@@ -24,7 +24,7 @@ public final class RobotArt {
 
     /** Estado de animación solo visual de un robot. */
     public static final class View {
-        float phase, pel = -22, lean, fx = 4, fy = -ANK, bx = -3, by = -ANK, a1 = 86, a2 = 96, b1 = 94, b2 = 86, flash; int assemble, clock, state = -1; public int shotT; boolean open;
+        float phase, pel = -22, lean, fx = 4, fy = -ANK, bx = -3, by = -ANK, a1 = 86, a2 = 96, b1 = 94, b2 = 86, flash; int assemble, clock, state = -1; public int shotT; boolean open, ball;
         float gFront, gBack; public String label = ""; public int labelT;
     }
     /** Cuadros que se mantiene cada dibujo: a 60 ticks por segundo, 5 equivalen a 12 cuadros por segundo. */
@@ -41,6 +41,8 @@ public final class RobotArt {
     static final float[] MID_F = {9,-ANK,-10,-6, 55,-45, 95,15, -20, 6}, STANCE_F = {11,-ANK,-10,-ANK, 0, 0, 80,-30, -20, 2};
     static final float[] UP_F = {7,-11,-4,-1, 4,-2,172,108,-23.5f,5}, DOWN_F = {7,-7,-5,-2, 20,10,165,120,-23.5f,5};
     static final float[] WALL_F = {7,-10,5,-4,-8,-8,160,110,-23.5f,-7}, SLIDE_F = {17,-ANK,-2,-ANK,150,185,120,150,-9,-58}, HOOK_F = {6,-6,-5,-2,-60,-60,120,60,-24,4};
+    /** Tras el doble salto, el robot se estira: piernas abajo y brazos arriba. */
+    static final float[] STRETCH_F = {2,-5,-1,-4.5f, -96,-92,-84,-88,-25,0};
     private static float ground(Terrain t, int x, int y) {
         for (int k = -11; k < 13; k++) if (t.solid(x, y + k)) return k;
         return 0;
@@ -50,7 +52,7 @@ public final class RobotArt {
     public static void update(View v, Robot r, World g) {
         float sp = Math.abs(r.vx); boolean run = r.grounded && sp > .3f && !r.sliding() && r.rope != 2;
         if (run) v.phase = (v.phase + sp) % (STRIDE * 4);
-        int st = r.sliding() ? 4 : r.rope == 2 ? 5 : r.wallDir != 0 ? 6 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
+        int st = r.thrownT > 0 ? 3 : r.rollT > 9 && !r.grounded ? 7 : r.rollT > 0 && !r.grounded ? 8 : r.sliding() ? 4 : r.rope == 2 ? 5 : r.wallDir != 0 ? 6 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
         boolean act = r.windT > 0 || r.fireT > 0;
         if (act) st = st == 0 ? (r.windT > 3 ? 20 : 21) : st + 10;
         v.clock++;
@@ -60,6 +62,7 @@ public final class RobotArt {
                 case 20: pose(v, MID_F); break;
                 case 21: pose(v, STANCE_F); break;
                 case 4: pose(v, SLIDE_F); break;
+                case 8: pose(v, STRETCH_F); break;
                 case 6: pose(v, WALL_F); break;
                 case 5: {
                     pose(v, HOOK_F);
@@ -72,6 +75,7 @@ public final class RobotArt {
             }
             if (st > 9 && st < 20 && !r.sliding() && r.rope != 2) { v.a1 = 0; v.a2 = 0; }
             v.open = act && st != 20 && !r.sliding();
+            v.ball = st % 10 == 7;
             v.gFront = r.grounded ? ground(g.t, r.px + (int) (v.fx * r.facing), r.py) : 0;
             v.gBack = r.grounded ? ground(g.t, r.px + (int) (v.bx * r.facing), r.py) : 0;
         }
@@ -134,11 +138,17 @@ public final class RobotArt {
     }
     public static void draw(Gfx g, View v, Robot r, int color) {
         if (r.invuln > 0 && r.invuln < 80 && r.invuln / 4 % 2 == 0) return;
-        g.save(); g.translate(r.px, r.py); g.scale(r.facing, 1);
+        g.save(); g.translate(r.px, r.py);
+        if (r.thrownT > 0) { g.translate(0, -24); g.rotate(-r.facing * (v.clock / 3) * .785f); g.translate(0, 24); } // va girando por el aire
+        g.scale(r.facing, 1);
         float ch = r.chargeLevel(); int col = v.flash > 0 ? 0xFFFFD040 : color;
         if (ch > 0) { boolean full = ch >= 1; int rate = full ? 4 : ch > .5f ? 6 : 10; if (v.clock / rate % 2 == 0) col = full ? 0xFFFFF27A : mix(color); }
         drawPose(g, v, r.armor, col, r.py);
         g.restore();
+        if (r.stunT > 0) for (int k = 0; k < 3; k++) { // estrellas de aturdido
+            double a = (v.clock / 4) * .5 + k * 2.09; int x = Math.round(r.px + (float) Math.cos(a) * 9), y = Math.round(r.py - 57 + (float) Math.sin(a) * 2.5f);
+            g.rect(x - 1, y, 3, 1, 0xFFFFE23A); g.rect(x, y - 1, 1, 3, 0xFFFFE23A);
+        }
         if (ch >= 1) {
             float R = 30 + v.clock / 4 % 3 * 3; int n = 8; float[] q = new float[n * 4];
             for (int i = 0; i < n * 2; i++) { float a = i * 3.14159f / n + v.clock / 4 * .4f, d = i % 2 == 0 ? R : R * .72f; q[i * 2] = r.px + (float) Math.cos(a) * d; q[i * 2 + 1] = r.py - 24 + (float) Math.sin(a) * d; }
@@ -148,6 +158,7 @@ public final class RobotArt {
     private static int mix(int c) { return 0xFF000000 | ((c >> 16 & 255) + 255) / 2 << 16 | ((c >> 8 & 255) + 255) / 2 << 8 | ((c & 255) + 255) / 2; }
     /** El dibujo en sí, en coordenadas locales mirando a la derecha. */
     public static void drawPose(Gfx g, View v, int ar, int c, int unused) {
+        if (v.ball) { drawBall(g, v, ar, c); return; }
         float e = (v.assemble / HOLD * HOLD) / 30f; e *= e;
         boolean on = e < .1f, glow = v.shotT > 0;
         float px = 0, py = v.pel, lr = (float) Math.toRadians(v.lean), sn = (float) Math.sin(lr), cs = (float) Math.cos(lr);
@@ -169,6 +180,16 @@ public final class RobotArt {
         arm(g, nx, ny, v.a1, v.a2, (ar >> Robot.BR_B & 1) != 0 && on, v.open, glow);
         if ((ar >> Robot.SH_B & 1) != 0) g.circle(nx - sp * .8f, ny, 3.6f, WHITE, INK, SW);
         if (v.shotT > 0 && v.open) { float d = UA + FA + 7; muzzle(g, nx + (float) Math.cos(Math.toRadians(v.a1)) * d, ny + (float) Math.sin(Math.toRadians(v.a1)) * d, 2 - (v.shotT - 1) / 4); }
+    }
+    /** Doble salto: se enrolla como un chanchito de tierra, con el caparazón del color del traje. */
+    private static void drawBall(Gfx g, View v, int ar, int c) {
+        boolean shell = (ar >> Robot.CHEST & 1) != 0;
+        g.save(); g.translate(0, -16); g.rotate((v.clock / HOLD) * 1.2f);
+        g.circle(0, 0, 11, shell ? c : INK, INK, SW);
+        for (int i = -1; i <= 1; i++) { float y = i * 5.2f, hx = (float) Math.sqrt(121 - y * y) - .6f; g.line(-hx, y, hx, y, INK, SW); }
+        if ((ar >> Robot.HELMET & 1) != 0) g.circle(6.5f, -5, 4, HEADC, INK, SW);
+        g.circle(-6, 5, 3, WHITE, INK, SW); g.rect(-3, 8, 6, 3, INK);
+        g.restore();
     }
     static final float[] CONE = {0,-4, 9,-2.4f, 15,0, 9,2.4f, 0,4}, CORE = {1,-2, 9,0, 1,2};
     /** Destello azul por cuadros frente a la mano: chispa, llamarada y restos. */

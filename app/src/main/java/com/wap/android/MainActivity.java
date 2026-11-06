@@ -15,6 +15,13 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
             @Override public void put(String k, String v) { p.edit().putString(k, v).apply(); }
         }, snd);
         app.seed((int) System.nanoTime());
+        final android.net.wifi.WifiManager wifi = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        final android.net.wifi.WifiManager.MulticastLock lock = wifi != null ? wifi.createMulticastLock("wap-salas") : null;
+        if (lock != null) lock.setReferenceCounted(false);
+        app.dev = new App.Device() {
+            @Override public String name() { return "Sala de " + Build.MODEL; }
+            @Override public void listen(boolean on) { if (lock == null) return; try { if (on) lock.acquire(); else if (lock.isHeld()) lock.release(); } catch (RuntimeException e) { } }
+        };
         app.up = new AppUpdater(this); ((AppUpdater) app.up).check();
         view = new GameView(this, app); setContentView(view); view.requestFocus();
         im = (InputManager) getSystemService(INPUT_SERVICE); im.registerInputDeviceListener(this, null); checkPads();
@@ -25,7 +32,7 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
     @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) immersive(); else clearInput(); }
     @Override protected void onResume() { super.onResume(); immersive(); checkPads(); }
     @Override protected void onPause() { super.onPause(); synchronized (app) { app.pauseNow(); } clearInput(); }
-    @Override protected void onDestroy() { super.onDestroy(); im.unregisterInputDeviceListener(this); snd.release(); }
+    @Override protected void onDestroy() { synchronized (app) { app.quit(); } super.onDestroy(); im.unregisterInputDeviceListener(this); snd.release(); }
     private void clearInput() { keyMask = axisMask = 0; push(); synchronized (app) { app.pad.clear(); } }
     private void push() { app.keys = keyMask | axisMask; }
     /** El mando en pantalla se oculta si hay un mando físico y vuelve al desconectarlo. */

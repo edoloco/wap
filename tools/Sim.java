@@ -61,6 +61,30 @@ public class Sim {
         w=new World(1,0,set("RIFLE","RIFLE","RIFLE","RIFLE","RIFLE"),set("RIFLE","RIFLE","RIFLE","RIFLE","RIFLE"));r=w.robots[0];r.invuln=0;for(int i=0;i<40&&!w.finished;i++){r.invuln=0;w.explode(r.px,r.py-30,36,44,0,0,1);}check(w.finished&&w.winner==1,"sin vidas termina la partida");
     }
     static Prop mkProp(World w,int[] q){try{java.lang.reflect.Constructor<Prop> c=Prop.class.getDeclaredConstructor(int[].class);c.setAccessible(true);Prop p=c.newInstance((Object)q);w.props.add(p);return p;}catch(Exception e){throw new RuntimeException(e);}}
+    static void bodies(){
+        World w=flat();Robot a=w.robots[0],b=w.robots[1];b.px=a.px+60;run(w,Input.RIGHT,120);check(b.px-a.px>=14,"los personajes no se encimen al caminar ("+(b.px-a.px)+" px)");
+        w=flat();a=w.robots[0];b=w.robots[1];a.px=b.px;a.py=b.py-b.h-1;a.vy=0;a.grounded=false;run(w,0,4);check(a.grounded&&a.py==b.py-b.h&&b.stunT==0,"uno puede pararse sobre el otro sin pisotón");
+        w=flat();a=w.robots[0];b=w.robots[1];a.px=b.px+3;a.py=b.py-b.h-60;a.vy=0;float hp=b.hp;for(int i=0;i<40&&b.stunT==0;i++)run(w,0,1);check(b.stunT>0&&hp-b.hp>0&&hp-b.hp<=Robot.STOMP_DMG+.1f,"caer encima aturde y quita poca vida ("+(hp-b.hp)+")");check(a.vy<-3,"el que pisa rebota");int st=b.stunT;int bx=b.px;run(w,0,0);w.step(new int[]{0,Input.RIGHT});check(b.px==bx,"el aturdido no se mueve");
+        w=flat();a=w.robots[0];w.robots[1].px=1700;int x=a.px;run(w,Input.RIGHT,90);int walk=a.px-x;w=flat();a=w.robots[0];w.robots[1].px=1700;x=a.px;run(w,Input.RIGHT|Input.B,90);int dash=a.px-x;check(dash>walk*1.3f,"B mantenido + dirección corre ("+walk+" → "+dash+" px)");
+        w=flat();a=w.robots[0];int gy=a.py;run(w,Input.B,1);run(w,Input.B,18);run(w,0,1);int y1=a.py;run(w,Input.B,4);check(a.vy<-6&&a.rollT>0,"doble salto en el aire con enrollado");int top=y1;for(int i=0;i<60;i++){run(w,Input.B,1);top=Math.min(top,a.py);}check(gy-top>190,"el doble salto llega más alto ("+(gy-top)+" px)");run(w,Input.B,1);run(w,0,1);run(w,Input.B,1);check(a.rollT==0||a.vy>-7,"no hay triple salto");
+        w=flat();a=w.robots[0];b=w.robots[1];for(int i=0;i<Robot.SLOTS;i++)a.loadout[i]=Wpn.ALL[Wpn.index("DROP")];b.px=a.px+22;hp=b.hp;run(w,0,1);run(w,Input.A,1);run(w,0,8);check(b.thrownT>0&&b.vx<0,"DROP agarra al rival y lo lanza hacia atrás");float hp2=b.hp;for(int i=0;i<90&&b.thrownT>0;i++)run(w,0,1);check(hp2-b.hp>=12&&b.thrownT==0,"al chocar pierde un porcentaje de vida ("+(hp2-b.hp)+")");check(b.px<a.px,"cae del otro lado");
+        w=flat();a=w.robots[0];b=w.robots[1];b.px=1700;run(w,Input.DOWN,1);run(w,Input.DOWN|Input.B,1);run(w,Input.DOWN,2);hp=a.hp;w.explode(a.px-20,a.py-10,30,20,0,2,1);check(a.vx>5&&a.slideT==0&&hp-a.hp<14&&hp-a.hp>0,"golpe al deslizarse lanza y quita poca vida ("+(hp-a.hp)+")");
+        w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+40;hp=b.hp;run(w,Input.DOWN,1);run(w,Input.DOWN|Input.B,1);run(w,Input.DOWN,10);check(b.vx>3&&b.hp<hp,"barrida lanza al rival");
+    }
+    static void online()throws Exception{
+        java.net.ServerSocket ss=new java.net.ServerSocket(0);com.wap.net.Link[] hl=new com.wap.net.Link[1];Thread t=new Thread(()->{try{hl[0]=com.wap.net.Link.accept(ss);}catch(Exception e){}});t.start();
+        com.wap.net.Link cl=com.wap.net.Link.connect("127.0.0.1",ss.getLocalPort());t.join();com.wap.net.Link hlk=hl[0];
+        com.wap.net.Link.Hello h=new com.wap.net.Link.Hello();h.rules=World.RULES;h.seed=777;h.lives=5;h.slots=new int[]{1,2,3,4};h.name="Sala prueba";hlk.send(h);com.wap.net.Link.Hello hr=cl.readHello();
+        com.wap.net.Link.Hello c=new com.wap.net.Link.Hello();c.rules=World.RULES;c.slots=new int[]{5,9,12,0};cl.send(c);com.wap.net.Link.Hello cr=hlk.readHello();
+        check(hr.seed==777&&hr.name.equals("Sala prueba")&&cr.slots[1]==9,"saludo entre teléfonos");
+        Wpn[] A=new Wpn[4],B=new Wpn[4];for(int i=0;i<4;i++){A[i]=Wpn.ALL[h.slots[i]];B[i]=Wpn.ALL[c.slots[i]];}
+        World wh=new World(777,5,A,B),wc=new World(777,5,A,B);hlk.startReader();cl.startReader();com.wap.net.Lockstep lh=new com.wap.net.Lockstep(hlk,0),lc=new com.wap.net.Lockstep(cl,1);
+        Bot bh=new Bot(1,0,1),bc=new Bot(2,1,1);long t0=System.currentTimeMillis();
+        while((wh.tick<3000||wc.tick<3000)&&System.currentTimeMillis()-t0<60000){boolean any=false;if(wh.tick<3000){lh.pump(wh,bh.think(wh));any|=lh.step(wh);wh.fx.clear();}if(wc.tick<3000){lc.pump(wc,bc.think(wc));any|=lc.step(wc);wc.fx.clear();}if(!any)Thread.sleep(0,200000);}
+        check(wh.tick==3000&&wc.tick==3000&&wh.hash()==wc.hash()&&!lh.desync&&!lc.desync,"ambos teléfonos simulan la misma partida en línea (3000 ticks)");
+        check(wh.robots[0].px!=wh.robots[0].lives,"");cl.close();Thread.sleep(200);check(hlk.closed,"salir avisa al otro teléfono");hlk.close();ss.close();
+        try(com.wap.net.Lan.Browser br=new com.wap.net.Lan.Browser();com.wap.net.Lan.Beacon bk=new com.wap.net.Lan.Beacon("Sala de prueba",47812,World.RULES)){java.util.List<com.wap.net.Lan.Room> rs=java.util.Collections.emptyList();for(int i=0;i<30&&rs.isEmpty();i++){Thread.sleep(100);rs=br.rooms();}check(!rs.isEmpty()&&rs.get(0).name.equals("Sala de prueba")&&rs.get(0).port==47812,"la sala aparece en la lista de búsqueda");}
+    }
     static int count(World w){int c=0;for(byte b:w.t.m)if(b!=0&&b!=Terrain.DEBRIS)c++;return c;}
     static void weapons(){
         for(Wpn p:Wpn.ALL){World w=flat();for(int i=0;i<Robot.SLOTS;i++)w.robots[0].loadout[i]=p;Robot r=w.robots[0],e=w.robots[1];e.px=r.px+120;e.py=600;
@@ -70,7 +94,7 @@ public class Sim {
     static void sheet(String out)throws Exception{int S=7,W=1540,H=420;BufferedImage b=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);J g=new J(b);g.clear(0xFFFFFFFF);g.beginPixels(W/S,H/S);int[] ticks={1,5,8,10,14};
         for(int k=0;k<5;k++){World q=flat();Robot o=q.robots[0];for(int i=0;i<Robot.SLOTS;i++)o.loadout[i]=Wpn.ALL[0];RobotArt.View v=new RobotArt.View();int[] in=new int[2];in[0]=Input.A;int t=0;while(t<ticks[k]){q.step(in);if(q.fx.size()>0){for(Fx f:q.fx)if(f.type==Fx.FLASH)v.shotT=12;q.fx.clear();}RobotArt.update(v,o,q);in[0]=0;t++;}g.save();g.translate(22+k*40,55);RobotArt.drawPose(g,v,o.armor,RobotArt.COLOR[0],0);g.restore();}
         World q=flat();Robot o=q.robots[0];RobotArt.View v=new RobotArt.View();for(int t=0;t<40;t++){q.step(new int[]{Input.RIGHT,0});RobotArt.update(v,o,q);}g.save();g.translate(205,55);RobotArt.drawPose(g,v,o.armor,RobotArt.COLOR[0],0);g.restore();
-        g.endPixels(0,0,S);ImageIO.write(b,"png",new File(out,"poses.png"));}
+        q=flat();o=q.robots[0];v=new RobotArt.View();q.step(new int[]{Input.B,0});for(int t=0;t<16;t++){q.step(new int[]{Input.B,0});RobotArt.update(v,o,q);}q.step(new int[]{0,0});for(int t=0;t<5;t++){q.step(new int[]{Input.B,0});RobotArt.update(v,o,q);}g.save();g.translate(205,55);g.restore();g.save();g.translate(185,20);RobotArt.drawPose(g,v,o.armor,RobotArt.COLOR[0],0);g.restore();g.endPixels(0,0,S);ImageIO.write(b,"png",new File(out,"poses.png"));}
     static void update()throws Exception{
         com.sun.net.httpserver.HttpServer h=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);byte[] apk=new byte[70000];new Random(1).nextBytes(apk);boolean[] ua={false};
         h.createContext("/api",x->{ua[0]="WAP-app".equals(x.getRequestHeaders().getFirst("User-Agent"));byte[] b="{\"name\":\"WAP 12\",\"assets\":[{\"name\":\"wap.apk\"}]}".getBytes();x.sendResponseHeaders(200,b.length);x.getResponseBody().write(b);x.close();});
@@ -94,10 +118,10 @@ public class Sim {
         App app=new App(store,mute);app.seed(4);int W=1560,H=720;BufferedImage b=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);J g=new J(b);
         app.draw(g);ImageIO.write(b,"png",new File(out,"1_titulo.png"));
         app.screen=App.ARMS;app.draw(g);ImageIO.write(b,"png",new File(out,"2_armas.png"));
-        app.screen=App.PAINT;app.draw(g);ImageIO.write(b,"png",new File(out,"2b_color.png"));app.screen=App.TITLE;app.start();g.tiles.clear();for(int i=0;i<95;i++)app.tick();app.draw(g);ImageIO.write(b,"png",new File(out,"3_inicio.png"));
+        app.openLobbyForTest();app.draw(g);ImageIO.write(b,"png",new File(out,"2c_salas.png"));app.back();app.screen=App.PAINT;app.draw(g);ImageIO.write(b,"png",new File(out,"2b_color.png"));app.screen=App.TITLE;app.start();g.tiles.clear();for(int i=0;i<95;i++)app.tick();app.draw(g);ImageIO.write(b,"png",new File(out,"3_inicio.png"));
         Random r=new Random(3);int s=0;for(int i=0;i<1500;i++){if(i%2==0)app.draw(g);int m=(i/70%2==0?Input.RIGHT:Input.LEFT);if(i%50<4)m|=Input.B;if(i%37==0)m|=Input.A;if(i%97==1)m=0;if(i%97==2)m=Input.DOWN|Input.A;
             if(i%160==20)m=Input.UP;if(i%160>20&&i%160<50)m=Input.UP|Input.B;if(i%300==80)m=Input.UP;if(i%300==81)m=Input.UP|Input.A;if(i%211==5)m=Input.DOWN;if(i%211==6)m=Input.DOWN|Input.B;app.keys=m;app.tick();
             if(app.screen!=App.PLAY)break;if(i>120&&i%(190)==0&&app.w.robots[0].alive()){app.draw(g);ImageIO.write(b,"png",new File(out,"j_"+(s++)+".png"));}}
     }
-    public static void main(String[] a)throws Exception{mech();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    public static void main(String[] a)throws Exception{mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

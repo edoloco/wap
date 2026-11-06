@@ -4,8 +4,8 @@ public final class Shot {
     public Wpn w; public int owner, age, hops, life; public float x, y, vx, vy; public boolean stuck, dead;
     public void step(World g) {
         age++;
-        if (w.accel != 0) { float s = (float) Math.hypot(vx, vy); if (s > .01f && s < 14) { vx += vx / s * w.accel; vy += vy / s * w.accel; } }
-        if (w.jitter != 0 && age % 6 == 0) { float a = g.rng.r(-w.jitter, w.jitter), c = (float) Math.cos(a), n = (float) Math.sin(a), t = vx * c - vy * n; vy = vx * n + vy * c; vx = t; }
+        if (w.accel != 0) { float s = (float) StrictMath.hypot(vx, vy); if (s > .01f && s < 14) { vx += vx / s * w.accel; vy += vy / s * w.accel; } }
+        if (w.jitter != 0 && age % 6 == 0) { float a = g.rng.r(-w.jitter, w.jitter), c = (float) StrictMath.cos(a), n = (float) StrictMath.sin(a), t = vx * c - vy * n; vy = vx * n + vy * c; vx = t; }
         if (w.smoke && age % 2 == 0) g.fx(Fx.SMOKE, x, y, 0, 0);
         if (w.look == Wpn.FLAME && age % 3 == 0 && w.burn) g.fx(Fx.SMOKE, x, y - 3, 1, 0);
         if (w.dropEvery > 0 && age % w.dropEvery == 0) g.spawn(w.splinter, owner, x, y, 0, 1.5f);
@@ -48,7 +48,7 @@ public final class Shot {
     private boolean near(Robot r, int d) { return Math.abs(r.px - x) < d && y > r.py - r.h - d && y < r.py + d; }
     private boolean hitRobot(World g, Robot r) {
         if (w.radius > 0) { explode(g); return true; }
-        float s = Math.max(1, (float) Math.hypot(vx, vy));
+        float s = Math.max(1, (float) StrictMath.hypot(vx, vy));
         r.damage(g, w.dmg, vx / s * w.knock, vy / s * w.knock - .15f, owner, x, y);
         return false;
     }
@@ -58,7 +58,7 @@ public final class Shot {
         if (w.radius > 0) g.explode(x, y, w.radius, w.dmg, w.dig, w.knock, owner);
         if (w.splinter != null && w.nSplinter > 0) for (int i = 0; i < w.nSplinter; i++) {
             float a = g.rng.r(0, 6.283f), v = w.splinter.speed * g.rng.r(.5f, 1.1f);
-            g.spawn(w.splinter, owner, x, y - 2, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 1);
+            g.spawn(w.splinter, owner, x, y - 2, (float) StrictMath.cos(a) * v, (float) StrictMath.sin(a) * v - 1);
         }
     }
 }

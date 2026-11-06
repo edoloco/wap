@@ -2,6 +2,8 @@ package com.wap.core;
 import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
+    /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
+    public static final int RULES = 8;
     public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
     public final Robot[] robots = new Robot[2];
     public final ArrayList<Shot> shots = new ArrayList<>(); public final ArrayList<Bonus> bonus = new ArrayList<>(); public final ArrayList<Prop> props = new ArrayList<>();
@@ -28,7 +30,7 @@ public final class World {
             for (int a = -12; a <= 12 && ok; a += 6) for (int b = -60; b <= 0 && ok; b += 6) if (t.solid(x + a, y + b)) ok = false;
             if (!ok) continue;
             while (y < Terrain.H - 20 && !t.solid(x, y) && !t.solid(x - 7, y) && !t.solid(x + 7, y)) y++;
-            float d = (float) Math.hypot(x - other.px, y - other.py); d = Math.min(d, 900) + rng.r(0, 200);
+            float d = (float) StrictMath.hypot(x - other.px, y - other.py); d = Math.min(d, 900) + rng.r(0, 200);
             if (d > bd) { bd = d; best[0] = x; best[1] = y - 1; }
         }
         return best;
@@ -42,12 +44,12 @@ public final class World {
         fx(Fx.EXPLODE, x, y, r, owner);
         for (int i = 0; i < props.size(); i++) {
             Prop p = props.get(i); if (p.gone) continue;
-            float nx = Math.max(p.x, Math.min(x, p.x + p.w)), ny = Math.max(p.y, Math.min(y, p.y + p.h)), d = (float) Math.hypot(nx - x, ny - y);
+            float nx = Math.max(p.x, Math.min(x, p.x + p.w)), ny = Math.max(p.y, Math.min(y, p.y + p.h)), d = (float) StrictMath.hypot(nx - x, ny - y);
             if (d < r) hurt(p, dmg * (.4f + .6f * (1 - d / r)));
         }
         float reach = r + 14;
         for (Robot o : robots) if (o.alive()) {
-            float dx = o.px - x, dy = o.py - 27 - y, d = (float) Math.hypot(dx, dy);
+            float dx = o.px - x, dy = o.py - 27 - y, d = (float) StrictMath.hypot(dx, dy);
             if (d < reach) {
                 float f = 1 - d / reach, nd = Math.max(1, d);
                 o.damage(this, dmg * (.35f + .65f * f), dx / nd * knock * (.4f + f), dy / nd * knock * (.4f + f) - knock * .35f, owner, x, y);
@@ -121,6 +123,9 @@ public final class World {
         int h = rng.s ^ tick;
         for (Robot r : robots) h = h * 31 + r.px * 7 + r.py * 13 + (int) (r.hp * 16) + r.lives + Float.floatToIntBits(r.vx) + r.armor;
         h = h * 31 + shots.size();
+        for (Shot s : shots) h = h * 31 + Float.floatToIntBits(s.x) + 7 * Float.floatToIntBits(s.y);
+        for (Prop p : props) h = h * 31 + Float.floatToIntBits(p.hp);
+        for (Robot r : robots) h = h * 31 + r.stunT + 3 * r.thrownT + 5 * Float.floatToIntBits(r.vy);
         return h;
     }
 }

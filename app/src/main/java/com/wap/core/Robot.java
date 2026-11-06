@@ -7,6 +7,8 @@ public final class Robot {
     /** Margen en ticks para que dirección + botón cuente como habilidad y no como correr + acción. */
     public static final int SMASH_WINDOW = 9, BUFFER = 3;
     public static final float HOOK_SHOT = 15, HOOK_PULL = 7.5f, HOOK_RANGE = 400;
+    public static final float RUN_FAST = 1.55f, AIR_JUMP = 8.4f, STOMP_DMG = 6, THROW_VX = 8.5f, THROW_VY = 6.5f;
+    public static final int STUN = 45;
     public static final float RUN = 2.5f, GRAV = .28f, JUMP = 9.2f, WALL_JUMP = 8.6f, WALL_PUSH = 4.2f, WALL_SLIDE = 1.4f, SLIDE = 4.6f;
     static final float MAX_HP = 100, BONE_HP = 25;
 
@@ -16,6 +18,7 @@ public final class Robot {
     public int slideT, airT, fireT, fireSlot = 3; boolean jumping;
     public int rope; public float rx, ry, rvx, rvy, rlen; // 0 sin gancho, 1 volando, 2 enganchado
     public final Wpn[] loadout = new Wpn[SLOTS]; public final int[] ammo = new int[SLOTS], reload = new int[SLOTS], delay = new int[SLOTS], charge = new int[SLOTS];
+    public int stunT, thrownT, rollT; int thrownBy, airJumps; Robot other; boolean ghost, stompHit;
     public int wallDir, windT; int windSlot, lastWall, wallT, wallLock;
     /** Preparación breve antes del primer disparo: 6 ticks, una décima de segundo. */
     public static final int WIND = 6;
@@ -33,10 +36,17 @@ public final class Robot {
         return best;
     }
 
-    private boolean free(Terrain t, int x, int y, int hh) {
+    private boolean freeT(Terrain t, int x, int y, int hh) {
         for (int yy = y - hh; yy < y; yy += 4) if (t.solid(x - HW, yy) || t.solid(x + HW, yy)) return false;
         for (int xx = x - HW; xx <= x + HW; xx += 3) if (t.solid(xx, y - 1) || t.solid(xx, y - hh)) return false;
         return !t.solid(x + HW, y - 1) && !t.solid(x - HW, y - 1);
+    }
+    private boolean free(Terrain t, int x, int y, int hh) { return freeT(t, x, y, hh) && !body(x, y, hh); }
+    /** El otro personaje ocupa espacio: no se atraviesan, salvo mientras uno va lanzado. */
+    boolean body(int x, int y, int hh) {
+        Robot o = other;
+        if (o == null || ghost || !o.alive() || o.thrownT > 0 || thrownT > 0) return false;
+        return Math.abs(x - o.px) < HW * 2 && y > o.py - o.h && y - hh < o.py;
     }
     private void moveX(Terrain t, float d) {
         remX += d; int n = (int) remX; remX -= n; int s = n > 0 ? 1 : -1; blocked = false;
@@ -58,7 +68,7 @@ public final class Robot {
         remY += d; int n = (int) remY; remY -= n; int s = n > 0 ? 1 : -1; grounded = false;
         for (int i = Math.abs(n); i > 0; i--) {
             if (free(t, px, py + s, h)) py += s;
-            else { if (s > 0) { grounded = true; } vy = 0; remY = 0; break; }
+            else { if (s > 0) { grounded = true; if (d > 2.5f && freeT(t, px, py + 1, h)) stompHit = true; } vy = 0; remY = 0; break; }
         }
         if (n >= 0 && vy >= 0 && !free(t, px, py + 1, h)) grounded = true;
     }
@@ -66,12 +76,16 @@ public final class Robot {
         hp = MAX_HP; armor = (1 << PIECES) - 1; deadT = 0; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
         int[] p = g.freeSpot(id == 0 ? g.robots[1] : g.robots[0]); px = p[0]; py = p[1];
         for (int i = 0; i < SLOTS; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
-        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0;
+        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; thrownT = 0; rollT = 0;
         g.fx(Fx.SPAWN, px, py - 27, id, 0);
     }
     public void damage(World g, float d, float kx, float ky, int by, float hx, float hy) {
         if (!alive() || invuln > 0) return;
         if (by == id) d *= .6f;
+        if (sliding() && thrownT == 0) { // golpe al deslizarse: sale lanzado en la dirección del golpe y pierde poca vida
+            float s = kx != 0 ? Math.signum(kx) : hx < px ? 1 : -1;
+            vx = s * 7; vy = -4.5f; slideT = 0; d *= .5f; kx = 0; ky = 0;
+        }
         float mul = 1 + (12 - armorCount()) * .08f;
         vx += kx * mul; vy += ky * mul; hurtT = 12;
         if (d <= 0) return;
@@ -88,7 +102,7 @@ public final class Robot {
             Fx f = g.lastFx; f.c = (hx < px ? 1.5f : -1.5f) + kx; f.d = -3;
         }
         if (hp <= 0) {
-            hp = 0; rope = 0; deadT = 150; windT = 0; java.util.Arrays.fill(charge, 0); lives--; deaths++;
+            hp = 0; rope = 0; deadT = 150; stunT = 0; thrownT = 0; windT = 0; java.util.Arrays.fill(charge, 0); lives--; deaths++;
             if (by != id) g.robots[by].kills++;
             g.fx(Fx.DEATH, px, py - 27, id, 0);
             if (lives < 0) { lives = 0; g.over(by == id ? 1 - id : by, id); deadT = 9999; lives = -1; }
@@ -106,10 +120,11 @@ public final class Robot {
         boolean planted = grounded && Math.abs(vx) < .4f && slideT == 0;
         float my = py - (h != STAND_H ? 13 : planted ? 30 : 33), mx = px + facing * 10; // sale de la mano extendida
         for (int d = 12; d <= 22 && !g.t.solid((int) (px + facing * d), (int) my); d += 2) mx = px + facing * d;
-        for (int i = 0; i < w.parts; i++) {
-            float a = base + (float) Math.toRadians(g.rng.r(-w.spread, w.spread));
+        if (w.grab) grab(g, w);
+        else for (int i = 0; i < w.parts; i++) {
+            float a = base + (float) StrictMath.toRadians(g.rng.r(-w.spread, w.spread));
             float v = w.speed * (w.parts > 1 ? g.rng.r(.82f, 1.1f) : 1);
-            float dx = (float) Math.cos(a) * facing, dy = (float) Math.sin(a);
+            float dx = (float) StrictMath.cos(a) * facing, dy = (float) StrictMath.sin(a);
             if (w.beam) g.beam(w, id, mx, my, dx, dy); else g.spawn(w, id, mx, my, dx * v + (w.grav > .1f ? vx * .4f : 0), dy * v);
         }
         g.fx(Fx.FLASH, mx, my, deg * facing, id).b = Wpn.index(w.name);
@@ -117,6 +132,15 @@ public final class Robot {
         ammo[slot]--; delay[slot] = w.delay;
         if (ammo[slot] <= 0) reload[slot] = w.reload;
         return true;
+    }
+    /** Drop: agarra al rival que está al frente y lo lanza hacia atrás. Al chocar pierde un porcentaje de vida. */
+    private void grab(World g, Wpn w) {
+        Robot o = g.robots[1 - id]; float dx = (o.px - px) * facing;
+        if (!o.alive() || o.invuln > 0 || o.thrownT > 0 || dx < -4 || dx > 36 || Math.abs(o.py - py) > 34) return;
+        o.damage(g, w.dmg, 0, 0, id, o.px, o.py - 30);
+        o.rope = 0; o.slideT = 0; o.windT = 0; o.stunT = 0; o.thrownT = 80; o.thrownBy = id;
+        o.vx = -facing * THROW_VX; o.vy = -THROW_VY; o.facing = facing;
+        g.fx(Fx.GRAB, o.px, o.py - 30, 0, id);
     }
     private void action(World g, int btn, int in, boolean freshDir) {
         boolean up = (in & Input.UP) != 0, down = (in & Input.DOWN) != 0;
@@ -141,13 +165,14 @@ public final class Robot {
     private void jump(World g) {
         if (rope != 0) { rope = 0; return; }
         if ((grounded || coyote > 0) && slideT == 0) { vy = -JUMP; jumping = true; grounded = false; coyote = 0; g.fx(Fx.JUMP, px, py, 0, 0); }
+        else if (!grounded && airJumps > 0 && slideT == 0) { airJumps--; vy = -AIR_JUMP; jumping = true; rollT = 24; g.fx(Fx.JUMP, px, py - 20, 2, 0); } // doble salto
     }
     private void throwHook(World g, int in) {
         int side = ((in & Input.RIGHT) != 0 ? 1 : 0) - ((in & Input.LEFT) != 0 ? 1 : 0);
         if (side != 0) facing = side;
-        float a = (float) Math.toRadians(side != 0 ? 45 : 72);
+        float a = (float) StrictMath.toRadians(side != 0 ? 45 : 72);
         rope = 1; rx = px + facing * 6; ry = py - 44;
-        rvx = facing * (float) Math.cos(a) * HOOK_SHOT; rvy = -(float) Math.sin(a) * HOOK_SHOT; g.fx(Fx.HOOK, rx, ry, 0, id);
+        rvx = facing * (float) StrictMath.cos(a) * HOOK_SHOT; rvy = -(float) StrictMath.sin(a) * HOOK_SHOT; g.fx(Fx.HOOK, rx, ry, 0, id);
     }
     void step(World g, int in) {
         for (int i = 0; i < SLOTS; i++) {
@@ -158,6 +183,11 @@ public final class Robot {
         if (lives < 0) return;
         if (deadT > 0) { if (--deadT == 0) spawnAt(g); prev = in; return; }
         Terrain t = g.t;
+        other = g.robots[1 - id]; ghost = false; ghost = body(px, py, h); // si aparecieron encimados, se separan solos
+        if (ghost) vx += (px != other.px ? Math.signum(px - other.px) : id == 0 ? -1 : 1) * .4f;
+        if (stunT > 0) stunT--;
+        if (stunT > 0 || thrownT > 0) in = 0;
+        if (rollT > 0) rollT--;
         if (invuln > 0) invuln--; if (hurtT > 0) hurtT--; if (fireT > 0) fireT--;
         int dir = ((in & Input.RIGHT) != 0 ? 1 : 0) - ((in & Input.LEFT) != 0 ? 1 : 0);
         if (dir != dirWas) { dirT = 0; dirWas = dir; } else if (dirT < 1000) dirT++;
@@ -188,12 +218,13 @@ public final class Robot {
             if (blocked || !grounded) slideT = Math.min(slideT, 0);
         } else {
             if (h != STAND_H && free(t, px, py, STAND_H)) h = STAND_H;
-            float target = dir * (RUN + (12 - armorCount()) * .035f) * (h != STAND_H ? .6f : 1);
+            float fast = (in & Input.B) != 0 && dir != 0 && h == STAND_H ? RUN_FAST : 1; // B mantenido + dirección: correr
+            float target = dir * (RUN + (12 - armorCount()) * .035f) * (h != STAND_H ? .6f : 1) * fast;
             if (wallLock > 0) wallLock--;
             else if (dir != 0 && rope == 0) facing = dir;
             if (rope != 2 && wallLock == 0) {
                 float acc = grounded ? .55f : .3f, d = target - vx;
-                if (Math.abs(vx) > RUN * 1.4f && Math.signum(vx) == Math.signum(target)) d = 0;
+                if (Math.abs(vx) > RUN * 1.4f * fast && Math.signum(vx) == Math.signum(target)) d = 0;
                 if (dir == 0 && !grounded) acc = .04f;
                 vx += Math.max(-acc, Math.min(acc, d));
             }
@@ -208,7 +239,7 @@ public final class Robot {
         } else if (rope == 2) {
             if (!t.solid((int) rx, (int) ry) && !t.solid((int) rx + 2, (int) ry) && !t.solid((int) rx - 2, (int) ry) && !t.solid((int) rx, (int) ry - 2) && !t.solid((int) rx, (int) ry + 2)) rope = 0;
             else {
-                float dx = rx - px, dy = ry - (py - 44), d = (float) Math.hypot(dx, dy);
+                float dx = rx - px, dy = ry - (py - 44), d = (float) StrictMath.hypot(dx, dy);
                 if (Math.abs(dx) > 4) facing = dx > 0 ? 1 : -1;
                 if (d > 24) { vx = dx / d * HOOK_PULL; vy = dy / d * HOOK_PULL; } else { vx = 0; vy = 0; }
             }
@@ -216,16 +247,37 @@ public final class Robot {
         if (rope != 2) vy = Math.min(10, vy + GRAV);
         if (wallDir != 0) vy = Math.min(vy, WALL_SLIDE);
         if (vy > 0 && rope != 2 && Math.abs(vx) > 6) vx *= .97f;
-        boolean wasGround = grounded;
+        boolean wasGround = grounded; float preVx = vx, preVy = vy;
         moveX(t, vx);
+        if (slideT > 0 && blocked && body(px + facing, py, h) && other.invuln == 0) { // barrida: el rival sale volando
+            other.damage(g, 5, 0, 0, id, other.px, other.py - 15); other.vx = facing * 6.5f; other.vy = -4.5f; slideT = 0;
+            g.fx(Fx.STOMP, other.px, other.py - 20, 1, other.id);
+        }
         moveY(t, vy);
+        if (stompHit) { // pisotón, como a un Goomba
+            stompHit = false; Robot o = other;
+            if (o.invuln == 0) { o.damage(g, STOMP_DMG, 0, 0, id, o.px, o.py - o.h); o.stunT = STUN; }
+            vy = (in & Input.B) != 0 ? -JUMP * .9f : -5.5f; jumping = (in & Input.B) != 0; grounded = false; airJumps = 1;
+            g.fx(Fx.STOMP, o.px, o.py - o.h, 0, o.id);
+        }
+        if (thrownT > 0) {
+            thrownT--;
+            boolean hit = blocked && Math.abs(preVx) > 2.5f || grounded && preVy > 3 || !grounded && vy == 0 && preVy < -3;
+            if (hit) {
+                float sp = Math.min(1, (Math.abs(preVx) + Math.abs(preVy)) / 12f); thrownT = 0;
+                damage(g, MAX_HP * (.12f + .13f * sp), 0, 0, thrownBy, px, py - 27); // porcentaje de vida según la fuerza del choque
+                g.fx(Fx.SLAM, px, py - 20, sp, id);
+            }
+        }
         if (grounded) coyote = 6; else if (coyote > 0) coyote--;
         if (grounded && !wasGround && airT > 22) g.fx(Fx.JUMP, px, py, 1, 0);
         airT = grounded ? 0 : airT + 1;
-        boolean wall = !grounded && rope == 0 && slideT == 0 && dir != 0 && wallLock == 0 && vy > -1.5f && !free(t, px + dir, py, h);
+        if (grounded && rollT < 20) rollT = 0;
+        boolean wall = !grounded && rope == 0 && slideT == 0 && dir != 0 && wallLock == 0 && vy > -1.5f && !freeT(t, px + dir, py, h);
         if (wall) { if (wallDir == 0) g.fx(Fx.WALL, px + dir * 7, py - 20, 0, 0); else if (airT % 6 == 0) g.fx(Fx.WALL, px + dir * 7, py - 8, 1, 0); wallDir = dir; lastWall = dir; wallT = 6; }
         else { wallDir = 0; if (wallT > 0) wallT--; }
+        if (grounded || wallDir != 0 || rope == 2) airJumps = 1;
         if (grounded && slideT == 0 && h != STAND_H && dir == 0) vx *= .7f;
     }
-    private float dist() { return (float) Math.hypot(rx - px, ry - (py - 40)); }
+    private float dist() { return (float) StrictMath.hypot(rx - px, ry - (py - 40)); }
 }

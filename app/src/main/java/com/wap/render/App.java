@@ -1,9 +1,12 @@
 package com.wap.render;
 import com.wap.core.*;
-import java.util.ArrayList;
+import com.wap.net.*;
+import java.util.ArrayList; import java.util.List;
 /** Pantallas y flujo de la aplicación. No conoce Android; recibe entradas y dibuja por Gfx. */
 public final class App {
-    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5;
+    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6;
+    /** Servicios del teléfono para jugar en red. */
+    public interface Device { String name(); void listen(boolean on); }
     static final int[] SWATCH = {0xFF5E5650, 0xFFFF0000, 0xFFFF7A00, 0xFFFFD200, 0xFF19C24A, 0xFF00B8D4, 0xFF1266FF, 0xFF8214FF, 0xFFFF2FA8, 0xFF2A2A2A};
     static final int RED = 0xFFFF0000, INK = RobotArt.INK, WHITE = 0xFFFFFFFF, MUTE = 0xFF6B7280, LINE = 0xFFCBD2DC;
     static final String[] LEVELS = {"FÁCIL", "NORMAL", "DIFÍCIL"}; static final float[] SKILL = {.45f, .9f, 1.6f};
@@ -11,7 +14,9 @@ public final class App {
     static final String[] DEF = {"GRENADE", "BAZOOKA", "PLASMA CANNON", "PLASMA GUN"};
     static final int SLOTS = Robot.SLOTS;
     static String key(int i) { return "arma" + (i == 3 ? 4 : i); } // conserva lo elegido en versiones anteriores
-    public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey; public Updater up;
+    public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey; public Updater up; public Device dev;
+    int myColor = 0xFF5E5650, me; boolean online, hosting; Lockstep ls; Link link; Lan.Browser browser; Lan.Beacon beacon; java.net.ServerSocket server;
+    volatile Link pending; volatile Link.Hello pendHost, pendGuest; volatile String netMsg = ""; String toast = ""; int toastT; volatile boolean busy;
     final Store st; final Audio au; public final TouchPad pad = new TouchPad(); public final Renderer ren = new Renderer();
     public World w; Bot bot; float W = 640, H = 360, u = 1; int cd; int paintRow, level = 1, livesIx = 2, selSlot = 3, cur, seed = 12345, overT; long frames;
     final int[] slots = new int[SLOTS]; final int[] in = new int[2];
@@ -21,7 +26,7 @@ public final class App {
     public App(Store st, Audio au) {
         this.st = st; this.au = au;
         for (int i = 0; i < SLOTS; i++) { slots[i] = Wpn.index(st.get(key(i), DEF[i])); }
-        try { RobotArt.COLOR[0] = 0xFF000000 | Integer.parseInt(st.get("traje", "5E5650"), 16); } catch (Exception e) { }
+        try { myColor = 0xFF000000 | Integer.parseInt(st.get("traje", "5E5650"), 16); } catch (Exception e) { }
         try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
     }
     public void seed(int s) { seed = s; }
@@ -29,7 +34,7 @@ public final class App {
         Wpn[] a = new Wpn[SLOTS], b = new Wpn[SLOTS]; seed = seed * 1103515245 + 12345;
         Rng r = new Rng(seed ^ 0x5A5A);
         for (int i = 0; i < SLOTS; i++) { a[i] = Wpn.ALL[slots[i]]; b[i] = Wpn.ALL[r.i(Wpn.ALL.length)]; }
-        RobotArt.COLOR[1] = near(RobotArt.COLOR[0], 0xFF1266FF) ? 0xFFFF0000 : 0xFF1266FF;
+        RobotArt.COLOR[0] = myColor; RobotArt.COLOR[1] = near(myColor, 0xFF1266FF) ? 0xFFFF0000 : 0xFF1266FF; me = 0; online = false;
         w = new World(seed, LIVES[livesIx] , a, b); bot = new Bot(seed + 1, 1, SKILL[level]); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
         pad.clear();
     }
@@ -37,12 +42,74 @@ public final class App {
         int r = (a >> 16 & 255) - (b >> 16 & 255), g = (a >> 8 & 255) - (b >> 8 & 255), l = (a & 255) - (b & 255);
         return r * r + g * g + l * l < 14000;
     }
+    // ---------- Partida en red local
+    Link.Hello hello(int seedV, int lives) {
+        Link.Hello h = new Link.Hello(); h.rules = World.RULES; h.seed = seedV; h.lives = lives; h.color = myColor; h.slots = slots.clone();
+        h.name = dev != null ? dev.name() : "Sala WAP"; return h;
+    }
+    void openLobby() {
+        go(LOBBY); netMsg = "Busca una sala o crea la tuya. Ambos teléfonos deben estar en la misma red Wi-Fi."; if (dev != null) dev.listen(true);
+        try { if (browser == null) browser = new Lan.Browser(); } catch (Exception e) { netMsg = "No se pueden buscar salas en esta red. Igual puedes crear una."; }
+    }
+    /** Solo para pruebas de escritorio. */
+    public void openLobbyForTest() { openLobby(); }
+    void closeLobby() {
+        if (browser != null) { browser.close(); browser = null; } if (beacon != null) { beacon.close(); beacon = null; }
+        if (server != null) { try { server.close(); } catch (Exception e) { } server = null; }
+        hosting = false; busy = false; if (dev != null) dev.listen(false);
+    }
+    void hostRoom() {
+        if (busy) return; busy = true; hosting = true; if (browser != null) { browser.close(); browser = null; }
+        final String name = dev != null ? dev.name() : "Sala WAP";
+        new Thread(() -> {
+            try {
+                java.net.ServerSocket ss; try { ss = new java.net.ServerSocket(Link.PORT); } catch (Exception e) { ss = new java.net.ServerSocket(0); }
+                server = ss; beacon = new Lan.Beacon(name, ss.getLocalPort(), World.RULES);
+                netMsg = name + " está abierta. Esperando que el otro teléfono se una...";
+                Link l = Link.accept(ss);
+                seed = seed * 1103515245 + 12345; Link.Hello mine = hello(seed, LIVES[livesIx]); l.send(mine);
+                Link.Hello peer = l.readHello();
+                if (peer.rules != World.RULES) { l.close(); netMsg = "El otro teléfono tiene otra versión. Actualicen ambos y vuelvan a intentar."; busy = false; hosting = false; return; }
+                pendHost = mine; pendGuest = peer; pending = l;
+            } catch (Exception e) { if (hosting) netMsg = "No se pudo abrir la sala en esta red."; busy = false; hosting = false; }
+        }, "sala").start();
+    }
+    void joinRoom(Lan.Room r) {
+        if (busy) return;
+        if (r.rules != World.RULES) { netMsg = "Esa sala usa otra versión del juego. Actualicen ambos teléfonos."; return; }
+        busy = true; netMsg = "Conectando con " + r.name + "...";
+        new Thread(() -> {
+            try {
+                Link l = Link.connect(r.ip, r.port); Link.Hello host = l.readHello(); Link.Hello mine = hello(0, 0); l.send(mine);
+                if (host.rules != World.RULES) { l.close(); netMsg = "Esa sala usa otra versión del juego."; busy = false; return; }
+                pendHost = host; pendGuest = mine; pending = l;
+            } catch (Exception e) { netMsg = "No se pudo conectar con " + r.name + ". Revisa que estén en la misma red."; busy = false; }
+        }, "unirse").start();
+    }
+    void startOnline() {
+        Link l = pending; pending = null; Link.Hello h = pendHost, c = pendGuest; me = hosting ? 0 : 1; closeLobby();
+        Wpn[] a = new Wpn[SLOTS], b = new Wpn[SLOTS];
+        for (int i = 0; i < SLOTS; i++) { a[i] = Wpn.ALL[Math.floorMod(h.slots[i], Wpn.ALL.length)]; b[i] = Wpn.ALL[Math.floorMod(c.slots[i], Wpn.ALL.length)]; }
+        int peer = me == 0 ? c.color : h.color; if (near(peer, myColor)) peer = near(myColor, 0xFF1266FF) ? 0xFFFF0000 : 0xFF1266FF;
+        RobotArt.COLOR[me] = myColor; RobotArt.COLOR[1 - me] = peer;
+        w = new World(h.seed, h.lives, a, b); bot = null; link = l; l.startReader(); ls = new Lockstep(l, me); online = true;
+        ren.reset(w); cd = 90; screen = PLAY; overT = 0; pad.clear();
+    }
+    void endOnline(String msg) {
+        if (link != null) link.close(); link = null; ls = null; online = false;
+        if (msg != null) { toast = msg; toastT = 300; }
+        go(TITLE);
+    }
+    /** Al cerrar la app. */
+    public void quit() { if (online) endOnline(null); closeLobby(); }
     public void back() {
+        if (screen == LOBBY) { closeLobby(); go(TITLE); return; }
+        if (screen == OVER && online) { endOnline(null); return; }
         if (screen == PAINT) { save(); go(TITLE); return; }
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); go(TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("traje", String.format("%06X", RobotArt.COLOR[0] & 0xFFFFFF)); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
+    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
     void go(int s) { screen = s; focus = 0; pad.clear(); }
     public boolean tap(float x, float y) {
         for (int i = btns.size() - 1; i >= 0; i--) { float[] b = btns.get(i); if (x >= b[0] && y >= b[1] && x <= b[2] && y <= b[3]) { au.play(Audio.MENU); acts.get(i).run(); return true; } }
@@ -52,6 +119,22 @@ public final class App {
         frames++;
         int m = keys | (screen == PLAY ? pad.mask() : 0), press = keys & ~last; last = keys;
         if (startKey) { startKey = false; if (screen == PLAY || screen == PAUSE) back(); else if (screen == TITLE) start(); }
+        if (pending != null) startOnline();
+        if (toastT > 0) toastT--;
+        if (online && (screen == PLAY || screen == PAUSE || screen == OVER)) {
+            if (link.closed && !w.finished) { endOnline(link.error != null ? link.error : "El otro jugador salió de la partida."); return; }
+            if (cd > 0) { cd--; return; }
+            int mm = screen == PLAY ? m : 0;
+            for (int n = 0; n < 3; n++) {
+                ls.pump(w, mm);
+                if (!ls.step(w)) break;
+                ren.tick(w); sounds(); ren.consume(w, false);
+                if (!ls.behind(w)) break;
+            }
+            if (w.finished && screen != OVER && ++overT > 110) go(OVER);
+            if (screen == OVER) navList(press);
+            return;
+        }
         if (screen == PLAY) {
             if (cd > 0) cd--;
             else {
@@ -70,6 +153,8 @@ public final class App {
             case Fx.FLASH: au.play(Audio.SHOT); break;
             case Fx.ARMOR: au.play(Audio.ARMOR); break;
             case Fx.HIT: au.play(Audio.HURT); break;
+            case Fx.STOMP: case Fx.SLAM: au.play(Audio.BOOM); break;
+            case Fx.GRAB: au.play(Audio.HOOK); break;
             case Fx.JUMP: if (f.a == 0) au.play(Audio.JUMP); break;
             case Fx.HOOK: au.play(Audio.HOOK); break;
             case Fx.PICK: au.play(Audio.PICK); break;
@@ -84,8 +169,8 @@ public final class App {
         if ((p & Input.A) != 0 && focus < n) { au.play(Audio.MENU); acts.get(focus).run(); }
         else if ((p & Input.B) != 0) back();
     }
-    void channel(int ch, int v) { int s = (2 - ch) * 8, c = RobotArt.COLOR[0]; RobotArt.COLOR[0] = c & ~(255 << s) | Math.max(0, Math.min(255, v)) << s; }
-    int channel(int ch) { return RobotArt.COLOR[0] >> (2 - ch) * 8 & 255; }
+    void channel(int ch, int v) { int s = (2 - ch) * 8, c = myColor; myColor = c & ~(255 << s) | Math.max(0, Math.min(255, v)) << s; }
+    int channel(int ch) { return myColor >> (2 - ch) * 8 & 255; }
     void navPaint(int p, int held) {
         if ((p & Input.DOWN) != 0) paintRow = (paintRow + 1) % 3;
         if ((p & Input.UP) != 0) paintRow = (paintRow + 2) % 3;
@@ -106,7 +191,7 @@ public final class App {
     void hero(Gfx g, RobotArt.View v, float cx, float by) {
         int sc = Math.max(2, (int) (H * .78f / 56)), lw = (int) W / sc + 1, lh = (int) H / sc + 1;
         g.beginPixels(lw, lh); g.save(); g.translate(Math.round(cx / sc), Math.round(by / sc));
-        RobotArt.drawPose(g, v, (1 << Robot.PIECES) - 1, RobotArt.COLOR[0], 0); g.restore(); g.endPixels(0, 0, sc);
+        RobotArt.drawPose(g, v, (1 << Robot.PIECES) - 1, myColor, 0); g.restore(); g.endPixels(0, 0, sc);
     }
     void paint(Gfx g) {
         g.clear(WHITE);
@@ -124,8 +209,8 @@ public final class App {
         float sz = (sliderW() + 8 * u) / SWATCH.length, y = sliderY(2) + 26 * u;
         for (int i = 0; i < SWATCH.length; i++) {
             final int c = SWATCH[i]; float x = sliderX() + i * sz;
-            g.rrect(x, y, sz - 5 * u, 28 * u, 2 * u, c, INK, RobotArt.COLOR[0] == c ? 2.6f * u : 1 * u);
-            btn(x, y, sz - 5 * u, 28 * u, () -> { RobotArt.COLOR[0] = c; save(); });
+            g.rrect(x, y, sz - 5 * u, 28 * u, 2 * u, c, INK, myColor == c ? 2.6f * u : 1 * u);
+            btn(x, y, sz - 5 * u, 28 * u, () -> { myColor = c; save(); });
         }
         float by = H - 46 * u;
         g.rrect(sliderX(), by, sliderW(), 36 * u, 3 * u, INK, INK, 1); g.text("LISTO", sliderX() + sliderW() / 2, by + 24 * u, 15 * u, WHITE, 0);
@@ -160,26 +245,31 @@ public final class App {
             case TITLE: title(g); break;
             case ARMS: arms(g); break;
             case PAINT: paint(g); break;
+            case LOBBY: lobby(g); break;
             default:
-                ren.drawWorld(g, w, 0); hud(g);
+                ren.drawWorld(g, w, me); hud(g);
+                if (online && ls.stall > 45) g.text("Esperando al otro teléfono...", W / 2, H * .5f, 16 * u, INK, 0);
+                if (online && ls.desync) g.text("Partida desincronizada", W / 2, H - 8 * u, 11 * u, RED, 0);
                 if (screen == PLAY) {
                     if (cd > 0) { g.text(cd > 60 ? "3" : cd > 30 ? "2" : "1", W / 2, H * .42f, 70 * u, RED, 0); }
                     pad.draw(g, pad.mask()); float x = W / 2 - 18 * u, y = H - 40 * u;
                     if (pad.visible) { g.rrect(x, y, 36 * u, 28 * u, 5 * u, 0x44FFFFFF, 0xAA141414, 1.5f * u); g.rect(x + 12 * u, y + 7 * u, 4 * u, 14 * u, 0xAA141414); g.rect(x + 20 * u, y + 7 * u, 4 * u, 14 * u, 0xAA141414); btn(x - 8 * u, y - 8 * u, 52 * u, 44 * u, () -> screen = PAUSE); }
                 } else if (screen == PAUSE) {
                     veil(g); g.text("PAUSA", W / 2, H * .3f, 42 * u, WHITE, 0);
-                    menu(g, W / 2 - 100 * u, H * .4f, 200 * u, new String[]{"SEGUIR", "VOLVER AL MENÚ"}, new Runnable[]{() -> screen = PLAY, () -> go(TITLE)});
+                    if (online) { g.text("La partida sigue mientras estás aquí", W / 2, H * .37f, 12 * u, WHITE, 0); menu(g, W / 2 - 110 * u, H * .42f, 220 * u, new String[]{"SEGUIR", "SALIR DE LA PARTIDA"}, new Runnable[]{() -> screen = PLAY, () -> endOnline(null)}); }
+                    else menu(g, W / 2 - 100 * u, H * .4f, 200 * u, new String[]{"SEGUIR", "VOLVER AL MENÚ"}, new Runnable[]{() -> screen = PLAY, () -> go(TITLE)});
                 } else {
-                    veil(g); boolean win = w.winner == 0;
+                    veil(g); boolean win = w.winner == me;
                     g.text(win ? "GANASTE" : "PERDISTE", W / 2, H * .28f, 50 * u, win ? WHITE : RED, 0);
-                    g.text("Bajas " + w.robots[0].kills + "   Muertes " + w.robots[0].deaths, W / 2, H * .37f, 15 * u, WHITE, 0);
-                    menu(g, W / 2 - 100 * u, H * .44f, 200 * u, new String[]{"REVANCHA", "VOLVER AL MENÚ"}, new Runnable[]{this::start, () -> go(TITLE)});
+                    g.text("Bajas " + w.robots[me].kills + "   Muertes " + w.robots[me].deaths, W / 2, H * .37f, 15 * u, WHITE, 0);
+                    if (online) menu(g, W / 2 - 100 * u, H * .44f, 200 * u, new String[]{"VOLVER AL MENÚ"}, new Runnable[]{() -> endOnline(null)});
+                    else menu(g, W / 2 - 100 * u, H * .44f, 200 * u, new String[]{"REVANCHA", "VOLVER AL MENÚ"}, new Runnable[]{this::start, () -> go(TITLE)});
                 }
         }
     }
     void veil(Gfx g) { g.rect(0, 0, W, H, 0xB8141414); }
     void menu(Gfx g, float x, float y, float w, String[] l, Runnable[] a) {
-        float h = (l.length > 5 ? 34 : l.length > 4 ? 37 : 40) * u, gap = (l.length > 4 ? 5 : 8) * u;
+        float h = (l.length > 6 ? 31 : l.length > 5 ? 34 : l.length > 4 ? 37 : 40) * u, gap = (l.length > 6 ? 4 : l.length > 4 ? 5 : 8) * u;
         for (int i = 0; i < l.length; i++) {
             boolean f = i == focus && !pad.visible || i == focus && padSeen;
             g.rrect(x, y, w, h, 3 * u, f ? RED : WHITE, INK, 2 * u);
@@ -194,10 +284,27 @@ public final class App {
         hero(g, hero, W * .25f, H * .92f);
         float x = W * .5f, wd = W * .42f;
         g.text("WAP", x - 3 * u, H * .19f, 58 * u, INK, -1);
-        String[] l = {"JUGAR", "ELEGIR 4 ARMAS", "COLOR DEL ROBOT", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
-        Runnable[] a = {this::start, () -> go(ARMS), () -> go(PAINT), () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }, () -> { level = (level + 1) % 3; save(); }};
-        if (up != null) { l = new String[]{l[0], l[1], l[2], l[3], l[4], up.label()}; a = new Runnable[]{a[0], a[1], a[2], a[3], a[4], () -> up.act()}; g.text(up.version(), W - 8 * u, H - 7 * u, 10 * u, MUTE, 1); }
-        menu(g, x, H * .22f, wd, l, a);
+        String[] l = {"JUGAR", "EN LÍNEA (RED LOCAL)", "ELEGIR 4 ARMAS", "COLOR DEL ROBOT", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
+        Runnable[] a = {this::start, this::openLobby, () -> go(ARMS), () -> go(PAINT), () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }, () -> { level = (level + 1) % 3; save(); }};
+        if (up != null) { l = new String[]{l[0], l[1], l[2], l[3], l[4], l[5], up.label()}; a = new Runnable[]{a[0], a[1], a[2], a[3], a[4], a[5], () -> up.act()}; g.text(up.version(), W - 8 * u, H - 7 * u, 10 * u, MUTE, 1); }
+        menu(g, x, H * .2f, wd, l, a);
+        if (toastT > 0) { g.rect(0, H - 30 * u, W, 30 * u, INK); g.text(toast, W / 2, H - 10 * u, 13 * u, WHITE, 0); }
+    }
+    void lobby(Gfx g) {
+        g.clear(WHITE);
+        int G = (int) (32 * u); for (int x = 0; x < W; x += G) g.line(x, 0, x, H, Renderer.GRID, 1); for (int y = 0; y < H; y += G) g.line(0, y, W, y, Renderer.GRID, 1);
+        g.text("EN LÍNEA · RED LOCAL", W / 2, 34 * u, 24 * u, INK, 0);
+        g.text(netMsg, W / 2, 56 * u, 12 * u, MUTE, 0);
+        List<String> l = new ArrayList<>(); List<Runnable> a = new ArrayList<>();
+        if (hosting) { l.add("CANCELAR SALA"); a.add(() -> { closeLobby(); openLobby(); }); }
+        else {
+            l.add("CREAR SALA"); a.add(this::hostRoom);
+            List<Lan.Room> rooms = browser != null ? browser.rooms() : new ArrayList<>();
+            if (rooms.isEmpty() && !busy) g.text("Buscando salas en tu red...", W / 2, H - 16 * u, 12 * u, MUTE, 0);
+            for (int i = 0; i < Math.min(4, rooms.size()); i++) { Lan.Room r = rooms.get(i); l.add("UNIRSE A " + r.name.toUpperCase() + (r.rules != World.RULES ? " (OTRA VERSIÓN)" : "")); a.add(() -> joinRoom(r)); }
+        }
+        l.add("VOLVER"); a.add(() -> { closeLobby(); go(TITLE); });
+        menu(g, W / 2 - 160 * u, 72 * u, 320 * u, l.toArray(new String[0]), a.toArray(new Runnable[0]));
     }
     void arms(Gfx g) {
         g.clear(WHITE);
@@ -225,8 +332,8 @@ public final class App {
         g.text(Wpn.ALL[cur].desc, gx + 4 * u, H - 10 * u, 12 * u, MUTE, -1);
     }
     void hud(Gfx g) {
-        Robot me = w.robots[0], e = w.robots[1];
-        bar(g, 10 * u, 8 * u, me, 0, false); bar(g, W - 134 * u, 8 * u, e, 1, true);
+        Robot me = w.robots[this.me], e = w.robots[1 - this.me];
+        bar(g, 10 * u, 8 * u, me, this.me, false); bar(g, W - 134 * u, 8 * u, e, 1 - this.me, true);
         int n = SLOTS; float cw = 72 * u, tot = cw * n, x = W / 2 - tot / 2;
         for (int i = 0; i < n; i++) {
             float y = 7 * u, h = 30 * u, cx = x + i * cw; Wpn wp = me.loadout[i];

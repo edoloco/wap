@@ -150,7 +150,7 @@ public final class Terrain {
             else if (j >= 8 && j < 34 && i >= 8 && i < 56) {
                 c = 0xFF0B3B2C;
                 if (i < 10 || j < 10 || i >= 54 || j >= 32) c = 0xFF8A95A8;
-                else if (kind % 2 == 0 ? (j - 13) % 5 < 2 && i < 14 + (hash(j, kind) & 31) : Math.abs(j - 21 - (int) (8 * Math.sin(i * .4))) < 2) c = 0xFF46F08A;
+                else if (kind % 2 == 0 ? (j - 13) % 5 < 2 && i < 14 + (hash(j, kind) & 31) : Math.abs(j - 21 - (int) (8 * StrictMath.sin(i * .4))) < 2) c = 0xFF46F08A;
             } else if (j >= 40 && j < 56) {
                 int a = i - 18, b = j - 48, e = i - 46; 
                 if (a * a + b * b < 64 || e * e + b * b < 64) c = (a * a + b * b < 9 || e * e + b * b < 9) ? 0xFF2C323F : 0xFFD6DCE6;
@@ -233,7 +233,6 @@ public final class Terrain {
             final int fx = x, fw = (w + 2) * G, fy = y;
             props.removeIf(q -> q[0] + q[2] > fx && q[0] < fx + fw && q[1] + q[3] > fy && q[1] < base);
         }
-        tops();
         steel(0, 0, W, 16); steel(0, H - 16, W, 16); steel(0, 0, 16, H); steel(W - 16, 0, 16, H);
         java.util.Arrays.fill(dirty, true);
     }

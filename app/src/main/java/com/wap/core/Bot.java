@@ -7,7 +7,7 @@ public final class Bot {
     int hookDir, checkT, lastCost = 9999, frust, climbDir;
     public Bot(int seed, int me, float skill) { r = new Rng(seed); this.me = me; this.skill = skill; }
     private boolean clear(World g, float x0, float y0, float x1, float y1) {
-        int n = (int) (Math.hypot(x1 - x0, y1 - y0) / 8) + 1;
+        int n = (int) (StrictMath.hypot(x1 - x0, y1 - y0) / 8) + 1;
         for (int i = 0; i <= n; i++) if (g.t.solid((int) (x0 + (x1 - x0) * i / n), (int) (y0 + (y1 - y0) * i / n))) return false;
         return true;
     }
@@ -45,8 +45,8 @@ public final class Bot {
     private boolean pickHook(World g, Robot m, int here) {
         int bestD = here - 4; boolean found = false;
         for (int o = -1; o <= 1; o++) {
-            int f = o == 0 ? m.facing : o; float a = (float) Math.toRadians(o == 0 ? 72 : 45);
-            float dx = (float) Math.cos(a) * f, dy = -(float) Math.sin(a), x = m.px + f * 6, y = m.py - 44;
+            int f = o == 0 ? m.facing : o; float a = (float) StrictMath.toRadians(o == 0 ? 72 : 45);
+            float dx = (float) StrictMath.cos(a) * f, dy = -(float) StrictMath.sin(a), x = m.px + f * 6, y = m.py - 44;
             for (int d = 0; d < Robot.HOOK_RANGE; d += 8) {
                 x += dx * 8; y += dy * 8;
                 if (!g.t.solid((int) x, (int) y)) continue;
@@ -93,7 +93,7 @@ public final class Bot {
             } else if (ad < 300) { moveDir = m.facing == to ? 0 : to; if (m.facing == to && fireHold == 0) fireHold = 20; }
         } else climbDir = 0;
         if (m.rope != 0) {
-            boolean arrived = m.rope == 2 && Math.hypot(m.rx - m.px, m.ry - (m.py - 44)) < 34 || see && ady < 40;
+            boolean arrived = m.rope == 2 && StrictMath.hypot(m.rx - m.px, m.ry - (m.py - 44)) < 34 || see && ady < 40;
             if (--hookHold > 0 && !arrived) out |= Input.B;
             if (moveDir > 0) out |= Input.RIGHT; else if (moveDir < 0) out |= Input.LEFT;
             if (fireHold > 0) { fireHold--; out |= Input.A; }

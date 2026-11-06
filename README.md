@@ -10,7 +10,8 @@ Descarga `wap.apk` desde la sección **Releases** del repositorio, en el teléfo
 |---|---|
 | ◀ ▶ | Caminar |
 | A | Disparar (arma 4) |
-| B | Saltar |
+| B | Saltar; en el aire, otra vez para el doble salto |
+| ◀▶ con B mantenido | Correr |
 | ▲ + A | Arma 3 |
 | ▼ + A | Arma 1 |
 | ◀▶ + A | Arma 2 |
@@ -33,3 +34,12 @@ Todas las armas salen rectas, desde la mano del robot, tras una preparación cor
 - `tools`: pruebas de escritorio y capturas sin dispositivo (`tools/run.sh`).
 
 La clave en `keystore/` es solo de desarrollo y pública; para Play Store hay que usar otra.
+
+## Reglas entre personajes
+Los personajes no se atraviesan: uno puede pararse sobre el otro. Caer encima es un pisotón: quita poca vida y aturde.
+Una barrida lanza al rival. Si te golpean mientras te deslizas, sales lanzado y pierdes la mitad del daño.
+El arma DROP agarra al rival que está al frente y lo lanza hacia atrás; al chocar pierde entre 12 % y 25 % de vida según la fuerza.
+
+## En línea (red local)
+Ambos teléfonos en la misma red Wi-Fi. Uno elige "Crear sala" y el otro la ve en la lista y se une.
+Cada teléfono simula la misma partida con las entradas de los dos; deben tener la misma versión del juego.

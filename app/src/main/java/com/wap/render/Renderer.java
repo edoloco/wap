@@ -26,64 +26,20 @@ public final class Renderer {
     public void reset(World w) { ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; bgNew = true; java.util.Arrays.fill(loaded, false); }
     static int hash(int x, int y) { int h = x * 374761393 + y * 668265263; h = (h ^ h >> 13) * 1274126177; return h ^ h >> 16; }
     final boolean[] loaded = new boolean[Terrain.TW * Terrain.TH];
-    static final int M = 18, N = Terrain.TILE + 2 * M, SEAM = 0xFF141414;
-    final int[] dIn = new int[N * N], dOut = new int[N * N]; final float[] soft = new float[N * N]; final byte[] mats = new byte[N * N];
-    static final int[] BAYER = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
-    static boolean air(Terrain t, int x, int y) { int k = t.at(x, y); return k == 0 || k == Terrain.DEBRIS; }
+    static boolean air(Terrain t, int x, int y) { int k = t.at(x, y); return k == 0 || k == Terrain.DEBRIS || k == Terrain.DECOR; }
     static int tone(int c, float m, int add) {
         return 0xFF000000 | Math.min(255, (int) ((c >> 16 & 255) * m) + add) << 16 | Math.min(255, (int) ((c >> 8 & 255) * m) + add) << 8 | Math.min(255, (int) ((c & 255) * m) + add);
     }
-    static final float LX = -.476f, LY = -.667f, LZ = .571f;
-    private static int group(int k) { return k == Terrain.PANEL || k == Terrain.DECOR || k == Terrain.STEEL ? 1 : k; }
-    private static void chamfer(int[] d) {
-        for (int y = 1; y < N - 1; y++) for (int x = 1; x < N - 1; x++) { int i = y * N + x, v = d[i];
-            v = Math.min(v, d[i - 1] + 3); v = Math.min(v, d[i - N] + 3); v = Math.min(v, d[i - N - 1] + 4); d[i] = Math.min(v, d[i - N + 1] + 4); }
-        for (int y = N - 2; y > 0; y--) for (int x = N - 2; x > 0; x--) { int i = y * N + x, v = d[i];
-            v = Math.min(v, d[i + 1] + 3); v = Math.min(v, d[i + N] + 3); v = Math.min(v, d[i + N + 1] + 4); d[i] = Math.min(v, d[i + N - 1] + 4); }
-    }
-    private static float radius(int k) {
-        switch (k) { case Terrain.VENT: return 15; case Terrain.CRATE: return 4.5f; case Terrain.METAL: return 5; case Terrain.COMPUTER: return 3.5f; case Terrain.STONE: return 7; default: return 6.5f; }
-    }
-    /** Relieve iluminado por píxel: como se calcula desde el mapa, los cráteres también quedan con volumen. */
+    /** Plataformas planas en pixel art: color liso, contorno negro de 1 píxel y un brillo de 1 píxel arriba. */
     void fillTile(Terrain t, int tx, int ty) {
-        final int S = Terrain.TILE, ox = tx * S - M, oy = ty * S - M, INF = 9999;
-        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
-            int k = t.at(ox + x, oy + y); if (k == Terrain.DEBRIS) k = 0;
-            mats[y * N + x] = (byte) k;
-        }
-        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
-            int i = y * N + x, k = mats[i]; dOut[i] = k == 0 ? INF : 0;
-            if (k == 0) { dIn[i] = 0; continue; }
-            int wx = ox + x, wy = oy + y; boolean e = x == 0 || y == 0 || x == N - 1 || y == N - 1;
-            if (!e) { int g = group(k); e = group(mats[i - 1]) != g || group(mats[i + 1]) != g || group(mats[i - N]) != g || group(mats[i + N]) != g; }
-            if (x == 0 || y == 0 || x == N - 1 || y == N - 1) e = false;
-            if (!e && wx >= 0 && wy >= 0 && wx < Terrain.W && wy < Terrain.H) {
-                e = t.tex[wy * Terrain.W + wx] == SEAM;
-                if ((k == Terrain.CRATE || k == Terrain.METAL) && (wx % 32 == 0 || wy % 32 == 0)) e = true;
-            }
-            dIn[i] = e ? 0 : INF;
-        }
-        chamfer(dIn); chamfer(dOut);
-        for (int y = 1; y < N - 1; y++) for (int x = 1; x < N - 1; x++) { int i = y * N + x, s = 0;
-            for (int a = -1; a <= 1; a++) for (int b = -1; b <= 1; b++) s += dIn[i + a * N + b];
-            soft[i] = s / 27f; }
-        int q = 0;
-        for (int wy = oy + M; wy < oy + M + S; wy++) for (int wx = ox + M; wx < ox + M + S; wx++) {
-            int c = 0, x = wx - ox, y = wy - oy, i = y * N + x, raw = t.at(wx, wy);
-            if (wx >= Terrain.W || wy >= Terrain.H) { px[q++] = 0; continue; }
-            if (raw == Terrain.DEBRIS) c = t.tex[wy * Terrain.W + wx] & 0xFFFFFF | 0x80000000;
-            else if (raw != 0) {
-                int base = t.tex[wy * Terrain.W + wx];
-                float R = radius(raw), d = soft[i], k = 1 - Math.min(d, R) / R, gx = soft[i + 1] - soft[i - 1], gy = soft[i + N] - soft[i - N], g = (float) Math.sqrt(gx * gx + gy * gy) + .0001f;
-                float nz = (float) Math.sqrt(Math.max(0, 1 - k * k)), nx = -gx / g * k, ny = -gy / g * k;
-                float lv = Math.max(0, nx * LX + ny * LY + nz * LZ) + (BAYER[(wy & 3) * 4 + (wx & 3)] - 7.5f) * .018f;
-                boolean edge = air(t, wx - 1, wy) || air(t, wx + 1, wy) || air(t, wx, wy - 1) || air(t, wx, wy + 1);
-                if (edge || base == SEAM) c = INK; // contorno de 1 píxel
-                else c = lv > .82f ? tone(base, 1.28f, 18) : lv < .3f ? tone(base, .62f, 0) : lv < .45f ? tone(base, .8f, 0) : base;
-            } else {
-                int sx = Math.max(0, x - 7), sy = Math.max(0, y - 10); float o = dOut[sy * N + sx] / 3f;
-                if (o < 5) c = 0x48100A28; else if (o < 9 && ((wx + wy) & 1) == 0) c = 0x48100A28; // sombra en dos tramos, con trama
-            }
+        final int S = Terrain.TILE; int q = 0;
+        for (int wy = ty * S; wy < ty * S + S; wy++) for (int wx = tx * S; wx < tx * S + S; wx++) {
+            int c = 0, k = t.at(wx, wy);
+            if (wx >= Terrain.W || wy >= Terrain.H || k == 0 || k == Terrain.DECOR) c = 0;
+            else if (k == Terrain.DEBRIS) c = t.tex[wy * Terrain.W + wx] & 0xFFFFFF | 0x80000000;
+            else if (air(t, wx - 1, wy) || air(t, wx + 1, wy) || air(t, wx, wy - 1) || air(t, wx, wy + 1)) c = INK;
+            else if (!Terrain.isProp(k) && air(t, wx, wy - 2)) c = tone(t.tex[wy * Terrain.W + wx], 1.25f, 30);
+            else c = t.tex[wy * Terrain.W + wx];
             px[q++] = c;
         }
     }
@@ -112,6 +68,14 @@ public final class Renderer {
                     P p = part(CHUNK, f.x + r.nextFloat() * f.a, f.y + r.nextFloat() * f.b, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 2.5f, 110 + r.nextInt(70), 3 + r.nextFloat() * 5, tone[i % 2]); p.slot = r.nextInt(99);
                 }
                 if (kind == Terrain.COMPUTER) for (int i = 0; i < 14; i++) part(SQUARE, f.x + 32, f.y + 30, (r.nextFloat() - .5f) * 7, -r.nextFloat() * 5, 26, 1.5f, 0xFFFFE23A);
+                break; }
+            case Fx.STOMP: {
+                for (int i = 0; i < 8; i++) { float a = i * .785f; P p = part(SQUARE, f.x, f.y, (float) Math.cos(a) * 2.5f, (float) Math.sin(a) * 1.5f - 1, 14, 2, 0xFFFFFFFF); p.g = 0; }
+                RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "¡BARRIDA!" : "¡PISADO!"; v.labelT = LABEL; break; }
+            case Fx.GRAB: { RobotArt.View v = views[1 - f.who]; v.label = "¡DROP!"; v.labelT = LABEL; break; }
+            case Fx.SLAM: {
+                booms.add(new float[]{f.x, f.y, 14 + f.a * 14, 0, 0}); if (!reduceMotion) shake = Math.min(14, shake + 3 + f.a * 6);
+                for (int i = 0; i < 10; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 6, -r.nextFloat() * 4, 20, 2, 0xFFFFFFFF);
                 break; }
             case Fx.CHARGE: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "CARGADO" : Wpn.ALL[(int) f.b].name; v.labelT = LABEL; break; }
             case Fx.WALL: { P p = part(SMOKE, f.x, f.y, 0, -.3f, 14, 2, 0xFFBFC6D2); p.g = 0; break; }
