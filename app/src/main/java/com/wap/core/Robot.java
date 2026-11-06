@@ -7,7 +7,7 @@ public final class Robot {
     /** Margen en ticks para que dirección + botón cuente como habilidad y no como correr + acción. */
     public static final int SMASH_WINDOW = 9, BUFFER = 3;
     public static final float HOOK_SHOT = 15, HOOK_PULL = 7.5f, HOOK_RANGE = 400;
-    public static final float RUN = 2.5f, GRAV = .28f, JUMP = 6.5f, SLIDE = 4.6f;
+    public static final float RUN = 2.5f, GRAV = .28f, JUMP = 9.2f, WALL_JUMP = 8.6f, WALL_PUSH = 4.2f, WALL_SLIDE = 1.4f, SLIDE = 4.6f;
     static final float MAX_HP = 100, BONE_HP = 25;
 
     public final int id; public int px, py, h = STAND_H, facing = 1; float remX, remY;
@@ -15,7 +15,8 @@ public final class Robot {
     public float hp = MAX_HP; public int lives, kills, deaths, deadT, invuln, hurtT, armor = (1 << PIECES) - 1;
     public int slideT, airT, fireT, fireSlot = 4; boolean jumping;
     public int rope; public float rx, ry, rvx, rvy, rlen; // 0 sin gancho, 1 volando, 2 enganchado
-    public final Wpn[] loadout = new Wpn[5]; public final int[] ammo = new int[5], reload = new int[5], delay = new int[5];
+    public final Wpn[] loadout = new Wpn[5]; public final int[] ammo = new int[5], reload = new int[5], delay = new int[5], charge = new int[5];
+    public int wallDir; int lastWall, wallT, wallLock;
     int prev, dirT, dirWas, heldSlot = -1, heldBtn, pending, pendT;
 
     Robot(int id, int lives) { this.id = id; this.lives = lives; }
@@ -23,6 +24,12 @@ public final class Robot {
     public boolean sliding() { return slideT > 0 || h != STAND_H; }
     public boolean hits(float x, float y) { return Math.abs(x - px) < 10 && y >= py - h && y <= py; }
     public int armorCount() { return Integer.bitCount(armor); }
+    /** Carga más alta entre las armas: 0 sin carga, 1 lista para lanzar. */
+    public float chargeLevel() {
+        float best = 0;
+        for (int i = 0; i < 5; i++) if (loadout[i].charge > 0) best = Math.max(best, charge[i] / (float) loadout[i].charge);
+        return best;
+    }
 
     private boolean free(Terrain t, int x, int y, int hh) {
         for (int yy = y - hh; yy < y; yy += 4) if (t.solid(x - HW, yy) || t.solid(x + HW, yy)) return false;
@@ -56,7 +63,8 @@ public final class Robot {
     public void spawnAt(World g) {
         hp = MAX_HP; armor = (1 << PIECES) - 1; deadT = 0; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
         int[] p = g.freeSpot(id == 0 ? g.robots[1] : g.robots[0]); px = p[0]; py = p[1];
-        for (int i = 0; i < 5; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; }
+        for (int i = 0; i < 5; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
+        wallDir = 0; wallT = 0; wallLock = 0;
         g.fx(Fx.SPAWN, px, py - 27, id, 0);
     }
     public void damage(World g, float d, float kx, float ky, int by, float hx, float hy) {
@@ -78,7 +86,7 @@ public final class Robot {
             Fx f = g.lastFx; f.c = (hx < px ? 1.5f : -1.5f) + kx; f.d = -3;
         }
         if (hp <= 0) {
-            hp = 0; rope = 0; deadT = 150; lives--; deaths++;
+            hp = 0; rope = 0; deadT = 150; java.util.Arrays.fill(charge, 0); lives--; deaths++;
             if (by != id) g.robots[by].kills++;
             g.fx(Fx.DEATH, px, py - 27, id, 0);
             if (lives < 0) { lives = 0; g.over(by == id ? 1 - id : by, id); deadT = 9999; lives = -1; }
@@ -110,17 +118,18 @@ public final class Robot {
         boolean up = (in & Input.UP) != 0, down = (in & Input.DOWN) != 0;
         boolean side = freshDir && ((in & Input.LEFT) != 0 ^ (in & Input.RIGHT) != 0);
         heldSlot = -1; heldBtn = btn;
-        if (btn == Input.A) {
-            if (up) throwHook(g, in);
-            else if (down) { heldSlot = 0; fire(g, 0); }
-            else if (side) { heldSlot = 1; fire(g, 1); }
-            else { heldSlot = 4; fire(g, 4); }
-        } else {
-            if (up) { heldSlot = 2; fire(g, 2); }
-            else if (down) { if (grounded && slideT == 0) { slideT = 26; h = SLIDE_H; g.fx(Fx.SLIDE, px, py, facing, 0); } }
-            else if (side) { heldSlot = 3; fire(g, 3); }
-            else jump(g);
-        }
+        if (btn == Input.A) use(g, up ? 2 : down ? 0 : side ? 1 : 4);
+        else if (up) throwHook(g, in);
+        else if (down) { if (grounded && slideT == 0) { slideT = 26; h = SLIDE_H; g.fx(Fx.SLIDE, px, py, facing, 0); } }
+        else if (side) use(g, 3);
+        else jump(g);
+    }
+    /** Arma normal: dispara. Arma con carga: el primer comando carga y, ya cargada, el siguiente la lanza. */
+    private void use(World g, int s) {
+        Wpn w = loadout[s];
+        if (w.charge == 0) { heldSlot = s; fire(g, s); return; }
+        if (charge[s] >= w.charge) { charge[s] = 0; fire(g, s); }
+        else if (charge[s] == 0 && reload[s] == 0) { charge[s] = 1; g.fx(Fx.CHARGE, px, py - 30, 0, id).b = Wpn.index(w.name); }
     }
     private void jump(World g) {
         if (rope != 0) { rope = 0; return; }
@@ -134,7 +143,11 @@ public final class Robot {
         rvx = facing * (float) Math.cos(a) * HOOK_SHOT; rvy = -(float) Math.sin(a) * HOOK_SHOT; g.fx(Fx.HOOK, rx, ry, 0, id);
     }
     void step(World g, int in) {
-        for (int i = 0; i < 5; i++) { if (delay[i] > 0) delay[i]--; if (reload[i] > 0 && --reload[i] == 0) ammo[i] = loadout[i].clip; }
+        for (int i = 0; i < 5; i++) {
+            if (delay[i] > 0) delay[i]--;
+            if (reload[i] > 0 && --reload[i] == 0) ammo[i] = loadout[i].clip;
+            if (charge[i] > 0 && charge[i] < loadout[i].charge && ++charge[i] == loadout[i].charge) g.fx(Fx.CHARGE, px, py - 30, 1, id);
+        }
         if (lives < 0) return;
         if (deadT > 0) { if (--deadT == 0) spawnAt(g); prev = in; return; }
         Terrain t = g.t;
@@ -143,6 +156,10 @@ public final class Robot {
         if (dir != dirWas) { dirT = 0; dirWas = dir; } else if (dirT < 1000) dirT++;
         boolean fresh = dir != 0 && dirT <= SMASH_WINDOW;
         int pressed = in & ~prev; prev = in;
+        if ((pressed & Input.B) != 0 && wallT > 0 && (in & (Input.UP | Input.DOWN)) == 0) {
+            vx = -lastWall * WALL_PUSH; vy = -WALL_JUMP; jumping = true; wallLock = 12; facing = -lastWall; wallT = 0; wallDir = 0;
+            pressed &= ~Input.B; g.fx(Fx.JUMP, px + lastWall * 7, py - 20, 0, 0);
+        }
         for (int b = Input.A; b <= Input.B; b <<= 1) if ((pressed & b) != 0) {
             boolean directional = (in & (Input.UP | Input.DOWN)) != 0 || fresh;
             boolean running = dir != 0 && !fresh;
@@ -164,15 +181,16 @@ public final class Robot {
         } else {
             if (h != STAND_H && free(t, px, py, STAND_H)) h = STAND_H;
             float target = dir * (RUN + (12 - armorCount()) * .035f) * (h != STAND_H ? .6f : 1);
-            if (dir != 0 && rope == 0) facing = dir;
-            if (rope != 2) {
+            if (wallLock > 0) wallLock--;
+            else if (dir != 0 && rope == 0) facing = dir;
+            if (rope != 2 && wallLock == 0) {
                 float acc = grounded ? .55f : .3f, d = target - vx;
                 if (Math.abs(vx) > RUN * 1.4f && Math.signum(vx) == Math.signum(target)) d = 0;
                 if (dir == 0 && !grounded) acc = .04f;
                 vx += Math.max(-acc, Math.min(acc, d));
             }
         }
-        if (rope != 0 && (in & Input.A) == 0) rope = 0; // soltar A suelta el gancho
+        if (rope != 0 && (in & Input.B) == 0) rope = 0; // soltar B suelta el gancho
         if (rope == 1) {
             for (int i = 0; i < 3 && rope == 1; i++) {
                 rx += rvx / 3; ry += rvy / 3;
@@ -188,6 +206,7 @@ public final class Robot {
             }
         }
         if (rope != 2) vy = Math.min(10, vy + GRAV);
+        if (wallDir != 0) vy = Math.min(vy, WALL_SLIDE);
         if (vy > 0 && rope != 2 && Math.abs(vx) > 6) vx *= .97f;
         boolean wasGround = grounded;
         moveX(t, vx);
@@ -195,6 +214,9 @@ public final class Robot {
         if (grounded) coyote = 6; else if (coyote > 0) coyote--;
         if (grounded && !wasGround && airT > 22) g.fx(Fx.JUMP, px, py, 1, 0);
         airT = grounded ? 0 : airT + 1;
+        boolean wall = !grounded && rope == 0 && slideT == 0 && dir != 0 && wallLock == 0 && vy > -1.5f && !free(t, px + dir, py, h);
+        if (wall) { if (wallDir == 0) g.fx(Fx.WALL, px + dir * 7, py - 20, 0, 0); else if (airT % 6 == 0) g.fx(Fx.WALL, px + dir * 7, py - 8, 1, 0); wallDir = dir; lastWall = dir; wallT = 6; }
+        else { wallDir = 0; if (wallT > 0) wallT--; }
         if (grounded && slideT == 0 && h != STAND_H && dir == 0) vx *= .7f;
     }
     private float dist() { return (float) Math.hypot(rx - px, ry - (py - 40)); }

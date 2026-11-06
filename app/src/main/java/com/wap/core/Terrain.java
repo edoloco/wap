@@ -3,14 +3,18 @@ package com.wap.core;
 public final class Terrain {
     public static final int W = 1800, H = 1000, TILE = 128;
     /** 0 es aire; STEEL es indestructible; lo demás se destruye. */
-    public static final byte PANEL = 1, STEEL = 2, CRATE = 3, VENT = 4, COMPUTER = 5;
+    public static final byte PANEL = 1, STEEL = 2, CRATE = 3, VENT = 4, COMPUTER = 5, DEBRIS = 6;
+    /** Tamaño bajo el cual un trozo deja de chocar: grosor en píxeles y área de una pieza suelta. */
+    static final int THIN = 6, SMALL = 420;
+    static final int[][] THEMES = {{0xFF3B5478,0xFF7596BE,0xFF1F2E46,0xFF2E4466,0xFFA9C0DC},{0xFF2F6B55,0xFF6CBB95,0xFF163E30,0xFF245642,0xFFA5E0C2},{0xFF61407F,0xFFA37ECB,0xFF372349,0xFF4D3266,0xFFD2BDE6},{0xFF7D4A3A,0xFFC98D74,0xFF4A2A20,0xFF65392C,0xFFE4C2B2}};
+    public int theme;
     static final int G = 32, FILL = 0xFF4A5F80;
     public final int[] tex = new int[W * H];
     public static final int TW = (W + TILE - 1) / TILE, TH = (H + TILE - 1) / TILE;
     public final byte[] m = new byte[W * H];
     public final boolean[] dirty = new boolean[TW * TH];
 
-    public boolean solid(int x, int y) { return x < 0 || y < 0 || x >= W || y >= H || m[y * W + x] != 0; }
+    public boolean solid(int x, int y) { if (x < 0 || y < 0 || x >= W || y >= H) return true; byte k = m[y * W + x]; return k != 0 && k != DEBRIS; }
     public int at(int x, int y) { return x < 0 || y < 0 || x >= W || y >= H ? 2 : m[y * W + x]; }
 
     private void disc(int cx, int cy, int rx, int ry, int from, int to) {
@@ -24,6 +28,46 @@ public final class Terrain {
             else if (m[i] == from) { m[i] = (byte) to; tex[i] = FILL; }
         }
         mark(x0, y0, x1, y1);
+        if (from < 0) cleanup(x0, y0, x1, y1);
+    }
+    private int[] sat = new int[0], sat2 = new int[0]; private final int[] stamp = new int[W * H], stack = new int[SMALL * 5], found = new int[SMALL + 1]; private int cur;
+    private boolean col(int i) { byte k = m[i]; return k != 0 && k != DEBRIS; }
+    /** Tras una destrucción, marca astillas y pedazos sueltos: se siguen viendo, pero ya no chocan con nada. */
+    private void cleanup(int x0, int y0, int x1, int y1) {
+        final int M = 14, E = 8;
+        int ax = Math.max(0, x0 - M), ay = Math.max(0, y0 - M), bx = Math.min(W - 1, x1 + M), by = Math.min(H - 1, y1 + M), w = bx - ax + 1, h = by - ay + 1, st = w + 1, n = st * (h + 1);
+        if (sat.length < n) { sat = new int[n]; sat2 = new int[n]; }
+        for (int j = 0; j < h; j++) for (int i = 0; i < w; i++)
+            sat[(j + 1) * st + i + 1] = (col((ay + j) * W + ax + i) ? 1 : 0) + sat[j * st + i + 1] + sat[(j + 1) * st + i] - sat[j * st + i];
+        int K = THIN;
+        for (int j = 0; j < h; j++) for (int i = 0; i < w; i++) {
+            boolean full = i + K <= w && j + K <= h && sat[(j + K) * st + i + K] - sat[j * st + i + K] - sat[(j + K) * st + i] + sat[j * st + i] == K * K;
+            sat2[(j + 1) * st + i + 1] = (full ? 1 : 0) + sat2[j * st + i + 1] + sat2[(j + 1) * st + i] - sat2[j * st + i];
+        }
+        int ex0 = Math.max(ax, x0 - E), ey0 = Math.max(ay, y0 - E), ex1 = Math.min(bx, x1 + E), ey1 = Math.min(by, y1 + E);
+        for (int y = ey0; y <= ey1; y++) for (int x = ex0; x <= ex1; x++) {
+            int q = y * W + x; if (!col(q) || m[q] == STEEL) continue;
+            int i1 = x - ax + 1, j1 = y - ay + 1, i0 = Math.max(0, i1 - K), j0 = Math.max(0, j1 - K);
+            if (sat2[j1 * st + i1] - sat2[j0 * st + i1] - sat2[j1 * st + i0] + sat2[j0 * st + i0] == 0) m[q] = DEBRIS;
+        }
+        cur++;
+        for (int y = ey0; y <= ey1; y++) for (int x = ex0; x <= ex1; x++) {
+            int q = y * W + x; if (!col(q) || m[q] == STEEL || stamp[q] == cur) continue;
+            int sp = 0, c = 0; boolean big = false; stack[sp++] = q; stamp[q] = cur;
+            while (sp > 0 && !big) {
+                int p = stack[--sp];
+                if (c >= SMALL) { big = true; break; }
+                found[c++] = p;
+                for (int d = 0; d < 4; d++) {
+                    int o = d == 0 ? p + 1 : d == 1 ? p - 1 : d == 2 ? p + W : p - W;
+                    if (o < 0 || o >= W * H || !col(o)) continue;
+                    if (m[o] == STEEL) { big = true; break; }
+                    if (stamp[o] != cur) { stamp[o] = cur; stack[sp++] = o; }
+                }
+            }
+            if (!big) for (int i = 0; i < c; i++) m[found[i]] = DEBRIS;
+        }
+        mark(ex0, ey0, ex1, ey1);
     }
     private void mark(int x0, int y0, int x1, int y1) {
         int a = Math.max(0, (x0 - 3) / TILE), b = Math.min(TW - 1, (x1 + 3) / TILE);
@@ -41,10 +85,10 @@ public final class Terrain {
     }
     void panel(int x, int y) {
         for (int j = 0; j < G; j++) for (int i = 0; i < G; i++) {
-            int c = 0xFF3B5478;
-            if (i < 3 || j < 3) c = 0xFF7596BE; else if (i >= G - 3 || j >= G - 3) c = 0xFF1F2E46;
-            else if (i > 9 && i < 22 && j > 9 && j < 22) c = 0xFF2E4466;
-            if ((i - 6) * (i - 6) + (j - 6) * (j - 6) < 4 || (i - 25) * (i - 25) + (j - 6) * (j - 6) < 4 || (i - 6) * (i - 6) + (j - 25) * (j - 25) < 4 || (i - 25) * (i - 25) + (j - 25) * (j - 25) < 4) c = 0xFFA9C0DC;
+            int[] t = THEMES[theme]; int c = t[0];
+            if (i < 3 || j < 3) c = t[1]; else if (i >= G - 3 || j >= G - 3) c = t[2];
+            else if (i > 9 && i < 22 && j > 9 && j < 22) c = t[3];
+            if ((i - 6) * (i - 6) + (j - 6) * (j - 6) < 4 || (i - 25) * (i - 25) + (j - 6) * (j - 6) < 4 || (i - 6) * (i - 6) + (j - 25) * (j - 25) < 4 || (i - 25) * (i - 25) + (j - 25) * (j - 25) < 4) c = t[4];
             put(x + i, y + j, PANEL, c);
         }
     }
@@ -119,14 +163,15 @@ public final class Terrain {
     }
     public void generate(Rng g) {
         java.util.Arrays.fill(m, (byte) 0);
-        final int floors = 5, gap = 160, cols = W / G;
+        theme = g.i(THEMES.length);
+        final int gap = g.i(2) == 0 ? 160 : 192, cols = W / G, minLen = 4 + g.i(4), spread = 7 + g.i(9), gapMin = 2 + g.i(3);
         int base = H - 64;
         for (int i = 0; i * G < W; i++) { for (int d = 0; d < 2; d++) if (g.i(9) == 0 && d == 0) steel(i * G, base, G, G); else panel(i * G, base + d * G); }
-        for (int f = 0; f < floors; f++) {
-            int y = base - (f + 1) * gap, x = 1 + g.i(4);
+        for (int f = 0; base - (f + 1) * gap > 100; f++) {
+            int y = base - (f + 1) * gap, x = 1 + g.i(6);
             y -= y % G;
             while (x < cols - 2) {
-                int len = 6 + g.i(10), kind = g.i(10);
+                int len = minLen + g.i(spread), kind = g.i(10);
                 if (x + len > cols - 1) len = cols - 1 - x;
                 if (len >= 3) {
                     if (kind < 2) ventH(x * G, y, len * G);
@@ -135,13 +180,18 @@ public final class Terrain {
                     int stepX = (g.i(2) == 0 ? x - 2 : x + len);
                     if (stepX > 1 && stepX < cols - 3 && g.i(2) == 0) { int sy = y + gap / 2 - (y + gap / 2) % G; if (clearArea(stepX * G, sy - 60, 2 * G, 92)) { panel(stepX * G, sy); panel((stepX + 1) * G, sy); } }
                 }
-                x += len + 3 + g.i(3);
+                x += len + gapMin + g.i(3);
             }
         }
         for (int n = 0; n < 7; n++) {
             int x = (3 + g.i(cols - 6)) * G, y = (2 + g.i(4)) * G, hh = (3 + g.i(3)) * G;
             y = base - G - (1 + g.i(4)) * gap; y -= y % G;
             if (clearArea(x, y, G, hh)) ventV(x, y, hh);
+        }
+        for (int n = 0; n < 3 + g.i(3); n++) { // pasadizos de dos paredes para rebotar
+            int w = 3 + g.i(2), hh = (8 + g.i(6)) * G, x = (3 + g.i(cols - 9)) * G, y = base - hh;
+            for (int j = y; j < base; j++) for (int i = x + G; i < x + (w + 1) * G; i++) m[j * W + i] = 0;
+            for (int j = y; j < base; j += G) { panel(x, j); panel(x + (w + 1) * G, j); }
         }
         steel(0, 0, W, 16); steel(0, H - 16, W, 16); steel(0, 0, 16, H); steel(W - 16, 0, 16, H);
         java.util.Arrays.fill(dirty, true);

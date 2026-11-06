@@ -1,9 +1,9 @@
 package com.wap.core;
 /** Definición de un arma: cargador, tiempo de recarga y comportamiento del proyectil, al estilo de la tabla de armas de Liero. */
 public final class Wpn {
-    public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10;
+    public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12;
     public String name, desc = "";
-    public int clip = 1, delay = 20, reload = 100, parts = 1, fuse = 0, look = BULLET;
+    public int charge, clip = 1, delay = 20, reload = 100, parts = 1, fuse = 0, look = BULLET;
     public float spread, speed = 10, grav, bounce, drag = 1, accel, dmg, knock = 1, recoil, lob, jitter;
     public int radius, dig;          // radio de explosión (0 = sin explosión) y radio de excavación
     public boolean beam, pierce, sticky, burn, impact = true, smoke, fan;
@@ -30,6 +30,8 @@ public final class Wpn {
         Wpn chiq = sub("chiq").shot(1, 180, 4.5f).phys(.14f, .35f, 1).boom(24, 16, 20, 2.2f).fuse(55).look(GRENADE).split(frag, 4);
         Wpn hop = sub("");
         ALL = new Wpn[] {
+            new Wpn("PLASMA GUN", "Ráfaga de disparos de energía").mag(30, 9, 90).shot(1, 0, 9.5f).hit(5, 4, .5f).look(LEMON),
+            new Wpn("PLASMA CANNON", "Comando para cargar, comando para lanzar").mag(1, 12, 30).shot(1, 0, 8).boom(34, 46, 30, 4).look(PLASMA).rec(2),
             new Wpn("SHOTGUN", "Abanico de perdigones").mag(5, 34, 120).shot(9, 8, 11).phys(.02f, 0, 1).hit(5, 5, .8f).rec(1.6f),
             new Wpn("SUPER SHOTGUN", "Doble cañón, mucho retroceso").mag(2, 26, 150).shot(16, 12, 12).phys(.02f, 0, 1).hit(5, 5, 1).rec(3.2f),
             new Wpn("CHAINGUN", "Ráfaga larga").mag(50, 3, 220).shot(1, 3, 12).phys(.01f, 0, 1).hit(3, 4, .35f).rec(.12f),
@@ -63,6 +65,7 @@ public final class Wpn {
         for (Wpn w : ALL) {
             if (w.name.equals("BAZOOKA") || w.name.equals("DOOMSDAY") || w.name.equals("LARPA")) { w.accel = .24f; w.smoke = true; }
             if (w.name.equals("MINE") || w.name.equals("BOOBY TRAP")) { w.sticky = true; w.trigger = 28; }
+            if (w.name.equals("PLASMA CANNON")) w.charge = 75;
             if (w.name.equals("LASER")) w.beam = true;
             if (w.name.equals("GAUSS GUN")) { w.beam = true; w.pierce = true; }
             if (w.name.equals("LARPA")) { w.splinter = drop; w.dropEvery = 16; }

@@ -7,8 +7,8 @@ public final class App {
     static final int RED = 0xFFFF0000, INK = RobotArt.INK, WHITE = 0xFFFFFFFF, MUTE = 0xFF6B7280, LINE = 0xFFCBD2DC;
     static final String[] LEVELS = {"FÁCIL", "NORMAL", "DIFÍCIL"}; static final float[] SKILL = {.45f, .9f, 1.6f};
     static final int[] LIVES = {3, 5, 10, 15, 30};
-    static final String[] DEF = {"GRENADE", "BAZOOKA", "SHOTGUN", "MINE", "CHAINGUN"};
-    public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey;
+    static final String[] DEF = {"GRENADE", "BAZOOKA", "PLASMA CANNON", "MINE", "PLASMA GUN"};
+    public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey; public Updater up;
     final Store st; final Audio au; public final TouchPad pad = new TouchPad(); public final Renderer ren = new Renderer();
     public World w; Bot bot; float W = 640, H = 360, u = 1; int cd; int level = 1, livesIx = 2, selSlot = 4, cur, seed = 12345, overT; long frames;
     final int[] slots = new int[5]; final int[] in = new int[2];
@@ -17,7 +17,7 @@ public final class App {
 
     public App(Store st, Audio au) {
         this.st = st; this.au = au;
-        for (int i = 0; i < 5; i++) { slots[i] = Wpn.index(st.get("slot" + i, DEF[i])); }
+        for (int i = 0; i < 5; i++) { slots[i] = Wpn.index(st.get("arma" + i, DEF[i])); }
         try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
     }
     public void seed(int s) { seed = s; }
@@ -32,7 +32,7 @@ public final class App {
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); go(TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { for (int i = 0; i < 5; i++) st.put("slot" + i, Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
+    void save() { for (int i = 0; i < 5; i++) st.put("arma" + i, Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
     void go(int s) { screen = s; focus = 0; pad.clear(); }
     public boolean tap(float x, float y) {
         for (int i = btns.size() - 1; i >= 0; i--) { float[] b = btns.get(i); if (x >= b[0] && y >= b[1] && x <= b[2] && y <= b[3]) { au.play(Audio.MENU); acts.get(i).run(); return true; } }
@@ -88,7 +88,7 @@ public final class App {
     /** Etiqueta de la combinación, dibujada con triángulos para no depender de la fuente. */
     public static void combo(Gfx g, int slot, float x, float cy, float s, int c) {
         int dir = slot == 0 ? 2 : slot == 2 ? 0 : slot == 4 ? -1 : 1;
-        String b = slot == 0 || slot == 1 || slot == 4 ? "A" : "B";
+        String b = slot == 3 ? "B" : "A";
         float q = s * .42f;
         if (dir == 0) g.poly(new float[]{x + q, cy - q, x + 2 * q, cy + q * .7f, x, cy + q * .7f}, c, 0, 0);
         if (dir == 2) g.poly(new float[]{x + q, cy + q, x + 2 * q, cy - q * .7f, x, cy - q * .7f}, c, 0, 0);
@@ -120,7 +120,7 @@ public final class App {
     }
     void veil(Gfx g) { g.rect(0, 0, W, H, 0xB8141414); }
     void menu(Gfx g, float x, float y, float w, String[] l, Runnable[] a) {
-        float h = 40 * u, gap = 8 * u;
+        float h = (l.length > 4 ? 37 : 40) * u, gap = (l.length > 4 ? 6 : 8) * u;
         for (int i = 0; i < l.length; i++) {
             boolean f = i == focus && !pad.visible || i == focus && padSeen;
             g.rrect(x, y, w, h, 3 * u, f ? RED : WHITE, INK, 2 * u);
@@ -134,9 +134,11 @@ public final class App {
         float s = H / 72f; hero.lean = frames / 30 % 2 == 0 ? 4 : 6;
         g.save(); g.translate(W * .25f, H * .92f); g.scale(s, s); RobotArt.drawPose(g, hero, (1 << Robot.PIECES) - 1, RED, 0); g.restore();
         float x = W * .5f, wd = W * .42f;
-        g.text("WAP", x - 3 * u, H * .24f, 76 * u, INK, -1);
-        menu(g, x, H * .3f, wd, new String[]{"JUGAR", "ELEGIR 5 ARMAS", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]}, new Runnable[]{this::start, () -> go(ARMS),
-            () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }, () -> { level = (level + 1) % 3; save(); }});
+        g.text("WAP", x - 3 * u, H * .2f, 62 * u, INK, -1);
+        String[] l = {"JUGAR", "ELEGIR 5 ARMAS", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
+        Runnable[] a = {this::start, () -> go(ARMS), () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }, () -> { level = (level + 1) % 3; save(); }};
+        if (up != null) { l = new String[]{l[0], l[1], l[2], l[3], up.label()}; a = new Runnable[]{a[0], a[1], a[2], a[3], () -> up.act()}; g.text(up.version(), W - 8 * u, H - 7 * u, 10 * u, MUTE, 1); }
+        menu(g, x, H * .24f, wd, l, a);
     }
     void arms(Gfx g) {
         g.clear(WHITE);
@@ -173,6 +175,7 @@ public final class App {
             combo(g, i, cx + 5 * u, y + 10 * u, 10 * u, INK);
             float frac = me.reload[i] > 0 ? 1 - me.reload[i] / (float) wp.reload : me.ammo[i] / (float) wp.clip;
             int c = me.reload[i] > 0 ? 0xFF9AA3B2 : RED;
+            if (wp.charge > 0 && me.reload[i] == 0) { frac = me.charge[i] / (float) wp.charge; c = 0xFFE0A800; }
             g.rect(cx + 5 * u, y + 23 * u, (cw - 10 * u) * Math.max(0, frac), 3.5f * u, c);
             String nm = wp.name.length() > 9 ? wp.name.substring(0, 9) : wp.name;
             g.text(nm, cx + 5 * u, y + 20 * u, 7.5f * u, INK, -1);

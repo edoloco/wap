@@ -67,8 +67,8 @@ public final class Bot {
         if (nav && wy < -24 && m.grounded && m.rope == 0 && jumpT < 0) { out |= Input.B; jumpT = 18; }
         if (--jumpT < 0 && m.grounded && (stuckT > 12 && stuckT < 60 || r.f() < .012f || dy < -44 && ad < 330 && r.f() < .1f)) { out |= Input.B; jumpT = 22; }
         else if (!m.grounded && m.vy < 0 && jumpT > 8) out |= Input.B;
-        if (--hookT < 0 && m.rope == 0 && (nav ? wy < -40 || stuckT > 60 : dy < -70 || stuckT > 60) && r.f() < .2f) { comboT = 2; combo = Input.UP | Input.A | (moveDir > 0 ? Input.RIGHT : moveDir < 0 ? Input.LEFT : 0); hookT = 40; hookHold = 70; return 0; }
-        if (m.rope != 0) { hookT = 20; if (--hookHold > 0 && (nav ? wy < -12 : dy < -12)) out |= Input.A; return out; }
+        if (--hookT < 0 && m.rope == 0 && (nav ? wy < -40 || stuckT > 60 : dy < -70 || stuckT > 60) && r.f() < .2f) { comboT = 2; combo = Input.UP | Input.B | (moveDir > 0 ? Input.RIGHT : moveDir < 0 ? Input.LEFT : 0); hookT = 40; hookHold = 70; return 0; }
+        if (m.rope != 0) { hookT = 20; if (--hookHold > 0 && (nav ? wy < -12 : dy < -12)) out |= Input.B; return out; }
         if (pressT > 0) pressT--;
         float aimOK = ady < 42 ? 1 : 0;
         if (see && (dx > 0) == (m.facing > 0) && r.f() < .10f * skill) {
@@ -77,7 +77,7 @@ public final class Bot {
                 if (q == 0 && ready(m, 1)) { comboT = 2; combo = side | Input.A; return 0; }
                 if (q == 1 && ready(m, 3)) { comboT = 2; combo = side | Input.B; return 0; }
                 if (q == 2 && ready(m, 0)) { comboT = 2; combo = Input.DOWN | Input.A; return 0; }
-                if (q == 3 && ready(m, 2)) { comboT = 2; combo = Input.UP | Input.B; return 0; }
+                if (q == 3 && ready(m, 2)) { comboT = 2; combo = Input.UP | Input.A; return 0; }
                 fireHold = 6 + r.i(30);
             } else if (dy < -40 && ad < 320 && m.grounded && jumpT < 0) { out |= Input.B; jumpT = 22; }
         }

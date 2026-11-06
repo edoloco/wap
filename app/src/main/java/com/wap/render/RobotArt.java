@@ -34,7 +34,7 @@ public final class RobotArt {
         {  3,-14,    4,-ANK,  96, 34,  92, 30, -29.8f, 12}};
     static final float[] IDLE_A = {4.5f,-ANK,-3.5f,-ANK, 78, 96,102, 84, -28.8f, 3}, IDLE_B = {4.5f,-ANK,-3.5f,-ANK, 80, 98,100, 82, -28.2f, 3};
     static final float[] UP_F = {10,-15,-5,-1, 4,-2,172,108,-30,5}, DOWN_F = {9,-9,-6,-3, 20,10,165,120,-30,5};
-    static final float[] SLIDE_F = {23,-ANK,-3,-ANK,150,185,120,150,-11,-58}, HOOK_F = {7,-8,-6,-2,-60,-60,120,60,-32,4};
+    static final float[] WALL_F = {9,-14,7,-5,-8,-8,160,110,-30,-7}, SLIDE_F = {23,-ANK,-3,-ANK,150,185,120,150,-11,-58}, HOOK_F = {7,-8,-6,-2,-60,-60,120,60,-32,4};
     private static float ground(Terrain t, int x, int y) {
         for (int k = -11; k < 13; k++) if (t.solid(x, y + k)) return k;
         return 0;
@@ -44,13 +44,14 @@ public final class RobotArt {
     public static void update(View v, Robot r, World g) {
         float sp = Math.abs(r.vx); boolean run = r.grounded && sp > .3f && !r.sliding() && r.rope != 2;
         if (run) v.phase = (v.phase + sp) % (STRIDE * 4);
-        int st = r.sliding() ? 4 : r.rope == 2 ? 5 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
+        int st = r.sliding() ? 4 : r.rope == 2 ? 5 : r.wallDir != 0 ? 6 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
         if (r.fireT > 0) st += 10;
         v.clock++;
         if (st != v.state || v.clock % HOLD == 0) {
             v.state = st;
             switch (st % 10) {
                 case 4: pose(v, SLIDE_F); break;
+                case 6: pose(v, WALL_F); break;
                 case 5: {
                     pose(v, HOOK_F);
                     v.a1 = v.a2 = (float) Math.toDegrees(Math.atan2(r.ry - (r.py - 40), (r.rx - r.px) * r.facing));
@@ -121,9 +122,17 @@ public final class RobotArt {
     public static void draw(Gfx g, View v, Robot r, int color) {
         if (r.invuln > 0 && r.invuln < 80 && r.invuln / 4 % 2 == 0) return;
         g.save(); g.translate(r.px, r.py); g.scale(r.facing, 1);
-        drawPose(g, v, r.armor, v.flash > 0 ? 0xFFFFD040 : color, r.py);
+        float ch = r.chargeLevel(); int col = v.flash > 0 ? 0xFFFFD040 : color;
+        if (ch > 0) { boolean full = ch >= 1; int rate = full ? 4 : ch > .5f ? 6 : 10; if (v.clock / rate % 2 == 0) col = full ? 0xFFFFF27A : mix(color); }
+        drawPose(g, v, r.armor, col, r.py);
         g.restore();
+        if (ch >= 1) {
+            float R = 34 + v.clock / 4 % 3 * 3; int n = 8; float[] q = new float[n * 4];
+            for (int i = 0; i < n * 2; i++) { float a = i * 3.14159f / n + v.clock / 4 * .4f, d = i % 2 == 0 ? R : R * .72f; q[i * 2] = r.px + (float) Math.cos(a) * d; q[i * 2 + 1] = r.py - 27 + (float) Math.sin(a) * d; }
+            g.poly(q, 0, 0xFFFFE23A, 1.2f);
+        }
     }
+    private static int mix(int c) { return 0xFF000000 | ((c >> 16 & 255) + 255) / 2 << 16 | ((c >> 8 & 255) + 255) / 2 << 8 | ((c & 255) + 255) / 2; }
     /** El dibujo en sí, en coordenadas locales mirando a la derecha. */
     public static void drawPose(Gfx g, View v, int ar, int c, int unused) {
         float e = (v.assemble / HOLD * HOLD) / 30f; e *= e;

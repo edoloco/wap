@@ -6,7 +6,7 @@ import java.util.Random;
 public final class Renderer {
     public static final int PAPER = 0xFFFFFFFF, GRID = 0xFFDCE7F2, INK = RobotArt.INK;
     static final int DIRT = 0xFF3B5478, DIRT2 = 0xFFCB8C3C;
-    static final int BG = 256; final int[] bg = new int[BG * BG]; boolean bgNew = true;
+    static final int BG = 256; final int[] bg = new int[BG * BG]; boolean bgNew = true; int theme;
     void paintBg() {
         for (int y = 0; y < BG; y++) for (int x = 0; x < BG; x++) {
             int c = 0xFFC7D2E0, gx = x % 128, gy = y % 128;
@@ -14,7 +14,8 @@ public final class Renderer {
             else if (gx > 20 && gx < 108 && gy > 20 && gy < 108) c = 0xFFBDC9D9;
             if (y > 150 && y < 178) c = (x / 12 + y / 12) % 2 == 0 ? 0xFFB3C0D2 : 0xFFA8B6CA;
             if ((gx - 10) * (gx - 10) + (gy - 10) * (gy - 10) < 7) c = 0xFF9AA9BE;
-            bg[y * BG + x] = c;
+            int[] k = {0x100, 0x100, 0x100}; if (theme == 1) { k[0] = 0xF0; k[2] = 0xE8; } else if (theme == 2) { k[1] = 0xEC; } else if (theme == 3) { k[1] = 0xF0; k[2] = 0xDC; }
+            bg[y * BG + x] = 0xFF000000 | ((c >> 16 & 255) * k[0] >> 8) << 16 | ((c >> 8 & 255) * k[1] >> 8) << 8 | (c & 255) * k[2] >> 8;
         }
     }
     static final class P { float x, y, vx, vy, life, max, rot, vr, size, g = .2f; int kind, slot, color; boolean ground; }
@@ -23,17 +24,18 @@ public final class Renderer {
     final Random r = new Random(7); final int[] px = new int[Terrain.TILE * Terrain.TILE];
     public float camX = 900, camY = 500, zoom = 2, shake; boolean first = true;
 
-    public void reset(World w) { ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; }
+    public void reset(World w) { ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; theme = w.t.theme; bgNew = true; }
     static int hash(int x, int y) { int h = x * 374761393 + y * 668265263; h = (h ^ h >> 13) * 1274126177; return h ^ h >> 16; }
     void fillTile(Terrain t, int tx, int ty) {
         int S = Terrain.TILE, ox = tx * S, oy = ty * S, i = 0;
         for (int y = oy; y < oy + S; y++) for (int x = ox; x < ox + S; x++) {
-            int c = 0;
-            if (x < Terrain.W && y < Terrain.H && t.m[y * Terrain.W + x] != 0)
-                c = t.at(x - 1, y) == 0 || t.at(x + 1, y) == 0 || t.at(x, y - 1) == 0 || t.at(x, y + 1) == 0 ? INK : t.tex[y * Terrain.W + x];
+            int c = 0; int k = x < Terrain.W && y < Terrain.H ? t.m[y * Terrain.W + x] : 0;
+            if (k == Terrain.DEBRIS) c = t.tex[y * Terrain.W + x] & 0xFFFFFF | 0x80000000;
+            else if (k != 0) c = air(t, x - 1, y) || air(t, x + 1, y) || air(t, x, y - 1) || air(t, x, y + 1) ? INK : t.tex[y * Terrain.W + x];
             px[i++] = c;
         }
     }
+    static boolean air(Terrain t, int x, int y) { int k = t.at(x, y); return k == 0 || k == Terrain.DEBRIS; }
     P part(int kind, float x, float y, float vx, float vy, float life, float size, int color) {
         if (ps.size() > 500) ps.remove(0);
         P p = new P(); p.kind = kind; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.life = p.max = life; p.size = size; p.color = color;
@@ -51,6 +53,8 @@ public final class Renderer {
             case Fx.CHIPS: for (int i = 0; i < f.a; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 4, -r.nextFloat() * 3, 24, 1.6f, DIRT2); break;
             case Fx.SMOKE: { P p = part(f.a > 0 ? FIRE : SMOKE, f.x, f.y, 0, -.2f, f.a > 0 ? 14 : 24, f.a > 0 ? 3 : 3.5f, 0xFF9098A8); p.g = 0; break; }
             case Fx.FLASH: booms.add(new float[]{f.x, f.y, 9, 8, 0}); { RobotArt.View v = views[f.who]; v.label = Wpn.ALL[(int) f.b].name; v.labelT = LABEL; } break;
+            case Fx.CHARGE: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "CARGADO" : Wpn.ALL[(int) f.b].name; v.labelT = LABEL; break; }
+            case Fx.WALL: { P p = part(SMOKE, f.x, f.y, 0, -.3f, 14, 2, 0xFFBFC6D2); p.g = 0; break; }
             case Fx.HOOK: if (f.a == 0) { RobotArt.View v = views[f.who]; v.label = "GANCHO"; v.labelT = LABEL; } break;
             case Fx.HIT: for (int i = 0; i < 5; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 5, (r.nextFloat() - .5f) * 5, 14, 1.3f, 0xFFFFC020); break;
             case Fx.ARMOR: { P p = part(ARMOR, f.x, f.y, f.c, f.d, 170, 1, RobotArt.COLOR[f.who]); p.slot = (int) f.a; p.g = .22f; break; }
@@ -88,7 +92,13 @@ public final class Renderer {
     }
     public void tick(World w) {
         stepFx(w);
-        for (int i = 0; i < 2; i++) RobotArt.update(views[i], w.robots[i], w);
+        for (int i = 0; i < 2; i++) {
+            Robot o = w.robots[i]; RobotArt.update(views[i], o, w);
+            float ch = o.chargeLevel();
+            if (o.alive() && ch > 0 && w.tick % 3 == 0) {
+                float a = r.nextFloat() * 6.28f, d = 34; P p = part(SQUARE, o.px + (float) Math.cos(a) * d, o.py - 27 + (float) Math.sin(a) * d, -(float) Math.cos(a) * 2.6f, -(float) Math.sin(a) * 2.6f, 12, 1.8f, 0xFFFFE23A); p.g = 0;
+            }
+        }
     }
     public void camera(Gfx g, World w, int who) {
         zoom = Math.max(1.05f, g.h() / 290f);
@@ -168,6 +178,11 @@ public final class Renderer {
             case Wpn.FLAME: { float k = s.life > 0 && s.w.fuse > 0 ? s.life / (float) s.w.fuse : 1; g.circle(s.x, s.y, 1.5f + 3.2f * k, k > .5f ? 0xFFFFD040 : 0xFFFF7010, 0, 0); break; }
             case Wpn.SPIKE: { for (int i = 0; i < 4; i++) { float c = i * .785f + s.age * .2f; g.line(s.x - (float) Math.cos(c) * 4.5f, s.y - (float) Math.sin(c) * 4.5f, s.x + (float) Math.cos(c) * 4.5f, s.y + (float) Math.sin(c) * 4.5f, INK, 1); } break; }
             case Wpn.DIRT: g.circle(s.x, s.y, 5, DIRT2, INK, .8f); break;
+            case Wpn.LEMON: g.save(); g.translate(s.x, s.y); g.rotate(a); g.scale(1.45f, 1); g.circle(0, 0, 2.6f, 0xFFFFE23A, INK, .7f); g.restore(); break;
+            case Wpn.PLASMA: {
+                float d = (float) Math.hypot(s.vx, s.vy), nx = s.vx / Math.max(1, d), ny = s.vy / Math.max(1, d), p = s.age / 3 % 2 * 1.2f;
+                g.circle(s.x - nx * 20, s.y - ny * 20, 3.4f, 0xFFFFA010, INK, .7f); g.circle(s.x - nx * 12, s.y - ny * 12, 5.4f, 0xFFFFC71E, INK, .7f);
+                g.circle(s.x, s.y, 9.5f + p, 0xFFFFE23A, INK, 1); g.circle(s.x + nx * 1.5f, s.y + ny * 1.5f, 5.5f, 0xFFFFFFFF, 0, 0); break; }
             case Wpn.ORB: g.circle(s.x, s.y, 3, 0xFFFFFFFF, 0xFF1266FF, 1.3f); break;
             case Wpn.NUKE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 9,0, 5,3.4f, -8,3.4f}, 0xFFFFD020, INK, .8f); g.circle(-1, 0, 1.8f, INK, 0, 0); g.restore(); break;
             case Wpn.SPARK: g.circle(s.x, s.y, 1.6f, 0xFFFFC020, INK, .4f); break;
