@@ -1,0 +1,26 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.wap'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.wap'
+        minSdk 24
+        targetSdk 35
+        versionCode((System.getenv('GITHUB_RUN_NUMBER') ?: '1') as int)
+        versionName "0.1." + (System.getenv('GITHUB_RUN_NUMBER') ?: '0')
+    }
+    signingConfigs {
+        // Clave de desarrollo pública: permite actualizar la APK sin desinstalar. No usar en Play Store.
+        dev {
+            storeFile rootProject.file('keystore/wap-dev.jks')
+            storePassword 'wapdev123'
+            keyAlias 'wap'
+            keyPassword 'wapdev123'
+        }
+    }
+    buildTypes {
+        release { minifyEnabled false; signingConfig signingConfigs.dev }
+        debug { signingConfig signingConfigs.dev }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
+}

@@ -1,0 +1,35 @@
+name: APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.14.3
+      - name: Compilar APK
+        run: |
+          set +e
+          gradle --no-daemon --console=plain :app:assembleRelease 2>&1 | tee build.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            grep -nE "error:|FAILURE|What went wrong|wrong:|\.java:[0-9]+" build.log | head -25 | while IFS= read -r l; do echo "::error::$l"; done
+            exit $code
+          fi
+      - name: Publicar en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk wap.apk
+          gh release delete ultima --yes --cleanup-tag || true
+          gh release create ultima wap.apk --title "WAP ${{ github.run_number }}" --notes "Build ${{ github.sha }}. Descarga wap.apk en tu teléfono Android e instálala." --latest
