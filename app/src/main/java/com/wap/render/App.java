@@ -8,25 +8,27 @@ public final class App {
     static final int RED = 0xFFFF0000, INK = RobotArt.INK, WHITE = 0xFFFFFFFF, MUTE = 0xFF6B7280, LINE = 0xFFCBD2DC;
     static final String[] LEVELS = {"FÁCIL", "NORMAL", "DIFÍCIL"}; static final float[] SKILL = {.45f, .9f, 1.6f};
     static final int[] LIVES = {3, 5, 10, 15, 30};
-    static final String[] DEF = {"GRENADE", "BAZOOKA", "PLASMA CANNON", "MINE", "PLASMA GUN"};
+    static final String[] DEF = {"GRENADE", "BAZOOKA", "PLASMA CANNON", "PLASMA GUN"};
+    static final int SLOTS = Robot.SLOTS;
+    static String key(int i) { return "arma" + (i == 3 ? 4 : i); } // conserva lo elegido en versiones anteriores
     public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey; public Updater up;
     final Store st; final Audio au; public final TouchPad pad = new TouchPad(); public final Renderer ren = new Renderer();
-    public World w; Bot bot; float W = 640, H = 360, u = 1; int cd; int paintRow, level = 1, livesIx = 2, selSlot = 4, cur, seed = 12345, overT; long frames;
-    final int[] slots = new int[5]; final int[] in = new int[2];
+    public World w; Bot bot; float W = 640, H = 360, u = 1; int cd; int paintRow, level = 1, livesIx = 2, selSlot = 3, cur, seed = 12345, overT; long frames;
+    final int[] slots = new int[SLOTS]; final int[] in = new int[2];
     final ArrayList<float[]> btns = new ArrayList<>(); final ArrayList<Runnable> acts = new ArrayList<>();
     final RobotArt.View hero = RobotArt.poster();
 
     public App(Store st, Audio au) {
         this.st = st; this.au = au;
-        for (int i = 0; i < 5; i++) { slots[i] = Wpn.index(st.get("arma" + i, DEF[i])); }
+        for (int i = 0; i < SLOTS; i++) { slots[i] = Wpn.index(st.get(key(i), DEF[i])); }
         try { RobotArt.COLOR[0] = 0xFF000000 | Integer.parseInt(st.get("color", "FF0000"), 16); } catch (Exception e) { }
         try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
     }
     public void seed(int s) { seed = s; }
     public void start() {
-        Wpn[] a = new Wpn[5], b = new Wpn[5]; seed = seed * 1103515245 + 12345;
+        Wpn[] a = new Wpn[SLOTS], b = new Wpn[SLOTS]; seed = seed * 1103515245 + 12345;
         Rng r = new Rng(seed ^ 0x5A5A);
-        for (int i = 0; i < 5; i++) { a[i] = Wpn.ALL[slots[i]]; b[i] = Wpn.ALL[r.i(Wpn.ALL.length)]; }
+        for (int i = 0; i < SLOTS; i++) { a[i] = Wpn.ALL[slots[i]]; b[i] = Wpn.ALL[r.i(Wpn.ALL.length)]; }
         RobotArt.COLOR[1] = near(RobotArt.COLOR[0], 0xFF1266FF) ? 0xFFFF0000 : 0xFF1266FF;
         w = new World(seed, LIVES[livesIx] , a, b); bot = new Bot(seed + 1, 1, SKILL[level]); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
         pad.clear();
@@ -40,7 +42,7 @@ public final class App {
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); go(TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("color", String.format("%06X", RobotArt.COLOR[0] & 0xFFFFFF)); for (int i = 0; i < 5; i++) st.put("arma" + i, Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
+    void save() { st.put("color", String.format("%06X", RobotArt.COLOR[0] & 0xFFFFFF)); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
     void go(int s) { screen = s; focus = 0; pad.clear(); }
     public boolean tap(float x, float y) {
         for (int i = btns.size() - 1; i >= 0; i--) { float[] b = btns.get(i); if (x >= b[0] && y >= b[1] && x <= b[2] && y <= b[3]) { au.play(Audio.MENU); acts.get(i).run(); return true; } }
@@ -130,15 +132,15 @@ public final class App {
         if ((p & Input.LEFT) != 0) cur = (cur + n - 1) % n;
         if ((p & Input.DOWN) != 0) cur = Math.min(n - 1, cur + COLS);
         if ((p & Input.UP) != 0) cur = Math.max(0, cur - COLS);
-        if ((p & Input.A) != 0) { slots[selSlot] = cur; selSlot = (selSlot + 1) % 5; au.play(Audio.PICK); }
+        if ((p & Input.A) != 0) { slots[selSlot] = cur; selSlot = (selSlot + 1) % SLOTS; au.play(Audio.PICK); }
         if ((p & Input.B) != 0) back();
     }
     void btn(float x, float y, float w, float h, Runnable r) { btns.add(new float[]{x, y, x + w, y + h}); acts.add(r); }
 
     /** Etiqueta de la combinación, dibujada con triángulos para no depender de la fuente. */
     public static void combo(Gfx g, int slot, float x, float cy, float s, int c) {
-        int dir = slot == 0 ? 2 : slot == 2 ? 0 : slot == 4 ? -1 : 1;
-        String b = slot == 3 ? "B" : "A";
+        int dir = slot == 0 ? 2 : slot == 2 ? 0 : slot == 3 ? -1 : 1;
+        String b = "A";
         float q = s * .42f;
         if (dir == 0) g.poly(new float[]{x + q, cy - q, x + 2 * q, cy + q * .7f, x, cy + q * .7f}, c, 0, 0);
         if (dir == 2) g.poly(new float[]{x + q, cy + q, x + 2 * q, cy - q * .7f, x, cy - q * .7f}, c, 0, 0);
@@ -186,7 +188,7 @@ public final class App {
         g.save(); g.translate(W * .25f, H * .92f); g.scale(s, s); RobotArt.drawPose(g, hero, (1 << Robot.PIECES) - 1, RobotArt.COLOR[0], 0); g.restore();
         float x = W * .5f, wd = W * .42f;
         g.text("WAP", x - 3 * u, H * .19f, 58 * u, INK, -1);
-        String[] l = {"JUGAR", "ELEGIR 5 ARMAS", "COLOR DEL ROBOT", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
+        String[] l = {"JUGAR", "ELEGIR 4 ARMAS", "COLOR DEL ROBOT", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
         Runnable[] a = {this::start, () -> go(ARMS), () -> go(PAINT), () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }, () -> { level = (level + 1) % 3; save(); }};
         if (up != null) { l = new String[]{l[0], l[1], l[2], l[3], l[4], up.label()}; a = new Runnable[]{a[0], a[1], a[2], a[3], a[4], () -> up.act()}; g.text(up.version(), W - 8 * u, H - 7 * u, 10 * u, MUTE, 1); }
         menu(g, x, H * .22f, wd, l, a);
@@ -194,8 +196,8 @@ public final class App {
     void arms(Gfx g) {
         g.clear(WHITE);
         float m = 12 * u, cw = 190 * u, row = 44 * u, y = 10 * u;
-        g.text("TUS 5 ARMAS", m, y + 15 * u, 15 * u, INK, -1); y += 24 * u;
-        for (int i = 0; i < 5; i++) {
+        g.text("TUS 4 ARMAS", m, y + 15 * u, 15 * u, INK, -1); y += 24 * u;
+        for (int i = 0; i < SLOTS; i++) {
             boolean sel = i == selSlot; final int ix = i;
             g.rrect(m, y, cw, row - 5 * u, 3 * u, sel ? RED : WHITE, INK, 1.6f * u);
             int c = sel ? WHITE : INK;
@@ -212,14 +214,14 @@ public final class App {
             boolean c = i == cur, eq = false; for (int s : slots) eq |= s == i;
             g.rrect(x + u, yy + u, gw - 2 * u, gh - 3 * u, 2 * u, eq ? 0xFFFFE3E3 : WHITE, c ? RED : LINE, c ? 2.2f * u : 1 * u);
             g.text(Wpn.ALL[i].name, x + gw / 2, yy + 17 * u, 10.5f * u, INK, 0);
-            btn(x, yy, gw, gh, () -> { cur = ix; slots[selSlot] = ix; selSlot = (selSlot + 1) % 5; });
+            btn(x, yy, gw, gh, () -> { cur = ix; slots[selSlot] = ix; selSlot = (selSlot + 1) % SLOTS; });
         }
         g.text(Wpn.ALL[cur].desc, gx + 4 * u, H - 10 * u, 12 * u, MUTE, -1);
     }
     void hud(Gfx g) {
         Robot me = w.robots[0], e = w.robots[1];
         bar(g, 10 * u, 8 * u, me, 0, false); bar(g, W - 134 * u, 8 * u, e, 1, true);
-        int n = 5; float cw = 62 * u, tot = cw * n, x = W / 2 - tot / 2;
+        int n = SLOTS; float cw = 72 * u, tot = cw * n, x = W / 2 - tot / 2;
         for (int i = 0; i < n; i++) {
             float y = 7 * u, h = 30 * u, cx = x + i * cw; Wpn wp = me.loadout[i];
             g.rrect(cx + u, y, cw - 2 * u, h, 2 * u, 0xE6FFFFFF, INK, 1.2f * u);

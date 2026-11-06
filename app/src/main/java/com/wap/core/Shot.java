@@ -26,6 +26,7 @@ public final class Shot {
             }
             if (w.fan) continue;
             if (g.t.solid((int) x, (int) y)) {
+                if (!w.sticky && w.radius == 0) g.hitProp(x, y, w.dmg);
                 if (w.sticky) { stuck = true; x = ox; y = oy; vx = vy = 0; return; }
                 if (w.bounce > 0) {
                     boolean hx = g.t.solid((int) (ox + dx), (int) oy), hy = g.t.solid((int) ox, (int) (oy + dy));

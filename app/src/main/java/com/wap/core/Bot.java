@@ -110,7 +110,6 @@ public final class Bot {
         if (see && (dx > 0) == (m.facing > 0) && r.f() < .10f * skill && ady < 44 && ad < 520) {
             int q = r.i(5), side = to > 0 ? Input.RIGHT : Input.LEFT;
             if (q == 0 && ready(m, 1)) { comboT = 2; combo = side | Input.A; return 0; }
-            if (q == 1 && ready(m, 3)) { comboT = 2; combo = side | Input.B; return 0; }
             if (q == 2 && ready(m, 0)) { comboT = 2; combo = Input.DOWN | Input.A; return 0; }
             if (q == 3 && ready(m, 2)) { comboT = 2; combo = Input.UP | Input.A; return 0; }
             fireHold = 6 + r.i(30);

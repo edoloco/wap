@@ -9,20 +9,21 @@ Descarga `wap.apk` desde la sección **Releases** del repositorio, en el teléfo
 | Entrada | Acción |
 |---|---|
 | ◀ ▶ | Caminar |
-| A | Disparar (arma 5) |
+| A | Disparar (arma 4) |
 | B | Saltar |
 | ▲ + A | Arma 3 |
 | ▼ + A | Arma 1 |
 | ◀▶ + A | Arma 2 |
 | ▲ + B | Gancho: mantén B y te lleva solo; suelta B para soltarte |
-| ◀▶ + B | Arma 4 |
 | ▼ + B | Deslizarse |
 
 En el aire, empujar contra una pared te afirma; B rebota hacia el lado contrario.
 
 La Plasma Cannon se activa una vez para cargar y, cuando el robot brilla, otra vez para lanzarla.
 
-Dirección y botón casi a la vez activan el arma. Si ya vienes corriendo, A dispara y B salta.
+Dirección y A casi a la vez activan el arma lateral; si ya vienes corriendo, A dispara. Lado + B siempre salta.
+Las cajas, computadoras y bloques de piedra tienen resistencia propia y se rompen enteros en pedazos.
+
 Todas las armas salen rectas, desde la mano del robot, tras una preparación corta. El robot no escarba: el escenario se destruye con las armas.
 
 ## Estructura

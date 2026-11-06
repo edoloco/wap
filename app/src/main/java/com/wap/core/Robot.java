@@ -3,7 +3,7 @@ package com.wap.core;
 public final class Robot {
     public static final int HELMET = 0, CHEST = 1, BELLY = 2, HIP = 3, SH_F = 4, SH_B = 5, BR_F = 6, BR_B = 7, TH_F = 8, TH_B = 9, SN_F = 10, SN_B = 11, PIECES = 12;
     static final float[] PX = {0, 0, 0, 0, 8, -8, 13, -13, 3, -3, 3, -3}, PY = {50, 37, 30, 26, 39, 39, 27, 27, 18, 18, 8, 8};
-    public static final int STAND_H = 54, SLIDE_H = 26, HW = 7;
+    public static final int SLOTS = 4, STAND_H = 54, SLIDE_H = 26, HW = 7;
     /** Margen en ticks para que dirección + botón cuente como habilidad y no como correr + acción. */
     public static final int SMASH_WINDOW = 9, BUFFER = 3;
     public static final float HOOK_SHOT = 15, HOOK_PULL = 7.5f, HOOK_RANGE = 400;
@@ -13,9 +13,9 @@ public final class Robot {
     public final int id; public int px, py, h = STAND_H, facing = 1; float remX, remY;
     public float vx, vy; public boolean grounded, blocked; int coyote;
     public float hp = MAX_HP; public int lives, kills, deaths, deadT, invuln, hurtT, armor = (1 << PIECES) - 1;
-    public int slideT, airT, fireT, fireSlot = 4; boolean jumping;
+    public int slideT, airT, fireT, fireSlot = 3; boolean jumping;
     public int rope; public float rx, ry, rvx, rvy, rlen; // 0 sin gancho, 1 volando, 2 enganchado
-    public final Wpn[] loadout = new Wpn[5]; public final int[] ammo = new int[5], reload = new int[5], delay = new int[5], charge = new int[5];
+    public final Wpn[] loadout = new Wpn[SLOTS]; public final int[] ammo = new int[SLOTS], reload = new int[SLOTS], delay = new int[SLOTS], charge = new int[SLOTS];
     public int wallDir, windT; int windSlot, lastWall, wallT, wallLock;
     /** Preparación breve antes del primer disparo: 6 ticks, una décima de segundo. */
     public static final int WIND = 6;
@@ -29,7 +29,7 @@ public final class Robot {
     /** Carga más alta entre las armas: 0 sin carga, 1 lista para lanzar. */
     public float chargeLevel() {
         float best = 0;
-        for (int i = 0; i < 5; i++) if (loadout[i].charge > 0) best = Math.max(best, charge[i] / (float) loadout[i].charge);
+        for (int i = 0; i < SLOTS; i++) if (loadout[i].charge > 0) best = Math.max(best, charge[i] / (float) loadout[i].charge);
         return best;
     }
 
@@ -65,7 +65,7 @@ public final class Robot {
     public void spawnAt(World g) {
         hp = MAX_HP; armor = (1 << PIECES) - 1; deadT = 0; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
         int[] p = g.freeSpot(id == 0 ? g.robots[1] : g.robots[0]); px = p[0]; py = p[1];
-        for (int i = 0; i < 5; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
+        for (int i = 0; i < SLOTS; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
         wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0;
         g.fx(Fx.SPAWN, px, py - 27, id, 0);
     }
@@ -122,10 +122,9 @@ public final class Robot {
         boolean up = (in & Input.UP) != 0, down = (in & Input.DOWN) != 0;
         boolean side = freshDir && ((in & Input.LEFT) != 0 ^ (in & Input.RIGHT) != 0);
         heldSlot = -1; heldBtn = btn;
-        if (btn == Input.A) use(g, up ? 2 : down ? 0 : side ? 1 : 4);
+        if (btn == Input.A) use(g, up ? 2 : down ? 0 : side ? 1 : 3);
         else if (up) throwHook(g, in);
         else if (down) { if (grounded && slideT == 0) { slideT = 26; h = SLIDE_H; g.fx(Fx.SLIDE, px, py, facing, 0); } }
-        else if (side) use(g, 3);
         else jump(g);
     }
     /** Arma normal: dispara. Arma con carga: el primer comando carga y, ya cargada, el siguiente la lanza. */
@@ -151,7 +150,7 @@ public final class Robot {
         rvx = facing * (float) Math.cos(a) * HOOK_SHOT; rvy = -(float) Math.sin(a) * HOOK_SHOT; g.fx(Fx.HOOK, rx, ry, 0, id);
     }
     void step(World g, int in) {
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < SLOTS; i++) {
             if (delay[i] > 0) delay[i]--;
             if (reload[i] > 0 && --reload[i] == 0) ammo[i] = loadout[i].clip;
             if (charge[i] > 0 && charge[i] < loadout[i].charge && ++charge[i] == loadout[i].charge) g.fx(Fx.CHARGE, px, py - 30, 1, id);

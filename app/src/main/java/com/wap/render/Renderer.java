@@ -6,30 +6,88 @@ import java.util.Random;
 public final class Renderer {
     public static final int PAPER = 0xFFFFFFFF, GRID = 0xFFDCE7F2, INK = RobotArt.INK;
     static final int DIRT = 0xFF8214FF, DIRT2 = 0xFF4A00A8;
+    static final int BG = 256; final int[] bg = new int[BG * BG]; boolean bgNew = true;
+    void paintBg() {
+        for (int y = 0; y < BG; y++) for (int x = 0; x < BG; x++) {
+            int c = 0xFFC7D2E0, gx = x % 128, gy = y % 128;
+            if (gx < 2 || gy < 2) c = 0xFFADBACC; else if (gx == 2 || gy == 2) c = 0xFFDCE4EE;
+            else if (gx > 20 && gx < 108 && gy > 20 && gy < 108) c = 0xFFBDC9D9;
+            if (y > 150 && y < 178) c = (x / 12 + y / 12) % 2 == 0 ? 0xFFB3C0D2 : 0xFFA8B6CA;
+            if ((gx - 10) * (gx - 10) + (gy - 10) * (gy - 10) < 7) c = 0xFF9AA9BE;
+            bg[y * BG + x] = c;
+        }
+    }
     static final class P { float x, y, vx, vy, life, max, rot, vr, size, g = .2f; int kind, slot, color; boolean ground; }
     public final RobotArt.View[] views = {new RobotArt.View(), new RobotArt.View()};
     final ArrayList<P> ps = new ArrayList<>(); final ArrayList<float[]> beams = new ArrayList<>(); final ArrayList<float[]> booms = new ArrayList<>();
     final Random r = new Random(7); final int[] px = new int[Terrain.TILE * Terrain.TILE];
     public float camX = 900, camY = 500, zoom = 2, shake; boolean first = true;
 
-    public void reset(World w) { ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; }
+    public void reset(World w) { ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; bgNew = true; java.util.Arrays.fill(loaded, false); }
     static int hash(int x, int y) { int h = x * 374761393 + y * 668265263; h = (h ^ h >> 13) * 1274126177; return h ^ h >> 16; }
+    final boolean[] loaded = new boolean[Terrain.TW * Terrain.TH];
+    static final int M = 18, N = Terrain.TILE + 2 * M, SEAM = 0xFF141414;
+    final int[] dIn = new int[N * N], dOut = new int[N * N]; final float[] soft = new float[N * N]; final byte[] mats = new byte[N * N];
+    static final float LX = -.476f, LY = -.667f, LZ = .571f;
+    private static int group(int k) { return k == Terrain.PANEL || k == Terrain.DECOR || k == Terrain.STEEL ? 1 : k; }
+    private static void chamfer(int[] d) {
+        for (int y = 1; y < N - 1; y++) for (int x = 1; x < N - 1; x++) { int i = y * N + x, v = d[i];
+            v = Math.min(v, d[i - 1] + 3); v = Math.min(v, d[i - N] + 3); v = Math.min(v, d[i - N - 1] + 4); d[i] = Math.min(v, d[i - N + 1] + 4); }
+        for (int y = N - 2; y > 0; y--) for (int x = N - 2; x > 0; x--) { int i = y * N + x, v = d[i];
+            v = Math.min(v, d[i + 1] + 3); v = Math.min(v, d[i + N] + 3); v = Math.min(v, d[i + N + 1] + 4); d[i] = Math.min(v, d[i + N - 1] + 4); }
+    }
+    private static float radius(int k) {
+        switch (k) { case Terrain.VENT: return 15; case Terrain.CRATE: return 4.5f; case Terrain.METAL: return 5; case Terrain.COMPUTER: return 3.5f; case Terrain.STONE: return 7; default: return 6.5f; }
+    }
+    /** Relieve iluminado por píxel: como se calcula desde el mapa, los cráteres también quedan con volumen. */
     void fillTile(Terrain t, int tx, int ty) {
-        int S = Terrain.TILE, ox = tx * S, oy = ty * S, i = 0;
-        for (int y = oy; y < oy + S; y++) for (int x = ox; x < ox + S; x++) {
-            int c = 0; int k = x < Terrain.W && y < Terrain.H ? t.m[y * Terrain.W + x] : 0;
-            if (k == Terrain.DEBRIS) c = t.tex[y * Terrain.W + x] & 0xFFFFFF | 0x80000000;
-            else if (k != 0) c = air(t, x - 1, y) || air(t, x + 1, y) || air(t, x, y - 1) || air(t, x, y + 1) ? INK : t.tex[y * Terrain.W + x];
-            px[i++] = c;
+        final int S = Terrain.TILE, ox = tx * S - M, oy = ty * S - M, INF = 9999;
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            int k = t.at(ox + x, oy + y); if (k == Terrain.DEBRIS) k = 0;
+            mats[y * N + x] = (byte) k;
+        }
+        for (int y = 0; y < N; y++) for (int x = 0; x < N; x++) {
+            int i = y * N + x, k = mats[i]; dOut[i] = k == 0 ? INF : 0;
+            if (k == 0) { dIn[i] = 0; continue; }
+            int wx = ox + x, wy = oy + y; boolean e = x == 0 || y == 0 || x == N - 1 || y == N - 1;
+            if (!e) { int g = group(k); e = group(mats[i - 1]) != g || group(mats[i + 1]) != g || group(mats[i - N]) != g || group(mats[i + N]) != g; }
+            if (x == 0 || y == 0 || x == N - 1 || y == N - 1) e = false;
+            if (!e && wx >= 0 && wy >= 0 && wx < Terrain.W && wy < Terrain.H) {
+                e = t.tex[wy * Terrain.W + wx] == SEAM;
+                if ((k == Terrain.CRATE || k == Terrain.METAL) && (wx % 32 == 0 || wy % 32 == 0)) e = true;
+            }
+            dIn[i] = e ? 0 : INF;
+        }
+        chamfer(dIn); chamfer(dOut);
+        for (int y = 1; y < N - 1; y++) for (int x = 1; x < N - 1; x++) { int i = y * N + x, s = 0;
+            for (int a = -1; a <= 1; a++) for (int b = -1; b <= 1; b++) s += dIn[i + a * N + b];
+            soft[i] = s / 27f; }
+        int q = 0;
+        for (int wy = oy + M; wy < oy + M + S; wy++) for (int wx = ox + M; wx < ox + M + S; wx++) {
+            int c = 0, x = wx - ox, y = wy - oy, i = y * N + x, raw = t.at(wx, wy);
+            if (wx >= Terrain.W || wy >= Terrain.H) { px[q++] = 0; continue; }
+            if (raw == Terrain.DEBRIS) c = t.tex[wy * Terrain.W + wx] & 0xFFFFFF | 0x80000000;
+            else if (raw != 0) {
+                int base = t.tex[wy * Terrain.W + wx]; if (base == SEAM) base = 0xFF2C0A5C;
+                float R = radius(raw), d = soft[i], k = 1 - Math.min(d, R) / R, gx = soft[i + 1] - soft[i - 1], gy = soft[i + N] - soft[i - N], g = (float) Math.sqrt(gx * gx + gy * gy) + .0001f;
+                float nz = (float) Math.sqrt(Math.max(0, 1 - k * k)), nx = -gx / g * k, ny = -gy / g * k;
+                float diff = Math.max(0, nx * LX + ny * LY + nz * LZ), spec = diff * diff; spec *= spec; spec *= spec;
+                float sh = .5f + .86f * diff; int add = (int) (spec * 70);
+                int r = Math.min(255, (int) ((base >> 16 & 255) * sh) + add), gr = Math.min(255, (int) ((base >> 8 & 255) * sh) + add), b = Math.min(255, (int) ((base & 255) * sh) + add);
+                c = 0xFF000000 | r << 16 | gr << 8 | b;
+            } else {
+                int sx = Math.max(0, x - 7), sy = Math.max(0, y - 10); float o = dOut[sy * N + sx] / 3f;
+                if (o < 11) { float a = 1 - o / 11; c = (int) (a * a * 110) << 24 | 0x100A28; }
+            }
+            px[q++] = c;
         }
     }
-    static boolean air(Terrain t, int x, int y) { int k = t.at(x, y); return k == 0 || k == Terrain.DEBRIS; }
     P part(int kind, float x, float y, float vx, float vy, float life, float size, int color) {
         if (ps.size() > 500) ps.remove(0);
         P p = new P(); p.kind = kind; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.life = p.max = life; p.size = size; p.color = color;
         p.rot = r.nextFloat() * 6.28f; p.vr = (r.nextFloat() - .5f) * .5f; ps.add(p); return p;
     }
-    static final int LABEL = 48, SQUARE = 0, SMOKE = 1, ARMOR = 2, BONE = 3, FIRE = 4;
+    static final int LABEL = 48, SQUARE = 0, SMOKE = 1, ARMOR = 2, BONE = 3, FIRE = 4, CHUNK = 5;
     public void consume(World w, boolean reduceMotion) {
         for (Fx f : w.fx) switch (f.type) {
             case Fx.EXPLODE: {
@@ -41,6 +99,15 @@ public final class Renderer {
             case Fx.CHIPS: for (int i = 0; i < f.a; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 4, -r.nextFloat() * 3, 24, 1.6f, DIRT2); break;
             case Fx.SMOKE: { P p = part(f.a > 0 ? FIRE : SMOKE, f.x, f.y, 0, -.2f, f.a > 0 ? 14 : 24, f.a > 0 ? 3 : 3.5f, 0xFF9098A8); p.g = 0; break; }
             case Fx.FLASH: { RobotArt.View v = views[f.who]; v.label = Wpn.ALL[(int) f.b].name; v.labelT = LABEL; if (v.shotT <= 0) v.shotT = 12; break; }
+            case Fx.PROP: {
+                int kind = (int) f.c, n = (int) (f.a * f.b / 110) + 6;
+                int[] tone = kind == Terrain.METAL ? new int[]{0xFF8D99A8, 0xFFB4BFCC} : kind == Terrain.STONE ? new int[]{0xFF9C9488, 0xFF7A7369} : kind == Terrain.COMPUTER ? new int[]{0xFF2C323F, 0xFF46F08A} : new int[]{0xFFCB8C3C, 0xFF96601F};
+                for (int i = 0; i < n; i++) {
+                    float a = r.nextFloat() * 6.28f, v = 1.5f + r.nextFloat() * 4;
+                    P p = part(CHUNK, f.x + r.nextFloat() * f.a, f.y + r.nextFloat() * f.b, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 2.5f, 110 + r.nextInt(70), 3 + r.nextFloat() * 5, tone[i % 2]); p.slot = r.nextInt(99);
+                }
+                if (kind == Terrain.COMPUTER) for (int i = 0; i < 14; i++) part(SQUARE, f.x + 32, f.y + 30, (r.nextFloat() - .5f) * 7, -r.nextFloat() * 5, 26, 1.5f, 0xFFFFE23A);
+                break; }
             case Fx.CHARGE: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "CARGADO" : Wpn.ALL[(int) f.b].name; v.labelT = LABEL; break; }
             case Fx.WALL: { P p = part(SMOKE, f.x, f.y, 0, -.3f, 14, 2, 0xFFBFC6D2); p.g = 0; break; }
             case Fx.HOOK: if (f.a == 0) { RobotArt.View v = views[f.who]; v.label = "GANCHO"; v.labelT = LABEL; } break;
@@ -68,7 +135,7 @@ public final class Renderer {
             p.vy += p.g; float nx = p.x + p.vx, ny = p.y + p.vy;
             if (p.kind == SMOKE || p.kind == FIRE) { p.x = nx; p.y = ny; continue; }
             if (w.t.solid((int) nx, (int) ny)) {
-                if (p.kind == ARMOR || p.kind == BONE) { if (w.t.solid((int) p.x, (int) ny)) { p.vy *= -.35f; p.vx *= .6f; if (Math.abs(p.vy) < 1) p.ground = true; } else p.vx *= -.5f; }
+                if (p.kind == ARMOR || p.kind == BONE || p.kind == CHUNK) { if (w.t.solid((int) p.x, (int) ny)) { p.vy *= -.35f; p.vx *= .6f; if (Math.abs(p.vy) < 1) p.ground = true; } else p.vx *= -.5f; }
                 else ps.remove(i);
                 continue;
             }
@@ -99,20 +166,28 @@ public final class Renderer {
     }
     public void drawWorld(Gfx g, World w, int who) {
         camera(g, w, who);
-        g.clear(PAPER);
+        g.clear(0xFFC7D2E0);
         float vw = g.w() / zoom, vh = g.h() / zoom, x0 = camX - vw / 2, y0 = camY - vh / 2;
         g.save(); g.scale(zoom, zoom);
         float sx = shake > .3f ? (r.nextFloat() - .5f) * shake : 0, sy = shake > .3f ? (r.nextFloat() - .5f) * shake : 0;
         g.translate(-x0 + sx, -y0 + sy);
+        if (bgNew) paintBg();
+        float bx0 = x0 * .55f, by0 = y0 * .55f;
+        for (int q = (int) Math.floor(by0 / BG); q * BG < by0 + vh; q++) for (int k = (int) Math.floor(bx0 / BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
         for (Bonus b : w.bonus) crate(g, b.x, b.y, b.kind);
         for (Shot s : w.shots) shot(g, s);
-        int S = Terrain.TILE; Terrain t = w.t;
+        int S = Terrain.TILE, budget = 3; Terrain t = w.t;
         for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(Terrain.TH - 1, (int) ((y0 + vh) / S)); ty++)
             for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(Terrain.TW - 1, (int) ((x0 + vw) / S)); tx++) {
-                int id = ty * Terrain.TW + tx; boolean d = t.dirty[id];
-                if (d) { fillTile(t, tx, ty); t.dirty[id] = false; }
+                int id = ty * Terrain.TW + tx; boolean d = t.dirty[id] && (!loaded[id] || budget-- > 0); // como mucho 3 relieves por cuadro
+                if (d) { fillTile(t, tx, ty); t.dirty[id] = false; loaded[id] = true; }
                 g.tile(id, px, S, d, tx * S, ty * S);
             }
+        for (Prop p : w.props) if (!p.gone && p.x < x0 + vw && p.x + p.w > x0 && p.y < y0 + vh && p.y + p.h > y0) damage(g, p);
+        for (P p : ps) if (p.kind == CHUNK) {
+            g.save(); g.translate(p.x, p.y); g.rotate(p.rot); float z = p.size, k = p.slot % 3 * .2f + .6f;
+            g.poly(new float[]{-z, -z * k, z * .7f, -z, z, z * .4f, -z * .3f, z * k}, p.color, 0x66141414, .5f); g.restore();
+        }
         for (P p : ps) if (p.kind == ARMOR || p.kind == BONE) { g.save(); g.translate(p.x, p.y); g.rotate(p.rot); if (p.kind == ARMOR) RobotArt.piece(g, p.slot, p.color); else RobotArt.bonePiece(g, p.slot); g.restore(); }
         for (int i = 0; i < 2; i++) {
             Robot o = w.robots[i]; if (!o.alive()) continue;
@@ -137,6 +212,19 @@ public final class Renderer {
         for (float[] b : booms) boom(g, b);
         g.restore();
         pointer(g, w, who, x0, y0);
+    }
+    /** Grietas según la resistencia que le queda al objeto. */
+    void damage(Gfx g, Prop p) {
+        if (p.hitT > 0) g.rect(p.x, p.y, p.w, p.h, 0x70FFFFFF);
+        float k = 1 - p.hp / p.max; if (k <= .05f) return;
+        int n = 1 + (int) (k * 5), h = p.x * 31 + p.y;
+        for (int i = 0; i < n; i++) {
+            h = h * 1103515245 + 12345;
+            float x = p.x + (h >>> 8 & 255) / 255f * p.w, y = p.y + (h >>> 16 & 255) / 255f * p.h, a = (h >>> 3 & 63) / 10f, l = p.w * (.25f + k * .3f);
+            float mx = x + (float) Math.cos(a) * l * .5f, my = y + (float) Math.sin(a) * l * .5f, ex = mx + (float) Math.cos(a + .8f) * l * .5f, ey = my + (float) Math.sin(a + .8f) * l * .5f;
+            mx = Math.max(p.x, Math.min(p.x + p.w, mx)); my = Math.max(p.y, Math.min(p.y + p.h, my)); ex = Math.max(p.x, Math.min(p.x + p.w, ex)); ey = Math.max(p.y, Math.min(p.y + p.h, ey));
+            g.line(x, y, mx, my, 0xDD141414, 1); g.line(mx, my, ex, ey, 0xDD141414, .8f);
+        }
     }
     void boom(Gfx g, float[] b) {
         float k = b[3] / 15, R = b[2] * (.45f + .75f * (float) Math.sqrt(k)); int n = 11; float[] q = new float[n * 4];
