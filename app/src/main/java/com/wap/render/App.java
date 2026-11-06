@@ -4,7 +4,7 @@ import java.util.ArrayList;
 /** Pantallas y flujo de la aplicación. No conoce Android; recibe entradas y dibuja por Gfx. */
 public final class App {
     public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5;
-    static final int[] SWATCH = {0xFFFF0000, 0xFFFF7A00, 0xFFFFD200, 0xFF19C24A, 0xFF00B8D4, 0xFF1266FF, 0xFF8214FF, 0xFFFF2FA8, 0xFF8A5A2B, 0xFF6B7280};
+    static final int[] SWATCH = {0xFF5E5650, 0xFFFF0000, 0xFFFF7A00, 0xFFFFD200, 0xFF19C24A, 0xFF00B8D4, 0xFF1266FF, 0xFF8214FF, 0xFFFF2FA8, 0xFF2A2A2A};
     static final int RED = 0xFFFF0000, INK = RobotArt.INK, WHITE = 0xFFFFFFFF, MUTE = 0xFF6B7280, LINE = 0xFFCBD2DC;
     static final String[] LEVELS = {"FÁCIL", "NORMAL", "DIFÍCIL"}; static final float[] SKILL = {.45f, .9f, 1.6f};
     static final int[] LIVES = {3, 5, 10, 15, 30};
@@ -21,7 +21,7 @@ public final class App {
     public App(Store st, Audio au) {
         this.st = st; this.au = au;
         for (int i = 0; i < SLOTS; i++) { slots[i] = Wpn.index(st.get(key(i), DEF[i])); }
-        try { RobotArt.COLOR[0] = 0xFF000000 | Integer.parseInt(st.get("color", "FF0000"), 16); } catch (Exception e) { }
+        try { RobotArt.COLOR[0] = 0xFF000000 | Integer.parseInt(st.get("traje", "5E5650"), 16); } catch (Exception e) { }
         try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
     }
     public void seed(int s) { seed = s; }
@@ -42,7 +42,7 @@ public final class App {
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); go(TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("color", String.format("%06X", RobotArt.COLOR[0] & 0xFFFFFF)); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
+    void save() { st.put("traje", String.format("%06X", RobotArt.COLOR[0] & 0xFFFFFF)); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
     void go(int s) { screen = s; focus = 0; pad.clear(); }
     public boolean tap(float x, float y) {
         for (int i = btns.size() - 1; i >= 0; i--) { float[] b = btns.get(i); if (x >= b[0] && y >= b[1] && x <= b[2] && y <= b[3]) { au.play(Audio.MENU); acts.get(i).run(); return true; } }
@@ -102,10 +102,16 @@ public final class App {
         }
     }
     float sliderX() { return W * .5f + 24 * u; } float sliderW() { return W * .5f - 60 * u; } float sliderY(int i) { return 66 * u + i * 56 * u; }
+    /** Personaje grande en pixel art, para menús. */
+    void hero(Gfx g, RobotArt.View v, float cx, float by) {
+        int sc = Math.max(2, (int) (H * .78f / 56)), lw = (int) W / sc + 1, lh = (int) H / sc + 1;
+        g.beginPixels(lw, lh); g.save(); g.translate(Math.round(cx / sc), Math.round(by / sc));
+        RobotArt.drawPose(g, v, (1 << Robot.PIECES) - 1, RobotArt.COLOR[0], 0); g.restore(); g.endPixels(0, 0, sc);
+    }
     void paint(Gfx g) {
         g.clear(WHITE);
-        float s = H / 72f; RobotArt.View v = new RobotArt.View();
-        g.save(); g.translate(W * .24f, H * .93f); g.scale(s, s); RobotArt.drawPose(g, v, (1 << Robot.PIECES) - 1, RobotArt.COLOR[0], 0); g.restore();
+        RobotArt.View v = new RobotArt.View();
+        hero(g, v, W * .24f, H * .93f);
         g.text("COLOR DEL ROBOT", sliderX(), 28 * u, 20 * u, INK, -1);
         String[] n = {"ROJO", "VERDE", "AZUL"}; int[] tone = {0xFFFF0000, 0xFF19A84A, 0xFF1266FF};
         for (int i = 0; i < 3; i++) {
@@ -184,8 +190,8 @@ public final class App {
     void title(Gfx g) {
         g.clear(WHITE);
         int G = (int) (32 * u); for (int x = 0; x < W; x += G) g.line(x, 0, x, H, Renderer.GRID, 1); for (int y = 0; y < H; y += G) g.line(0, y, W, y, Renderer.GRID, 1);
-        float s = H / 72f; hero.lean = frames / 30 % 2 == 0 ? 4 : 6;
-        g.save(); g.translate(W * .25f, H * .92f); g.scale(s, s); RobotArt.drawPose(g, hero, (1 << Robot.PIECES) - 1, RobotArt.COLOR[0], 0); g.restore();
+        hero.lean = frames / 30 % 2 == 0 ? 4 : 6;
+        hero(g, hero, W * .25f, H * .92f);
         float x = W * .5f, wd = W * .42f;
         g.text("WAP", x - 3 * u, H * .19f, 58 * u, INK, -1);
         String[] l = {"JUGAR", "ELEGIR 4 ARMAS", "COLOR DEL ROBOT", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};

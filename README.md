@@ -1,6 +1,6 @@
 # WAP
 
-Juego de acción 2D para Android: escenario plataformero destructible, armas de Liero y movimiento de Mega Man.
+Juego de acción 2D en pixel art para Android: escenario plataformero destructible, armas de Liero y movimiento de Mega Man.
 
 ## Instalar
 Descarga `wap.apk` desde la sección **Releases** del repositorio, en el teléfono Android, y permite la instalación de fuentes externas. Cada push a `main` compila una versión nueva, que se puede instalar desde el menú del juego.

@@ -11,7 +11,17 @@ final class AndroidGfx implements Gfx {
         fill.setStyle(Paint.Style.FILL); stroke.setStyle(Paint.Style.STROKE); stroke.setStrokeCap(Paint.Cap.ROUND); stroke.setStrokeJoin(Paint.Join.ROUND);
         text.setTypeface(Typeface.DEFAULT_BOLD);
     }
+    private Bitmap low; private Canvas lowC, main; private boolean pix; private final Paint blit = new Paint();
     void begin(Canvas k, int w, int h) { c = k; W = w; H = h; }
+    private float sw(float w) { return pix && w < 1.5f ? 0 : w; } // en píxeles, las líneas finas miden exactamente 1
+    @Override public void beginPixels(int w, int h) {
+        if (low == null || low.getWidth() != w || low.getHeight() != h) { low = Bitmap.createBitmap(Math.max(1, w), Math.max(1, h), Bitmap.Config.ARGB_8888); lowC = new Canvas(low); }
+        low.eraseColor(0); main = c; c = lowC; pix = true; fill.setAntiAlias(false); stroke.setAntiAlias(false);
+    }
+    @Override public void endPixels(float x, float y, int s) {
+        c = main; pix = false; fill.setAntiAlias(true); stroke.setAntiAlias(true); blit.setFilterBitmap(false);
+        c.save(); c.translate(x, y); c.scale(s, s); c.drawBitmap(low, 0, 0, blit); c.restore();
+    }
     @Override public int w() { return W; }
     @Override public int h() { return H; }
     @Override public void save() { c.save(); }
@@ -25,25 +35,25 @@ final class AndroidGfx implements Gfx {
         for (int i = 2; i < p.length; i += 2) path.lineTo(p[i], p[i + 1]);
         path.close();
         if (f != 0) { fill.setColor(f); c.drawPath(path, fill); }
-        if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw); c.drawPath(path, stroke); }
+        if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw(sw)); c.drawPath(path, stroke); }
     }
     @Override public void grad(float[] p, int c0, int c1, float x0, float x1, int s, float sw) {
         path.rewind(); path.moveTo(p[0], p[1]);
         for (int i = 2; i < p.length; i += 2) path.lineTo(p[i], p[i + 1]);
         path.close();
         fill.setColor(0xFFFFFFFF); fill.setShader(new LinearGradient(x0, 0, x1, 0, c0, c1, Shader.TileMode.CLAMP)); c.drawPath(path, fill); fill.setShader(null);
-        if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw); c.drawPath(path, stroke); }
+        if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw(sw)); c.drawPath(path, stroke); }
     }
     @Override public void circle(float x, float y, float r, int f, int s, float sw) {
         if (f != 0) { fill.setColor(f); c.drawCircle(x, y, r, fill); }
-        if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw); c.drawCircle(x, y, r, stroke); }
+        if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw(sw)); c.drawCircle(x, y, r, stroke); }
     }
-    @Override public void line(float a, float b, float d, float e, int k, float w) { stroke.setColor(k); stroke.setStrokeWidth(w); c.drawLine(a, b, d, e, stroke); }
+    @Override public void line(float a, float b, float d, float e, int k, float w) { stroke.setColor(k); stroke.setStrokeWidth(sw(w)); c.drawLine(a, b, d, e, stroke); }
     @Override public void rect(float x, float y, float w, float h, int k) { fill.setColor(k); c.drawRect(x, y, x + w, y + h, fill); }
     @Override public void rrect(float x, float y, float w, float h, float r, int f, int s, float sw) {
         rf.set(x, y, x + w, y + h);
         if (f != 0) { fill.setColor(f); c.drawRoundRect(rf, r, r, fill); }
-        if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw); c.drawRoundRect(rf, r, r, stroke); }
+        if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw(sw)); c.drawRoundRect(rf, r, r, stroke); }
     }
     @Override public void text(String s, float x, float y, float size, int k, int align) {
         text.setTextSize(size); text.setColor(k);

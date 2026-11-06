@@ -21,13 +21,18 @@ public final class Renderer {
     public final RobotArt.View[] views = {new RobotArt.View(), new RobotArt.View()};
     final ArrayList<P> ps = new ArrayList<>(); final ArrayList<float[]> beams = new ArrayList<>(); final ArrayList<float[]> booms = new ArrayList<>();
     final Random r = new Random(7); final int[] px = new int[Terrain.TILE * Terrain.TILE];
-    public float camX = 900, camY = 500, zoom = 2, shake; boolean first = true;
+    public float camX = 900, camY = 500, shake; public int zoom = 3; int vx0, vy0, vw, vh; boolean first = true;
 
     public void reset(World w) { ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; bgNew = true; java.util.Arrays.fill(loaded, false); }
     static int hash(int x, int y) { int h = x * 374761393 + y * 668265263; h = (h ^ h >> 13) * 1274126177; return h ^ h >> 16; }
     final boolean[] loaded = new boolean[Terrain.TW * Terrain.TH];
     static final int M = 18, N = Terrain.TILE + 2 * M, SEAM = 0xFF141414;
     final int[] dIn = new int[N * N], dOut = new int[N * N]; final float[] soft = new float[N * N]; final byte[] mats = new byte[N * N];
+    static final int[] BAYER = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+    static boolean air(Terrain t, int x, int y) { int k = t.at(x, y); return k == 0 || k == Terrain.DEBRIS; }
+    static int tone(int c, float m, int add) {
+        return 0xFF000000 | Math.min(255, (int) ((c >> 16 & 255) * m) + add) << 16 | Math.min(255, (int) ((c >> 8 & 255) * m) + add) << 8 | Math.min(255, (int) ((c & 255) * m) + add);
+    }
     static final float LX = -.476f, LY = -.667f, LZ = .571f;
     private static int group(int k) { return k == Terrain.PANEL || k == Terrain.DECOR || k == Terrain.STEEL ? 1 : k; }
     private static void chamfer(int[] d) {
@@ -68,16 +73,16 @@ public final class Renderer {
             if (wx >= Terrain.W || wy >= Terrain.H) { px[q++] = 0; continue; }
             if (raw == Terrain.DEBRIS) c = t.tex[wy * Terrain.W + wx] & 0xFFFFFF | 0x80000000;
             else if (raw != 0) {
-                int base = t.tex[wy * Terrain.W + wx]; if (base == SEAM) base = 0xFF2C0A5C;
+                int base = t.tex[wy * Terrain.W + wx];
                 float R = radius(raw), d = soft[i], k = 1 - Math.min(d, R) / R, gx = soft[i + 1] - soft[i - 1], gy = soft[i + N] - soft[i - N], g = (float) Math.sqrt(gx * gx + gy * gy) + .0001f;
                 float nz = (float) Math.sqrt(Math.max(0, 1 - k * k)), nx = -gx / g * k, ny = -gy / g * k;
-                float diff = Math.max(0, nx * LX + ny * LY + nz * LZ), spec = diff * diff; spec *= spec; spec *= spec;
-                float sh = .5f + .86f * diff; int add = (int) (spec * 70);
-                int r = Math.min(255, (int) ((base >> 16 & 255) * sh) + add), gr = Math.min(255, (int) ((base >> 8 & 255) * sh) + add), b = Math.min(255, (int) ((base & 255) * sh) + add);
-                c = 0xFF000000 | r << 16 | gr << 8 | b;
+                float lv = Math.max(0, nx * LX + ny * LY + nz * LZ) + (BAYER[(wy & 3) * 4 + (wx & 3)] - 7.5f) * .018f;
+                boolean edge = air(t, wx - 1, wy) || air(t, wx + 1, wy) || air(t, wx, wy - 1) || air(t, wx, wy + 1);
+                if (edge || base == SEAM) c = INK; // contorno de 1 píxel
+                else c = lv > .82f ? tone(base, 1.28f, 18) : lv < .3f ? tone(base, .62f, 0) : lv < .45f ? tone(base, .8f, 0) : base;
             } else {
                 int sx = Math.max(0, x - 7), sy = Math.max(0, y - 10); float o = dOut[sy * N + sx] / 3f;
-                if (o < 11) { float a = 1 - o / 11; c = (int) (a * a * 110) << 24 | 0x100A28; }
+                if (o < 5) c = 0x48100A28; else if (o < 9 && ((wx + wy) & 1) == 0) c = 0x48100A28; // sombra en dos tramos, con trama
             }
             px[q++] = c;
         }
@@ -155,25 +160,26 @@ public final class Renderer {
             }
         }
     }
-    public void camera(Gfx g, World w, int who) {
-        zoom = Math.max(1.05f, g.h() / 290f);
+    void camera(World w, int who) {
         Robot me = w.robots[who];
-        float vw = g.w() / zoom, vh = g.h() / zoom;
-        float tx = me.px + me.facing * vw * .1f + me.vx * 12, ty = me.py - 40;
+        float tx = me.px + me.facing * vw * .1f + me.vx * 12, ty = me.py - 36;
         if (first) { camX = tx; camY = ty; first = false; }
         camX += (tx - camX) * .1f; camY += (ty - camY) * .12f;
-        camX = Math.max(vw / 2, Math.min(Terrain.W - vw / 2, camX)); camY = Math.max(vh / 2, Math.min(Terrain.H - vh / 2, camY));
+        camX = Math.max(vw / 2f, Math.min(Terrain.W - vw / 2f, camX)); camY = Math.max(vh / 2f, Math.min(Terrain.H - vh / 2f, camY));
     }
+    /** El mundo se dibuja a 1 píxel por unidad y se amplía por un factor entero: todo queda en pixel art. */
     public void drawWorld(Gfx g, World w, int who) {
-        camera(g, w, who);
+        zoom = Math.max(1, Math.round(g.h() / 280f)); vw = (g.w() + zoom - 1) / zoom; vh = (g.h() + zoom - 1) / zoom;
+        camera(w, who);
+        int x0 = Math.round(camX - vw / 2f), y0 = Math.round(camY - vh / 2f); vx0 = x0; vy0 = y0;
         g.clear(0xFFC7D2E0);
-        float vw = g.w() / zoom, vh = g.h() / zoom, x0 = camX - vw / 2, y0 = camY - vh / 2;
-        g.save(); g.scale(zoom, zoom);
-        float sx = shake > .3f ? (r.nextFloat() - .5f) * shake : 0, sy = shake > .3f ? (r.nextFloat() - .5f) * shake : 0;
+        g.beginPixels(vw, vh);
+        g.save();
+        int sx = shake > .6f ? Math.round((r.nextFloat() - .5f) * shake) : 0, sy = shake > .6f ? Math.round((r.nextFloat() - .5f) * shake) : 0;
         g.translate(-x0 + sx, -y0 + sy);
         if (bgNew) paintBg();
-        float bx0 = x0 * .55f, by0 = y0 * .55f;
-        for (int q = (int) Math.floor(by0 / BG); q * BG < by0 + vh; q++) for (int k = (int) Math.floor(bx0 / BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
+        int bx0 = Math.round(x0 * .55f), by0 = Math.round(y0 * .55f);
+        for (int q = Math.floorDiv(by0, BG); q * BG < by0 + vh; q++) for (int k = Math.floorDiv(bx0, BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
         for (Bonus b : w.bonus) crate(g, b.x, b.y, b.kind);
         for (Shot s : w.shots) shot(g, s);
         int S = Terrain.TILE, budget = 3; Terrain t = w.t;
@@ -191,16 +197,8 @@ public final class Renderer {
         for (P p : ps) if (p.kind == ARMOR || p.kind == BONE) { g.save(); g.translate(p.x, p.y); g.rotate(p.rot); if (p.kind == ARMOR) RobotArt.piece(g, p.slot, p.color); else RobotArt.bonePiece(g, p.slot); g.restore(); }
         for (int i = 0; i < 2; i++) {
             Robot o = w.robots[i]; if (!o.alive()) continue;
-            if (o.rope != 0) { float hx = o.px + o.facing * 10, hy = o.py - 42; g.line(hx, hy, o.rx, o.ry, INK, 1.1f); g.circle(o.rx, o.ry, 2.4f, 0xFFFFFFFF, INK, .7f); }
+            if (o.rope != 0) { float hx = o.px + o.facing * 12, hy = o.py - 33; g.line(hx, hy, o.rx, o.ry, INK, 1.1f); g.circle(o.rx, o.ry, 2.4f, 0xFFFFFFFF, INK, .7f); }
             RobotArt.draw(g, views[i], o, RobotArt.COLOR[i]);
-        }
-        for (int i = 0; i < 2; i++) {
-            Robot o = w.robots[i]; RobotArt.View v = views[i];
-            if (!o.alive() || v.labelT <= 0) continue;
-            float z = 9, tw = g.textW(v.label, z), ly = o.py - o.h - 13 - (LABEL - v.labelT) * .16f, lx = Math.max(x0 + tw / 2 + 5, Math.min(x0 + vw - tw / 2 - 5, o.px));
-            int a = Math.min(255, v.labelT * 18) << 24;
-            g.rrect(lx - tw / 2 - 4, ly - 9, tw + 8, 13, 2, a | 0x141414, 0, 0);
-            g.text(v.label, lx, ly + 1, z, a | 0xFFFFFF, 0);
         }
         for (P p : ps) switch (p.kind) {
             case SQUARE: g.rect(p.x, p.y, p.size, p.size, p.color); break;
@@ -211,6 +209,8 @@ public final class Renderer {
         for (float[] b : beams) { boolean gs = b[5] == 1; g.line(b[0], b[1], b[2], b[3], gs ? 0xFF1266FF : 0xFFFF2040, gs ? b[4] * .35f : 1.6f); g.line(b[0], b[1], b[2], b[3], 0xFFFFFFFF, gs ? b[4] * .12f : .6f); }
         for (float[] b : booms) boom(g, b);
         g.restore();
+        g.endPixels(0, 0, zoom);
+        labels(g, w, x0, y0);
         pointer(g, w, who, x0, y0);
     }
     /** Grietas según la resistencia que le queda al objeto. */
@@ -224,6 +224,17 @@ public final class Renderer {
             float mx = x + (float) Math.cos(a) * l * .5f, my = y + (float) Math.sin(a) * l * .5f, ex = mx + (float) Math.cos(a + .8f) * l * .5f, ey = my + (float) Math.sin(a + .8f) * l * .5f;
             mx = Math.max(p.x, Math.min(p.x + p.w, mx)); my = Math.max(p.y, Math.min(p.y + p.h, my)); ex = Math.max(p.x, Math.min(p.x + p.w, ex)); ey = Math.max(p.y, Math.min(p.y + p.h, ey));
             g.line(x, y, mx, my, 0xDD141414, 1); g.line(mx, my, ex, ey, 0xDD141414, .8f);
+        }
+    }
+    /** Nombres sobre los personajes, en la pantalla para que se lean nítidos. */
+    void labels(Gfx g, World w, int x0, int y0) {
+        for (int i = 0; i < 2; i++) {
+            Robot o = w.robots[i]; RobotArt.View v = views[i];
+            if (!o.alive() || v.labelT <= 0) continue;
+            float z = 8 * zoom, tw = g.textW(v.label, z), ly = (o.py - o.h - 9 - (LABEL - v.labelT) * .16f - y0) * zoom, lx = Math.max(tw / 2 + 5 * zoom, Math.min(g.w() - tw / 2 - 5 * zoom, (o.px - x0) * zoom));
+            int a = Math.min(255, v.labelT * 18) << 24;
+            g.rect(lx - tw / 2 - 3 * zoom, ly - 9 * zoom, tw + 6 * zoom, 12 * zoom, a | 0x141414);
+            g.text(v.label, lx, ly, z, a | 0xFFFFFF, 0);
         }
     }
     void boom(Gfx g, float[] b) {
@@ -262,7 +273,7 @@ public final class Renderer {
             default: g.line(s.x, s.y, s.x - s.vx * .8f, s.y - s.vy * .8f, INK, 1.4f);
         }
     }
-    void pointer(Gfx g, World w, int who, float x0, float y0) {
+    void pointer(Gfx g, World w, int who, int x0, int y0) {
         Robot e = w.robots[1 - who]; if (!e.alive()) return;
         float sx = (e.px - x0) * zoom, sy = (e.py - 30 - y0) * zoom, W = g.w(), H = g.h(), m = H * .09f;
         if (sx > 0 && sx < W && sy > 0 && sy < H) return;

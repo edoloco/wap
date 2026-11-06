@@ -4,6 +4,10 @@ public interface Gfx {
     int w(); int h();
     void save(); void restore(); void translate(float x, float y); void rotate(float rad); void scale(float x, float y);
     void clear(int c);
+    /** Desde aquí se dibuja en una capa de baja resolución, sin suavizado: pixel art. */
+    void beginPixels(int w, int h);
+    /** Termina la capa y la amplía por un factor entero, sin filtrar. */
+    void endPixels(float x, float y, int scale);
     void poly(float[] p, int fill, int stroke, float sw);
     /** Polígono con degradado horizontal entre x0 y x1. */
     void grad(float[] p, int c0, int c1, float x0, float x1, int stroke, float sw);

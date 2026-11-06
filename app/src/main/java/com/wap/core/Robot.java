@@ -104,8 +104,8 @@ public final class Robot {
         if (reload[slot] > 0 || delay[slot] > 0) return false;
         float deg = 0, base = 0; // todas las armas salen rectas, hacia donde mira el robot
         boolean planted = grounded && Math.abs(vx) < .4f && slideT == 0;
-        float my = py - (h != STAND_H ? 16 : planted ? 38 : 46), mx = px + facing * 10; // sale de la mano extendida
-        for (int d = 12; d <= 30 && !g.t.solid((int) (px + facing * d), (int) my); d += 2) mx = px + facing * d;
+        float my = py - (h != STAND_H ? 13 : planted ? 30 : 33), mx = px + facing * 10; // sale de la mano extendida
+        for (int d = 12; d <= 22 && !g.t.solid((int) (px + facing * d), (int) my); d += 2) mx = px + facing * d;
         for (int i = 0; i < w.parts; i++) {
             float a = base + (float) Math.toRadians(g.rng.r(-w.spread, w.spread));
             float v = w.speed * (w.parts > 1 ? g.rng.r(.82f, 1.1f) : 1);
