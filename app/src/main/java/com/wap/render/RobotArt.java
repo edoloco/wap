@@ -149,12 +149,26 @@ public final class RobotArt {
             double a = (v.clock / 4) * .5 + k * 2.09; int x = Math.round(r.px + (float) Math.cos(a) * 9), y = Math.round(r.py - 57 + (float) Math.sin(a) * 2.5f);
             g.rect(x - 1, y, 3, 1, 0xFFFFE23A); g.rect(x, y - 1, 1, 3, 0xFFFFE23A);
         }
-        if (ch >= 1) {
-            float R = 30 + v.clock / 4 % 3 * 3; int n = 8; float[] q = new float[n * 4];
-            for (int i = 0; i < n * 2; i++) { float a = i * 3.14159f / n + v.clock / 4 * .4f, d = i % 2 == 0 ? R : R * .72f; q[i * 2] = r.px + (float) Math.cos(a) * d; q[i * 2 + 1] = r.py - 24 + (float) Math.sin(a) * d; }
-            g.poly(q, 0, 0xFFFFE23A, 1);
+        if (ch > 0) { // carga: chispas que aparecen y desaparecen alrededor del cuerpo, como el Mega Buster
+            boolean full = ch >= 1; int n = full ? 9 : 2 + (int) (ch * 5), f = v.clock / 2;
+            for (int i = 0; i < n; i++) {
+                int h = (f * 73 + i * 151 + r.id * 977) * 2654435 >>> 7; float a = (h & 1023) / 1023f * 6.283f, d = 13 + (h >> 10 & 15);
+                int x = Math.round(r.px + (float) Math.cos(a) * d), y = Math.round(r.py - 26 + (float) Math.sin(a) * d * 1.15f), sz = (h >> 14 & 3) == 0 ? 2 : 1;
+                int spark = full ? ((h >> 16 & 1) == 0 ? 0xFFFFFFFF : 0xFF7FE3FF) : ((h >> 16 & 1) == 0 ? 0xFFFFE23A : 0xFFFFF7B0);
+                g.rect(x, y, sz, sz, spark);
+                if (full && sz == 2) { g.rect(x - 1, y, 1, 1, spark); g.rect(x + 2, y + 1, 1, 1, spark); }
+            }
+        }
+        if (r.aiming && r.rope == 0) { // mira del gancho
+            float a = (float) Math.toRadians(r.aim), cx = r.px + r.facing * 6, cy = r.py - 40;
+            for (int i = 1; i <= 4; i++) g.rect(Math.round(cx + (float) Math.cos(a) * r.facing * i * 8), Math.round(cy - (float) Math.sin(a) * i * 8), 1, 1, INK);
+            int x = Math.round(cx + (float) Math.cos(a) * r.facing * 44), y = Math.round(cy - (float) Math.sin(a) * 44);
+            g.rect(x - 3, y, 2, 1, color); g.rect(x + 2, y, 2, 1, color); g.rect(x, y - 3, 1, 2, color); g.rect(x, y + 2, 1, 2, color);
+            g.rect(x - 4, y - 1, 1, 3, INK); g.rect(x + 4, y - 1, 1, 3, INK); g.rect(x - 1, y - 4, 3, 1, INK); g.rect(x - 1, y + 4, 3, 1, INK);
         }
     }
+    public static int mixLight(int c) { return 0xFF000000 | Math.min(255, (c >> 16 & 255) + 70) << 16 | Math.min(255, (c >> 8 & 255) + 70) << 8 | Math.min(255, (c & 255) + 70); }
+    public static int mixDark(int c) { return 0xFF000000 | (c >> 16 & 255) * 3 / 5 << 16 | (c >> 8 & 255) * 3 / 5 << 8 | (c & 255) * 3 / 5; }
     private static int mix(int c) { return 0xFF000000 | ((c >> 16 & 255) + 255) / 2 << 16 | ((c >> 8 & 255) + 255) / 2 << 8 | ((c & 255) + 255) / 2; }
     /** El dibujo en sí, en coordenadas locales mirando a la derecha. */
     public static void drawPose(Gfx g, View v, int ar, int c, int unused) {

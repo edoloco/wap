@@ -8,7 +8,10 @@ public final class App {
     /** Servicios del teléfono para jugar en red. */
     public interface Device { String name(); void listen(boolean on); }
     static final int[] SWATCH = {0xFF5E5650, 0xFFFF0000, 0xFFFF7A00, 0xFFFFD200, 0xFF19C24A, 0xFF00B8D4, 0xFF1266FF, 0xFF8214FF, 0xFFFF2FA8, 0xFF2A2A2A};
-    static final int RED = 0xFFFF0000, INK = RobotArt.INK, WHITE = 0xFFFFFFFF, MUTE = 0xFF6B7280, LINE = 0xFFCBD2DC;
+    static final int RED = 0xFFE8323C, INK = RobotArt.INK, WHITE = 0xFFFFFFFF, MUTE = 0xFF9AA6D6, LINE = 0xFFCBD2DC;
+    /** Paleta de la interfaz en pixel art. */
+    static final int NAVY = 0xFF1B1F4A, BLUE = 0xFF2E4BA8, SKY = 0xFF5FA8FF, GOLD = 0xFFFFC83D, CREAM = 0xFFFFF4D6, MINT = 0xFF3DDC97, PINK = 0xFFFF6FA0, DEEP = 0xFF101330, PURPLE = 0xFF8214FF;
+    float uiScale = 1;
     static final String[] LEVELS = {"FÁCIL", "NORMAL", "DIFÍCIL"}; static final float[] SKILL = {.45f, .9f, 1.6f};
     static final int[] LIVES = {3, 5, 10, 15, 30};
     static final String[] DEF = {"GRENADE", "BAZOOKA", "PLASMA CANNON", "PLASMA GUN"};
@@ -111,7 +114,10 @@ public final class App {
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
     void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
     void go(int s) { screen = s; focus = 0; pad.clear(); }
+    /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
+    public void pointer(int id, float x, float y, boolean down) { pad.pointer(id, x / uiScale, y / uiScale, down); }
     public boolean tap(float x, float y) {
+        x /= uiScale; y /= uiScale;
         for (int i = btns.size() - 1; i >= 0; i--) { float[] b = btns.get(i); if (x >= b[0] && y >= b[1] && x <= b[2] && y <= b[3]) { au.play(Audio.MENU); acts.get(i).run(); return true; } }
         return false;
     }
@@ -181,6 +187,7 @@ public final class App {
     /** Arrastre sobre las barras de color. */
     public void drag(float x, float y) {
         if (screen != PAINT) return;
+        x /= uiScale; y /= uiScale;
         for (int i = 0; i < 3; i++) {
             float ty = sliderY(i);
             if (Math.abs(y - ty) < 22 * u && x > sliderX() - 16 * u && x < sliderX() + sliderW() + 16 * u) { paintRow = i; channel(i, (int) ((x - sliderX()) / sliderW() * 255)); }
@@ -189,31 +196,61 @@ public final class App {
     float sliderX() { return W * .5f + 24 * u; } float sliderW() { return W * .5f - 60 * u; } float sliderY(int i) { return 66 * u + i * 56 * u; }
     /** Personaje grande en pixel art, para menús. */
     void hero(Gfx g, RobotArt.View v, float cx, float by) {
-        int sc = Math.max(2, (int) (H * .78f / 56)), lw = (int) W / sc + 1, lh = (int) H / sc + 1;
+        int sc = Math.max(1, (int) (H * .8f / 58)), lw = (int) W / sc + 1, lh = (int) H / sc + 1;
         g.beginPixels(lw, lh); g.save(); g.translate(Math.round(cx / sc), Math.round(by / sc));
         RobotArt.drawPose(g, v, (1 << Robot.PIECES) - 1, myColor, 0); g.restore(); g.endPixels(0, 0, sc);
     }
+    // ---------- Piezas de interfaz en pixel art
+    void txt(Gfx g, String s, float x, float y, float size, int c, int align) { PixelFont.draw(g, s, x, y, size, c, align, 0); }
+    void txtS(Gfx g, String s, float x, float y, float size, int c, int align) { PixelFont.draw(g, s, x, y, size, c, align, DEEP); }
+    /** Caja con esquinas recortadas, brillo arriba y sombra abajo. */
+    void box(Gfx g, float x, float y, float w, float h, int fill, int light, int dark) {
+        int X = Math.round(x), Y = Math.round(y), Wd = Math.round(w), Hd = Math.round(h);
+        g.rect(X + 1, Y, Wd - 2, Hd, INK); g.rect(X, Y + 1, Wd, Hd - 2, INK);
+        g.rect(X + 1, Y + 1, Wd - 2, Hd - 2, fill); g.rect(X + 2, Y + 1, Wd - 4, 1, light); g.rect(X + 1, Y + Hd - 3, Wd - 2, 2, dark);
+    }
+    /** Fondo de los menús: cielo nocturno en bandas, con estrellas que titilan. */
+    void sky(Gfx g) {
+        int[] band = {0xFF101330, 0xFF15193D, 0xFF1B1F4A, 0xFF212863, 0xFF283180, 0xFF2E3B97, 0xFF33459F};
+        int bh = (int) Math.ceil(H / band.length);
+        for (int i = 0; i < band.length; i++) {
+            g.rect(0, i * bh, W, bh, band[i]);
+            if (i > 0) for (int x = (i & 1); x < W; x += 2) g.rect(x, i * bh, 1, 1, band[i - 1]);
+        }
+        for (int i = 0; i < 26; i++) {
+            int h = i * 2654435761L > 0 ? (int) (i * 2654435761L >>> 5) : i * 977; int x = Math.floorMod(h, (int) W), y = Math.floorMod(h >> 11, (int) (H * .6f));
+            if ((frames / 20 + i) % 7 != 0) g.rect(x, y, 1, 1, i % 3 == 0 ? GOLD : CREAM);
+        }
+    }
+    /** Plataforma del juego, para el suelo de los menús. */
+    void floor(Gfx g, float x, float y, float w) {
+        int X = Math.round(x), Y = Math.round(y), Wd = Math.round(w);
+        g.rect(X, Y, Wd, (int) H - Y, INK); g.rect(X + 1, Y + 1, Wd - 2, (int) H - Y, PURPLE); g.rect(X + 1, Y + 1, Wd - 2, 1, 0xFFB46BFF);
+        for (int k = X + 32; k < X + Wd; k += 32) g.rect(k, Y + 1, 1, (int) H - Y, INK);
+    }
     void paint(Gfx g) {
-        g.clear(WHITE);
+        sky(g); floor(g, 0, H * .93f, W * .48f);
         RobotArt.View v = new RobotArt.View();
         hero(g, v, W * .24f, H * .93f);
-        g.text("COLOR DEL ROBOT", sliderX(), 28 * u, 20 * u, INK, -1);
-        String[] n = {"ROJO", "VERDE", "AZUL"}; int[] tone = {0xFFFF0000, 0xFF19A84A, 0xFF1266FF};
+        txtS(g, "COLOR DEL ROBOT", sliderX(), 28 * u, 20 * u, GOLD, -1);
+        String[] n = {"ROJO", "VERDE", "AZUL"}; int[] tone = {0xFFE8323C, 0xFF3DDC97, 0xFF5FA8FF};
         for (int i = 0; i < 3; i++) {
             float y = sliderY(i), x = sliderX(), w = sliderW(), k = channel(i) / 255f;
-            g.text(n[i], x, y - 11 * u, 11 * u, INK, -1); g.text("" + channel(i), x + w, y - 11 * u, 11 * u, INK, 1);
-            g.rrect(x, y - 5 * u, w, 10 * u, 2 * u, 0xFFE4E7EC, i == paintRow && padSeen ? INK : LINE, 1.4f * u);
-            g.rrect(x, y - 5 * u, Math.max(4 * u, w * k), 10 * u, 2 * u, tone[i], 0, 0);
-            g.circle(x + w * k, y, 11 * u, WHITE, INK, 2 * u);
+            txt(g, n[i], x, y - 10 * u, 14 * u, CREAM, -1); txt(g, "" + channel(i), x + w, y - 10 * u, 14 * u, i == paintRow && padSeen ? GOLD : CREAM, 1);
+            box(g, x, y - 6 * u, w, 12 * u, DEEP, NAVY, DEEP);
+            g.rect(Math.round(x + 1), Math.round(y - 6 * u + 1), Math.round(Math.max(1, (w - 2) * k)), Math.round(12 * u - 4), tone[i]);
+            int kx = Math.round(x + w * k), ky = Math.round(y);
+            g.rect(kx - 3, ky - 6, 7, 12, INK); g.rect(kx - 2, ky - 5, 5, 10, CREAM); g.rect(kx - 2, ky + 3, 5, 2, 0xFFC9B98F);
         }
-        float sz = (sliderW() + 8 * u) / SWATCH.length, y = sliderY(2) + 26 * u;
+        float sz = (sliderW() + 8 * u) / SWATCH.length, y = sliderY(2) + 24 * u;
         for (int i = 0; i < SWATCH.length; i++) {
             final int c = SWATCH[i]; float x = sliderX() + i * sz;
-            g.rrect(x, y, sz - 5 * u, 28 * u, 2 * u, c, INK, myColor == c ? 2.6f * u : 1 * u);
+            if (myColor == c) box(g, x - 2, y - 2, sz - 5 * u + 4, 28 * u + 4, GOLD, CREAM, 0xFFB8862A);
+            box(g, x, y, sz - 5 * u, 28 * u, c, RobotArt.mixLight(c), RobotArt.mixDark(c));
             btn(x, y, sz - 5 * u, 28 * u, () -> { myColor = c; save(); });
         }
         float by = H - 46 * u;
-        g.rrect(sliderX(), by, sliderW(), 36 * u, 3 * u, INK, INK, 1); g.text("LISTO", sliderX() + sliderW() / 2, by + 24 * u, 15 * u, WHITE, 0);
+        box(g, sliderX(), by, sliderW(), 36 * u, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", sliderX() + sliderW() / 2, by + 24 * u, 16 * u, CREAM, 0);
         btn(sliderX(), by, sliderW(), 36 * u, this::back);
     }
     static final int COLS = 3, ROWS = 10;
@@ -237,120 +274,147 @@ public final class App {
         if (dir == 2) g.poly(new float[]{x + q, cy + q, x + 2 * q, cy - q * .7f, x, cy - q * .7f}, c, 0, 0);
         if (dir == 1) { g.poly(new float[]{x, cy, x + q, cy - q, x + q, cy + q}, c, 0, 0); g.poly(new float[]{x + 2.8f * q, cy, x + 1.8f * q, cy - q, x + 1.8f * q, cy + q}, c, 0, 0); }
         float tx = dir < 0 ? x : x + (dir == 1 ? 3.3f : 2.5f) * q;
-        g.text(b, tx, cy + s * .36f, s, c, -1);
+        PixelFont.draw(g, b, tx, cy + 3.5f * PixelFont.scale(s), s, c, -1, 0);
     }
     public void draw(Gfx g) {
-        W = g.w(); H = g.h(); u = H / 360f; pad.layout(W, H); btns.clear(); acts.clear();
+        int s = Math.max(1, Math.round(g.h() / 190f)); uiScale = s;
+        boolean game = screen == PLAY || screen == PAUSE || screen == OVER;
+        if (game) ren.drawWorld(g, w, me); else g.clear(DEEP);
+        g.beginPixels((g.w() + s - 1) / s, (g.h() + s - 1) / s); // toda la interfaz va en pixel art
+        W = (g.w() + s - 1) / s; H = (g.h() + s - 1) / s; u = H / 360f; pad.layout(W, H); btns.clear(); acts.clear();
         switch (screen) {
             case TITLE: title(g); break;
             case ARMS: arms(g); break;
             case PAINT: paint(g); break;
             case LOBBY: lobby(g); break;
             default:
-                ren.drawWorld(g, w, me); hud(g);
-                if (online && ls.stall > 45) g.text("Esperando al otro teléfono...", W / 2, H * .5f, 16 * u, INK, 0);
-                if (online && ls.desync) g.text("Partida desincronizada", W / 2, H - 8 * u, 11 * u, RED, 0);
+                hud(g);
+                if (online && ls.stall > 45) txtS(g, "ESPERANDO AL OTRO TELÉFONO...", W / 2, H * .5f, 16 * u, CREAM, 0);
+                if (online && ls.desync) txtS(g, "PARTIDA DESINCRONIZADA", W / 2, H - 8 * u, 12 * u, RED, 0);
                 if (screen == PLAY) {
-                    if (cd > 0) { g.text(cd > 60 ? "3" : cd > 30 ? "2" : "1", W / 2, H * .42f, 70 * u, RED, 0); }
+                    if (cd > 0) txtS(g, cd > 60 ? "3" : cd > 30 ? "2" : "1", W / 2, H * .42f, 64 * u, GOLD, 0);
                     pad.draw(g, pad.mask()); float x = W / 2 - 18 * u, y = H - 40 * u;
-                    if (pad.visible) { g.rrect(x, y, 36 * u, 28 * u, 5 * u, 0x44FFFFFF, 0xAA141414, 1.5f * u); g.rect(x + 12 * u, y + 7 * u, 4 * u, 14 * u, 0xAA141414); g.rect(x + 20 * u, y + 7 * u, 4 * u, 14 * u, 0xAA141414); btn(x - 8 * u, y - 8 * u, 52 * u, 44 * u, () -> screen = PAUSE); }
+                    if (pad.visible) {
+                        box(g, x, y, 36 * u, 28 * u, 0xCC1B1F4A, 0x55FFFFFF, DEEP);
+                        g.rect(Math.round(x + 12 * u), Math.round(y + 7 * u), Math.max(1, Math.round(4 * u)), Math.round(13 * u), CREAM); g.rect(Math.round(x + 20 * u), Math.round(y + 7 * u), Math.max(1, Math.round(4 * u)), Math.round(13 * u), CREAM);
+                        btn(x - 8 * u, y - 8 * u, 52 * u, 44 * u, () -> screen = PAUSE);
+                    }
                 } else if (screen == PAUSE) {
-                    veil(g); g.text("PAUSA", W / 2, H * .3f, 42 * u, WHITE, 0);
-                    if (online) { g.text("La partida sigue mientras estás aquí", W / 2, H * .37f, 12 * u, WHITE, 0); menu(g, W / 2 - 110 * u, H * .42f, 220 * u, new String[]{"SEGUIR", "SALIR DE LA PARTIDA"}, new Runnable[]{() -> screen = PLAY, () -> endOnline(null)}); }
-                    else menu(g, W / 2 - 100 * u, H * .4f, 200 * u, new String[]{"SEGUIR", "VOLVER AL MENÚ"}, new Runnable[]{() -> screen = PLAY, () -> go(TITLE)});
+                    veil(g); txtS(g, "PAUSA", W / 2, H * .3f, 40 * u, GOLD, 0);
+                    if (online) { txt(g, "LA PARTIDA SIGUE MIENTRAS ESTÁS AQUÍ", W / 2, H * .37f, 12 * u, CREAM, 0); menu(g, W / 2 - 120 * u, H * .42f, 240 * u, new String[]{"SEGUIR", "SALIR DE LA PARTIDA"}, new Runnable[]{() -> screen = PLAY, () -> endOnline(null)}); }
+                    else menu(g, W / 2 - 110 * u, H * .4f, 220 * u, new String[]{"SEGUIR", "VOLVER AL MENÚ"}, new Runnable[]{() -> screen = PLAY, () -> go(TITLE)});
                 } else {
                     veil(g); boolean win = w.winner == me;
-                    g.text(win ? "GANASTE" : "PERDISTE", W / 2, H * .28f, 50 * u, win ? WHITE : RED, 0);
-                    g.text("Bajas " + w.robots[me].kills + "   Muertes " + w.robots[me].deaths, W / 2, H * .37f, 15 * u, WHITE, 0);
-                    if (online) menu(g, W / 2 - 100 * u, H * .44f, 200 * u, new String[]{"VOLVER AL MENÚ"}, new Runnable[]{() -> endOnline(null)});
-                    else menu(g, W / 2 - 100 * u, H * .44f, 200 * u, new String[]{"REVANCHA", "VOLVER AL MENÚ"}, new Runnable[]{this::start, () -> go(TITLE)});
+                    txtS(g, win ? "¡GANASTE!" : "PERDISTE", W / 2, H * .28f, 48 * u, win ? GOLD : RED, 0);
+                    txt(g, "BAJAS " + w.robots[me].kills + "   MUERTES " + w.robots[me].deaths, W / 2, H * .37f, 14 * u, CREAM, 0);
+                    if (online) menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"VOLVER AL MENÚ"}, new Runnable[]{() -> endOnline(null)});
+                    else menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"REVANCHA", "VOLVER AL MENÚ"}, new Runnable[]{this::start, () -> go(TITLE)});
                 }
         }
+        g.endPixels(0, 0, s);
     }
-    void veil(Gfx g) { g.rect(0, 0, W, H, 0xB8141414); }
+    /** Texto largo partido en líneas que caben en el ancho. */
+    void para(Gfx g, String t, float cx, float y, float maxW, int c) {
+        StringBuilder line = new StringBuilder();
+        for (String word : t.split(" ")) {
+            String next = line.length() == 0 ? word : line + " " + word;
+            if (PixelFont.width(next, 8) > maxW && line.length() > 0) { txt(g, line.toString(), cx, y, 8, c, 0); y += 10; line = new StringBuilder(word); }
+            else line = new StringBuilder(next);
+        }
+        txt(g, line.toString(), cx, y, 8, c, 0);
+    }
+    void veil(Gfx g) { g.rect(0, 0, W, H, 0xC0101330); }
     void menu(Gfx g, float x, float y, float w, String[] l, Runnable[] a) {
-        float h = (l.length > 6 ? 31 : l.length > 5 ? 34 : l.length > 4 ? 37 : 40) * u, gap = (l.length > 6 ? 4 : l.length > 4 ? 5 : 8) * u;
+        float h = (l.length > 6 ? 31 : l.length > 5 ? 34 : l.length > 4 ? 37 : 40) * u, gap = (l.length > 6 ? 5 : l.length > 4 ? 6 : 9) * u;
         for (int i = 0; i < l.length; i++) {
-            boolean f = i == focus && !pad.visible || i == focus && padSeen;
-            g.rrect(x, y, w, h, 3 * u, f ? RED : WHITE, INK, 2 * u);
-            g.text(l[i], x + w / 2, y + h * .66f, 16 * u, f ? WHITE : INK, 0);
+            boolean f = i == focus && padSeen;
+            if (f) box(g, x, y, w, h, RED, 0xFFFF8A8F, 0xFF8E1520); else box(g, x, y, w, h, BLUE, SKY, NAVY);
+            txtS(g, l[i], x + w / 2, y + h / 2 + 3.5f * PixelFont.scale(15 * u) - 1, 15 * u, f ? GOLD : CREAM, 0);
             btn(x, y, w, h, a[i]); y += h + gap;
         }
     }
     void title(Gfx g) {
-        g.clear(WHITE);
-        int G = (int) (32 * u); for (int x = 0; x < W; x += G) g.line(x, 0, x, H, Renderer.GRID, 1); for (int y = 0; y < H; y += G) g.line(0, y, W, y, Renderer.GRID, 1);
+        sky(g); floor(g, 0, H * .92f, W * .46f);
         hero.lean = frames / 30 % 2 == 0 ? 4 : 6;
         hero(g, hero, W * .25f, H * .92f);
-        float x = W * .5f, wd = W * .42f;
-        g.text("WAP", x - 3 * u, H * .19f, 58 * u, INK, -1);
+        float x = W * .5f, wd = W * .44f;
+        txtS(g, "WAP", x, H * .17f, 48 * u, GOLD, -1);
         String[] l = {"JUGAR", "EN LÍNEA (RED LOCAL)", "ELEGIR 4 ARMAS", "COLOR DEL ROBOT", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
         Runnable[] a = {this::start, this::openLobby, () -> go(ARMS), () -> go(PAINT), () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }, () -> { level = (level + 1) % 3; save(); }};
-        if (up != null) { l = new String[]{l[0], l[1], l[2], l[3], l[4], l[5], up.label()}; a = new Runnable[]{a[0], a[1], a[2], a[3], a[4], a[5], () -> up.act()}; g.text(up.version(), W - 8 * u, H - 7 * u, 10 * u, MUTE, 1); }
-        menu(g, x, H * .2f, wd, l, a);
-        if (toastT > 0) { g.rect(0, H - 30 * u, W, 30 * u, INK); g.text(toast, W / 2, H - 10 * u, 13 * u, WHITE, 0); }
+        if (up != null) { l = new String[]{l[0], l[1], l[2], l[3], l[4], l[5], up.label()}; a = new Runnable[]{a[0], a[1], a[2], a[3], a[4], a[5], () -> up.act()}; txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
+        menu(g, x, H * .21f, wd, l, a);
+        if (toastT > 0) { g.rect(0, H - 16, W, 16, RED); txtS(g, toast, W / 2, H - 4, 8, CREAM, 0); }
     }
     void lobby(Gfx g) {
-        g.clear(WHITE);
-        int G = (int) (32 * u); for (int x = 0; x < W; x += G) g.line(x, 0, x, H, Renderer.GRID, 1); for (int y = 0; y < H; y += G) g.line(0, y, W, y, Renderer.GRID, 1);
-        g.text("EN LÍNEA · RED LOCAL", W / 2, 34 * u, 24 * u, INK, 0);
-        g.text(netMsg, W / 2, 56 * u, 12 * u, MUTE, 0);
+        sky(g);
+        txtS(g, "EN LÍNEA · RED LOCAL", W / 2, 34 * u, 24 * u, GOLD, 0);
+        para(g, netMsg, W / 2, 52 * u, W - 20, CREAM);
         List<String> l = new ArrayList<>(); List<Runnable> a = new ArrayList<>();
         if (hosting) { l.add("CANCELAR SALA"); a.add(() -> { closeLobby(); openLobby(); }); }
         else {
             l.add("CREAR SALA"); a.add(this::hostRoom);
             List<Lan.Room> rooms = browser != null ? browser.rooms() : new ArrayList<>();
-            if (rooms.isEmpty() && !busy) g.text("Buscando salas en tu red...", W / 2, H - 16 * u, 12 * u, MUTE, 0);
+            if (rooms.isEmpty() && !busy) txt(g, "BUSCANDO SALAS EN TU RED" + "...".substring(0, (int) (frames / 20 % 4)), W / 2, H - 10 * u, 8, MUTE, 0);
             for (int i = 0; i < Math.min(4, rooms.size()); i++) { Lan.Room r = rooms.get(i); l.add("UNIRSE A " + r.name.toUpperCase() + (r.rules != World.RULES ? " (OTRA VERSIÓN)" : "")); a.add(() -> joinRoom(r)); }
         }
         l.add("VOLVER"); a.add(() -> { closeLobby(); go(TITLE); });
-        menu(g, W / 2 - 160 * u, 72 * u, 320 * u, l.toArray(new String[0]), a.toArray(new Runnable[0]));
+        menu(g, W / 2 - 170 * u, 84 * u, 340 * u, l.toArray(new String[0]), a.toArray(new Runnable[0]));
     }
     void arms(Gfx g) {
-        g.clear(WHITE);
-        float m = 12 * u, cw = 190 * u, row = 44 * u, y = 10 * u;
-        g.text("TUS 4 ARMAS", m, y + 15 * u, 15 * u, INK, -1); y += 24 * u;
+        sky(g);
+        float m = 12 * u, cw = 200 * u, row = 44 * u, y = 10 * u;
+        txtS(g, "TUS 4 ARMAS", m, y + 16 * u, 15 * u, GOLD, -1); y += 24 * u;
         for (int i = 0; i < SLOTS; i++) {
             boolean sel = i == selSlot; final int ix = i;
-            g.rrect(m, y, cw, row - 5 * u, 3 * u, sel ? RED : WHITE, INK, 1.6f * u);
-            int c = sel ? WHITE : INK;
-            combo(g, i, m + 8 * u, y + 19 * u, 14 * u, c);
-            g.text(Wpn.ALL[slots[i]].name, m + 44 * u, y + 24 * u, 13 * u, c, -1);
+            if (sel) box(g, m, y, cw, row - 5 * u, RED, 0xFFFF8A8F, 0xFF8E1520); else box(g, m, y, cw, row - 5 * u, BLUE, SKY, NAVY);
+            combo(g, i, m + 6 * u, y + 17 * u, 14 * u, sel ? GOLD : CREAM);
+            txtS(g, Wpn.ALL[slots[i]].name, m + 46 * u, y + 23 * u, 8, CREAM, -1);
             btn(m, y, cw, row - 5 * u, () -> selSlot = ix); y += row;
         }
         float bx = m, by = H - 48 * u;
-        g.rrect(bx, by, cw, 38 * u, 3 * u, INK, INK, 1); g.text("LISTO", bx + cw / 2, by + 25 * u, 15 * u, WHITE, 0);
+        box(g, bx, by, cw, 38 * u, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", bx + cw / 2, by + 24 * u, 16 * u, CREAM, 0);
         btn(bx, by, cw, 38 * u, () -> { save(); go(TITLE); });
-        float gx = m + cw + 12 * u, gw = (W - gx - m) / COLS, gh = 29 * u, gy = 8 * u; int n = Wpn.ALL.length;
+        float gx = m + cw + 10 * u, gw = (W - gx - m) / COLS, gh = 28 * u, gy = 8 * u; int n = Wpn.ALL.length;
         for (int i = 0; i < n; i++) {
             final int ix = i; float x = gx + i % COLS * gw, yy = gy + i / COLS * gh;
             boolean c = i == cur, eq = false; for (int s : slots) eq |= s == i;
-            g.rrect(x + u, yy + u, gw - 2 * u, gh - 3 * u, 2 * u, eq ? 0xFFFFE3E3 : WHITE, c ? RED : LINE, c ? 2.2f * u : 1 * u);
-            g.text(Wpn.ALL[i].name, x + gw / 2, yy + 17 * u, 10.5f * u, INK, 0);
+            if (c) box(g, x, yy, gw - u, gh - 2 * u, GOLD, CREAM, 0xFFB8862A);
+            else if (eq) box(g, x, yy, gw - u, gh - 2 * u, PURPLE, 0xFFB46BFF, 0xFF4A00A8);
+            else box(g, x, yy, gw - u, gh - 2 * u, NAVY, BLUE, DEEP);
+            txt(g, Wpn.ALL[i].name, x + gw / 2, yy + gh / 2 + 3, 8, c ? DEEP : CREAM, 0);
             btn(x, yy, gw, gh, () -> { cur = ix; slots[selSlot] = ix; selSlot = (selSlot + 1) % SLOTS; });
         }
-        g.text(Wpn.ALL[cur].desc, gx + 4 * u, H - 10 * u, 12 * u, MUTE, -1);
+        txt(g, Wpn.ALL[cur].desc, gx + 2, H - 3, 8, SKY, -1);
     }
     void hud(Gfx g) {
         Robot me = w.robots[this.me], e = w.robots[1 - this.me];
-        bar(g, 10 * u, 8 * u, me, this.me, false); bar(g, W - 134 * u, 8 * u, e, 1 - this.me, true);
-        int n = SLOTS; float cw = 72 * u, tot = cw * n, x = W / 2 - tot / 2;
+        float bw = 168 * u; bar(g, 4, 4, bw, me, this.me); bar(g, W - 4 - bw, 4, bw, e, 1 - this.me);
+        int n = SLOTS; float cw = Math.min(112 * u, (W - 2 * bw - 16) / n), x = W / 2 - cw * n / 2;
         for (int i = 0; i < n; i++) {
-            float y = 7 * u, h = 30 * u, cx = x + i * cw; Wpn wp = me.loadout[i];
-            g.rrect(cx + u, y, cw - 2 * u, h, 2 * u, 0xE6FFFFFF, INK, 1.2f * u);
-            combo(g, i, cx + 5 * u, y + 10 * u, 10 * u, INK);
+            float y = 4, h = 27, cx = x + i * cw; Wpn wp = me.loadout[i];
+            box(g, cx + 1, y, cw - 2, h, 0xE61B1F4A, BLUE, DEEP);
+            combo(g, i, cx + 4, y + 6, 8, GOLD);
+            int fit = Math.max(3, (int) ((cw - 6) / 6)); String nm = wp.name;
+            if (nm.length() > fit && nm.indexOf(' ') > 0) nm = nm.charAt(0) + "." + nm.substring(nm.indexOf(' ') + 1); // PLASMA CANNON → P.CANNON
+            if (nm.length() > fit) nm = nm.substring(0, fit);
+            txt(g, nm, cx + 4, y + 17, 8, CREAM, -1);
             float frac = me.reload[i] > 0 ? 1 - me.reload[i] / (float) wp.reload : me.ammo[i] / (float) wp.clip;
-            int c = me.reload[i] > 0 ? 0xFF9AA3B2 : RED;
-            if (wp.charge > 0 && me.reload[i] == 0) { frac = me.charge[i] / (float) wp.charge; c = 0xFFE0A800; }
-            g.rect(cx + 5 * u, y + 23 * u, (cw - 10 * u) * Math.max(0, frac), 3.5f * u, c);
-            String nm = wp.name.length() > 9 ? wp.name.substring(0, 9) : wp.name;
-            g.text(nm, cx + 5 * u, y + 20 * u, 7.5f * u, INK, -1);
+            int c = me.reload[i] > 0 ? 0xFF6B7398 : frac > .5f ? MINT : frac > .2f ? GOLD : RED;
+            if (wp.charge > 0 && me.reload[i] == 0) { frac = me.charge[i] / (float) wp.charge; c = frac >= 1 && frames / 4 % 2 == 0 ? CREAM : SKY; }
+            int bx = Math.round(cx + 4), by = Math.round(y + h - 7), bwd = Math.round(cw - 10);
+            g.rect(bx, by, bwd, 3, DEEP); g.rect(bx, by, Math.round(bwd * Math.max(0, Math.min(1, frac))), 3, c);
         }
     }
-    void bar(Gfx g, float x, float y, Robot r, int id, boolean right) {
-        float w = 124 * u, h = 30 * u;
-        g.rrect(x, y - u, w, h, 2 * u, 0xE6FFFFFF, INK, 1.2f * u);
-        float k = r.hp / 100f; g.rect(x + 3 * u, y + 2 * u, (w - 6 * u) * Math.max(0, k), 9 * u, RobotArt.COLOR[id]);
-        g.text("VIDAS " + Math.max(0, r.lives) + "   BAJAS " + r.kills, x + 4 * u, y + 23 * u, 10 * u, INK, -1);
+    void bar(Gfx g, float x, float y, float w, Robot r, int id) {
+        float h = 27; box(g, x, y, w, h, 0xE61B1F4A, BLUE, DEEP);
+        int seg = 10, sx = Math.round(x + 4), sy = Math.round(y + 4), sw = Math.max(2, Math.round((w - 8) / seg)), full = (int) Math.ceil(Math.max(0, r.hp) / 10f), col = RobotArt.COLOR[id];
+        for (int i = 0; i < seg; i++) {
+            g.rect(sx + i * sw, sy, sw - 1, 6, i < full ? col : DEEP);
+            if (i < full) g.rect(sx + i * sw, sy, sw - 1, 1, RobotArt.mixLight(col));
+        }
+        int hx = sx, hy = Math.round(y + h - 9);
+        g.rect(hx, hy, 2, 1, PINK); g.rect(hx + 3, hy, 2, 1, PINK); g.rect(hx, hy + 1, 5, 2, PINK); g.rect(hx + 1, hy + 3, 3, 1, PINK); g.rect(hx + 2, hy + 4, 1, 1, PINK);
+        txt(g, "x" + Math.max(0, r.lives), hx + 7, hy + 5, 8, CREAM, -1);
+        txt(g, "BAJAS " + r.kills, Math.round(x + w - 4), hy + 5, 8, GOLD, 1);
     }
 }

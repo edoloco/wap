@@ -8,7 +8,8 @@ public final class Robot {
     public static final int SMASH_WINDOW = 9, BUFFER = 3;
     public static final float HOOK_SHOT = 15, HOOK_PULL = 7.5f, HOOK_RANGE = 400;
     public static final float RUN_FAST = 1.55f, AIR_JUMP = 8.4f, STOMP_DMG = 6, THROW_VX = 8.5f, THROW_VY = 6.5f;
-    public static final int STUN = 45;
+    public static final int STUN = 18, STOMP_COOLDOWN = 60;
+    public static final float AIM_SPEED = 2.5f, AIM_MIN = -40, AIM_MAX = 90, GRAB_RANGE = 60;
     public static final float RUN = 2.5f, GRAV = .28f, JUMP = 9.2f, WALL_JUMP = 8.6f, WALL_PUSH = 4.2f, WALL_SLIDE = 1.4f, SLIDE = 4.6f;
     static final float MAX_HP = 100, BONE_HP = 25;
 
@@ -18,7 +19,7 @@ public final class Robot {
     public int slideT, airT, fireT, fireSlot = 3; boolean jumping;
     public int rope; public float rx, ry, rvx, rvy, rlen; // 0 sin gancho, 1 volando, 2 enganchado
     public final Wpn[] loadout = new Wpn[SLOTS]; public final int[] ammo = new int[SLOTS], reload = new int[SLOTS], delay = new int[SLOTS], charge = new int[SLOTS];
-    public int stunT, thrownT, rollT; int thrownBy, airJumps; Robot other; boolean ghost, stompHit;
+    public int stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot other; boolean ghost, stompHit;
     public int wallDir, windT; int windSlot, lastWall, wallT, wallLock;
     /** Preparación breve antes del primer disparo: 6 ticks, una décima de segundo. */
     public static final int WIND = 6;
@@ -76,7 +77,7 @@ public final class Robot {
         hp = MAX_HP; armor = (1 << PIECES) - 1; deadT = 0; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
         int[] p = g.freeSpot(id == 0 ? g.robots[1] : g.robots[0]); px = p[0]; py = p[1];
         for (int i = 0; i < SLOTS; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
-        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; thrownT = 0; rollT = 0;
+        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; stompCd = 0; thrownT = 0; rollT = 0; aim = 60;
         g.fx(Fx.SPAWN, px, py - 27, id, 0);
     }
     public void damage(World g, float d, float kx, float ky, int by, float hx, float hy) {
@@ -136,7 +137,7 @@ public final class Robot {
     /** Drop: agarra al rival que está al frente y lo lanza hacia atrás. Al chocar pierde un porcentaje de vida. */
     private void grab(World g, Wpn w) {
         Robot o = g.robots[1 - id]; float dx = (o.px - px) * facing;
-        if (!o.alive() || o.invuln > 0 || o.thrownT > 0 || dx < -4 || dx > 36 || Math.abs(o.py - py) > 34) return;
+        if (!o.alive() || o.invuln > 0 || o.thrownT > 0 || dx < -6 || dx > GRAB_RANGE || Math.abs(o.py - py) > 44) return;
         o.damage(g, w.dmg, 0, 0, id, o.px, o.py - 30);
         o.rope = 0; o.slideT = 0; o.windT = 0; o.stunT = 0; o.thrownT = 80; o.thrownBy = id;
         o.vx = -facing * THROW_VX; o.vy = -THROW_VY; o.facing = facing;
@@ -167,11 +168,12 @@ public final class Robot {
         if ((grounded || coyote > 0) && slideT == 0) { vy = -JUMP; jumping = true; grounded = false; coyote = 0; g.fx(Fx.JUMP, px, py, 0, 0); }
         else if (!grounded && airJumps > 0 && slideT == 0) { airJumps--; vy = -AIR_JUMP; jumping = true; rollT = 24; g.fx(Fx.JUMP, px, py - 20, 2, 0); } // doble salto
     }
+    /** El gancho sale en el ángulo de la mira (se ajusta manteniendo X y moviendo arriba o abajo). */
     private void throwHook(World g, int in) {
         int side = ((in & Input.RIGHT) != 0 ? 1 : 0) - ((in & Input.LEFT) != 0 ? 1 : 0);
         if (side != 0) facing = side;
-        float a = (float) StrictMath.toRadians(side != 0 ? 45 : 72);
-        rope = 1; rx = px + facing * 6; ry = py - 44;
+        float a = (float) StrictMath.toRadians(aim);
+        rope = 1; rx = px + facing * 6; ry = py - 40;
         rvx = facing * (float) StrictMath.cos(a) * HOOK_SHOT; rvy = -(float) StrictMath.sin(a) * HOOK_SHOT; g.fx(Fx.HOOK, rx, ry, 0, id);
     }
     void step(World g, int in) {
@@ -185,9 +187,12 @@ public final class Robot {
         Terrain t = g.t;
         other = g.robots[1 - id]; ghost = false; ghost = body(px, py, h); // si aparecieron encimados, se separan solos
         if (ghost) vx += (px != other.px ? Math.signum(px - other.px) : id == 0 ? -1 : 1) * .4f;
-        if (stunT > 0) stunT--;
+        if (stunT > 0) stunT--; if (stompCd > 0) stompCd--;
         if (stunT > 0 || thrownT > 0) in = 0;
         if (rollT > 0) rollT--;
+        aiming = (in & Input.X) != 0;
+        if (aiming && (in & Input.UP) != 0) aim = Math.min(AIM_MAX, aim + AIM_SPEED);
+        if (aiming && (in & Input.DOWN) != 0) aim = Math.max(AIM_MIN, aim - AIM_SPEED);
         if (invuln > 0) invuln--; if (hurtT > 0) hurtT--; if (fireT > 0) fireT--;
         int dir = ((in & Input.RIGHT) != 0 ? 1 : 0) - ((in & Input.LEFT) != 0 ? 1 : 0);
         if (dir != dirWas) { dirT = 0; dirWas = dir; } else if (dirT < 1000) dirT++;
@@ -218,7 +223,7 @@ public final class Robot {
             if (blocked || !grounded) slideT = Math.min(slideT, 0);
         } else {
             if (h != STAND_H && free(t, px, py, STAND_H)) h = STAND_H;
-            float fast = (in & Input.B) != 0 && dir != 0 && h == STAND_H ? RUN_FAST : 1; // B mantenido + dirección: correr
+            float fast = (in & Input.X) != 0 && dir != 0 && h == STAND_H ? RUN_FAST : 1; // X mantenido + dirección: correr
             float target = dir * (RUN + (12 - armorCount()) * .035f) * (h != STAND_H ? .6f : 1) * fast;
             if (wallLock > 0) wallLock--;
             else if (dir != 0 && rope == 0) facing = dir;
@@ -256,7 +261,7 @@ public final class Robot {
         moveY(t, vy);
         if (stompHit) { // pisotón, como a un Goomba
             stompHit = false; Robot o = other;
-            if (o.invuln == 0) { o.damage(g, STOMP_DMG, 0, 0, id, o.px, o.py - o.h); o.stunT = STUN; }
+            if (o.invuln == 0 && o.stompCd == 0) { o.damage(g, STOMP_DMG, 0, 0, id, o.px, o.py - o.h); o.stunT = STUN; o.stompCd = STOMP_COOLDOWN; }
             vy = (in & Input.B) != 0 ? -JUMP * .9f : -5.5f; jumping = (in & Input.B) != 0; grounded = false; airJumps = 1;
             g.fx(Fx.STOMP, o.px, o.py - o.h, 0, o.id);
         }

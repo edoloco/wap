@@ -118,10 +118,6 @@ public final class Renderer {
         stepFx(w);
         for (int i = 0; i < 2; i++) {
             Robot o = w.robots[i]; RobotArt.update(views[i], o, w);
-            float ch = o.chargeLevel();
-            if (o.alive() && ch > 0 && w.tick % 3 == 0) {
-                float a = r.nextFloat() * 6.28f, d = 34; P p = part(SQUARE, o.px + (float) Math.cos(a) * d, o.py - 27 + (float) Math.sin(a) * d, -(float) Math.cos(a) * 2.6f, -(float) Math.sin(a) * 2.6f, 12, 1.8f, 0xFFFFE23A); p.g = 0;
-            }
         }
     }
     void camera(World w, int who) {
@@ -173,9 +169,9 @@ public final class Renderer {
         for (float[] b : beams) { boolean gs = b[5] == 1; g.line(b[0], b[1], b[2], b[3], gs ? 0xFF1266FF : 0xFFFF2040, gs ? b[4] * .35f : 1.6f); g.line(b[0], b[1], b[2], b[3], 0xFFFFFFFF, gs ? b[4] * .12f : .6f); }
         for (float[] b : booms) boom(g, b);
         g.restore();
-        g.endPixels(0, 0, zoom);
         labels(g, w, x0, y0);
         pointer(g, w, who, x0, y0);
+        g.endPixels(0, 0, zoom);
     }
     /** Grietas según la resistencia que le queda al objeto. */
     void damage(Gfx g, Prop p) {
@@ -191,14 +187,14 @@ public final class Renderer {
         }
     }
     /** Nombres sobre los personajes, en la pantalla para que se lean nítidos. */
+    /** Nombres sobre los personajes, con la fuente de pixel art. */
     void labels(Gfx g, World w, int x0, int y0) {
         for (int i = 0; i < 2; i++) {
             Robot o = w.robots[i]; RobotArt.View v = views[i];
-            if (!o.alive() || v.labelT <= 0) continue;
-            float z = 8 * zoom, tw = g.textW(v.label, z), ly = (o.py - o.h - 9 - (LABEL - v.labelT) * .16f - y0) * zoom, lx = Math.max(tw / 2 + 5 * zoom, Math.min(g.w() - tw / 2 - 5 * zoom, (o.px - x0) * zoom));
-            int a = Math.min(255, v.labelT * 18) << 24;
-            g.rect(lx - tw / 2 - 3 * zoom, ly - 9 * zoom, tw + 6 * zoom, 12 * zoom, a | 0x141414);
-            g.text(v.label, lx, ly, z, a | 0xFFFFFF, 0);
+            if (!o.alive() || v.labelT <= 0 || v.labelT < 8 && v.labelT % 2 == 0) continue;
+            float tw = PixelFont.width(v.label, 8); int ly = Math.round(o.py - o.h - 8 - (LABEL - v.labelT) / 6 - y0), lx = Math.round(Math.max(tw / 2 + 3, Math.min(vw - tw / 2 - 3, o.px - x0)));
+            g.rect(lx - tw / 2 - 2, ly - 9, tw + 4, 11, INK); g.rect(lx - tw / 2 - 2, ly + 2, tw + 4, 1, RobotArt.COLOR[i]);
+            PixelFont.draw(g, v.label, lx, ly, 8, 0xFFFFF4D6, 0, 0);
         }
     }
     void boom(Gfx g, float[] b) {
@@ -210,11 +206,17 @@ public final class Renderer {
         int a = (int) (255 * (1 - k * k)) << 24;
         g.poly(q, a | (k < .35f ? 0xFFFFFF : k < .7f ? 0xFFC61A : 0xFF3A10), a | 0x141414, 1.1f);
     }
+    /** Bonus: píldoras de colores para curar, caja de balas para recargar. */
     void crate(Gfx g, float x, float y, int kind) {
-        g.rrect(x - 8, y - 15, 16, 15, 2, 0xFFFFFFFF, INK, 1);
-        int c = kind == 0 ? 0xFFFF0000 : 0xFF1A1A1A;
-        if (kind == 0) { g.rect(x - 1.8f, y - 12, 3.6f, 9, c); g.rect(x - 4.5f, y - 9.3f, 9, 3.6f, c); }
-        else { g.rect(x - 4.5f, y - 11, 2.4f, 7.5f, c); g.rect(x - 1, y - 11, 2.4f, 7.5f, c); g.rect(x + 2.5f, y - 11, 2.4f, 7.5f, c); }
+        if (kind == 0) { pill(g, x - 2, y - 5, -.5f, 0xFFE8323C, 0xFFFFD23D); pill(g, x + 3, y - 10, .6f, 0xFF2F7BFF, 0xFFFFFFFF); return; }
+        g.rect(x - 8, y - 15, 16, 15, INK); g.rect(x - 7, y - 14, 14, 13, 0xFF6B7A3A); g.rect(x - 7, y - 14, 14, 2, 0xFF93A55A);
+        for (int i = 0; i < 3; i++) { g.rect(x - 5 + i * 4, y - 11, 2, 7, 0xFFFFC83D); g.rect(x - 5 + i * 4, y - 12, 2, 1, 0xFFB8862A); }
+    }
+    /** Cápsula de dos colores, al estilo de los juegos de píldoras. */
+    void pill(Gfx g, float x, float y, float rot, int a, int b) {
+        g.save(); g.translate(Math.round(x), Math.round(y)); g.rotate(rot);
+        g.rrect(-7, -3, 14, 6, 3, INK, 0, 0); g.rrect(-6, -2, 6, 4, 2, a, 0, 0); g.rrect(0, -2, 6, 4, 2, b, 0, 0);
+        g.rect(-5, -2, 3, 1, 0xFFFFFFFF); g.restore();
     }
     void shot(Gfx g, Shot s) {
         Wpn w = s.w; float a = (float) Math.atan2(s.vy, s.vx);
@@ -239,11 +241,10 @@ public final class Renderer {
     }
     void pointer(Gfx g, World w, int who, int x0, int y0) {
         Robot e = w.robots[1 - who]; if (!e.alive()) return;
-        float sx = (e.px - x0) * zoom, sy = (e.py - 30 - y0) * zoom, W = g.w(), H = g.h(), m = H * .09f;
-        if (sx > 0 && sx < W && sy > 0 && sy < H) return;
-        float cx = W / 2, cy = H / 2, dx = sx - cx, dy = sy - cy, k = Math.min((W / 2 - m) / Math.max(1, Math.abs(dx)), (H / 2 - m) / Math.max(1, Math.abs(dy)));
-        float x = cx + dx * k, y = cy + dy * k, u = H / 360f;
-        g.save(); g.translate(x, y); g.rotate((float) Math.atan2(dy, dx)); g.scale(u, u);
-        g.poly(new float[]{10,0, -8,-8, -4,0, -8,8}, RobotArt.COLOR[1 - who], INK, 1.4f); g.restore();
+        float sx = e.px - x0, sy = e.py - 30 - y0, m = 14;
+        if (sx > 0 && sx < vw && sy > 0 && sy < vh) return;
+        float cx = vw / 2f, cy = vh / 2f, dx = sx - cx, dy = sy - cy, k = Math.min((vw / 2f - m) / Math.max(1, Math.abs(dx)), (vh / 2f - m) / Math.max(1, Math.abs(dy)));
+        g.save(); g.translate(Math.round(cx + dx * k), Math.round(cy + dy * k)); g.rotate((float) Math.atan2(dy, dx));
+        g.poly(new float[]{7,0, -5,-6, -2,0, -5,6}, RobotArt.COLOR[1 - who], INK, 1); g.restore();
     }
 }

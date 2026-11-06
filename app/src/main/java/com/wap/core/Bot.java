@@ -4,7 +4,7 @@ public final class Bot {
     static final int C = 20, GW = Terrain.W / C, GH = Terrain.H / C;
     final Rng r; final int me; final float skill; final short[] dist = new short[GW * GH]; final int[] queue = new int[GW * GH];
     int navT, comboT, combo, moveT, moveDir = 1, stuckT, lastX, lastY, jumpT, jumpHold, hookT, hookHold, fireHold;
-    int hookDir, checkT, lastCost = 9999, frust, climbDir;
+    int aimT, aimGoal, hookDir, checkT, lastCost = 9999, frust, climbDir;
     public Bot(int seed, int me, float skill) { r = new Rng(seed); this.me = me; this.skill = skill; }
     private boolean clear(World g, float x0, float y0, float x1, float y1) {
         int n = (int) (StrictMath.hypot(x1 - x0, y1 - y0) / 8) + 1;
@@ -42,16 +42,16 @@ public final class Bot {
         return best;
     }
     /** Prueba los mismos tiros de gancho que tiene un jugador y elige el que más acerca al objetivo. */
+    /** Prueba ángulos de mira a cada lado y elige el que más acerca al objetivo. */
     private boolean pickHook(World g, Robot m, int here) {
         int bestD = here - 4; boolean found = false;
-        for (int o = -1; o <= 1; o++) {
-            int f = o == 0 ? m.facing : o; float a = (float) StrictMath.toRadians(o == 0 ? 72 : 45);
-            float dx = (float) StrictMath.cos(a) * f, dy = -(float) StrictMath.sin(a), x = m.px + f * 6, y = m.py - 44;
+        for (int f = -1; f <= 1; f += 2) for (int deg : new int[]{35, 55, 75, 90}) {
+            float a = (float) Math.toRadians(deg), dx = (float) Math.cos(a) * f, dy = -(float) Math.sin(a), x = m.px + f * 6, y = m.py - 40;
             for (int d = 0; d < Robot.HOOK_RANGE; d += 8) {
                 x += dx * 8; y += dy * 8;
                 if (!g.t.solid((int) x, (int) y)) continue;
                 int q = near(cell((int) (x - dx * 16), (int) (y - dy * 16) + 40));
-                if (q >= 0 && q < bestD) { bestD = q; hookDir = o; found = true; }
+                if (q >= 0 && q < bestD) { bestD = q; hookDir = f; aimGoal = deg; found = true; }
                 break;
             }
         }
@@ -60,6 +60,11 @@ public final class Bot {
     public int think(World g) {
         Robot m = g.robots[me], e = g.robots[1 - me];
         if (!m.alive()) return 0;
+        if (aimT > 0) { // mantiene X y mueve la mira; luego lanza el gancho
+            aimT--; float d = aimGoal - m.aim;
+            if (Math.abs(d) > Robot.AIM_SPEED && aimT > 0) return Input.X | (d > 0 ? Input.UP : Input.DOWN);
+            aimT = 0; comboT = 2; combo = Input.UP | Input.B | (hookDir > 0 ? Input.RIGHT : Input.LEFT); hookT = 45; hookHold = 80; return 0;
+        }
         if (comboT > 0) { comboT--; return comboT == 1 ? combo & (Input.LEFT | Input.RIGHT | Input.UP | Input.DOWN) : comboT == 0 ? combo : 0; }
         if (!e.alive()) return 0;
         float dx = e.px - m.px, dy = (e.py - 30) - (m.py - 30), ad = Math.abs(dx), ady = Math.abs(dy);
@@ -105,7 +110,7 @@ public final class Bot {
         else if (jumpHold > 0 && !m.grounded) { jumpHold--; out |= Input.B; }
         if (m.wallDir != 0 && (up || frust > 0)) { out &= ~Input.B; if (g.tick % 6 == 0) { out |= Input.B; out &= ~(Input.LEFT | Input.RIGHT); jumpHold = 26; } }
         if (hookT < 0 && (chase && up || stuckT > 30) && r.f() < .35f && pickHook(g, m, stuckT > 30 ? cost + 5 : cost)) {
-            comboT = 2; combo = Input.UP | Input.B | (hookDir > 0 ? Input.RIGHT : hookDir < 0 ? Input.LEFT : 0); hookT = 45; hookHold = 80; return 0;
+            aimT = 40; return Input.X;
         }
         if (see && (dx > 0) == (m.facing > 0) && r.f() < .10f * skill && ady < 44 && ad < 520) {
             int q = r.i(5), side = to > 0 ? Input.RIGHT : Input.LEFT;

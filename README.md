@@ -11,11 +11,12 @@ Descarga `wap.apk` desde la sección **Releases** del repositorio, en el teléfo
 | ◀ ▶ | Caminar |
 | A | Disparar (arma 4) |
 | B | Saltar; en el aire, otra vez para el doble salto |
-| ◀▶ con B mantenido | Correr |
+| ◀▶ con X mantenido | Correr |
+| X mantenido + ▲▼ | Apuntar el gancho |
 | ▲ + A | Arma 3 |
 | ▼ + A | Arma 1 |
 | ◀▶ + A | Arma 2 |
-| ▲ + B | Gancho: mantén B y te lleva solo; suelta B para soltarte |
+| ▲ + B | Gancho en la dirección de la mira: mantén B y te lleva solo; suelta B para soltarte |
 | ▼ + B | Deslizarse |
 
 En el aire, empujar contra una pared te afirma; B rebota hacia el lado contrario.

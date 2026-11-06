@@ -11,16 +11,20 @@ final class AndroidGfx implements Gfx {
         fill.setStyle(Paint.Style.FILL); stroke.setStyle(Paint.Style.STROKE); stroke.setStrokeCap(Paint.Cap.ROUND); stroke.setStrokeJoin(Paint.Join.ROUND);
         text.setTypeface(Typeface.DEFAULT_BOLD);
     }
-    private Bitmap low; private Canvas lowC, main; private boolean pix; private final Paint blit = new Paint();
+    private final java.util.HashMap<Long, Bitmap> lows = new java.util.HashMap<>(); private final java.util.HashMap<Long, Canvas> lowCs = new java.util.HashMap<>();
+    private final java.util.ArrayDeque<Canvas> stack = new java.util.ArrayDeque<>(); private final java.util.ArrayDeque<Bitmap> open = new java.util.ArrayDeque<>();
+    private boolean pix; private final Paint blit = new Paint();
     void begin(Canvas k, int w, int h) { c = k; W = w; H = h; }
     private float sw(float w) { return pix && w < 1.5f ? 0 : w; } // en píxeles, las líneas finas miden exactamente 1
+    /** Capas de pixel art apilables: la interfaz y el personaje del menú usan cada una la suya. */
     @Override public void beginPixels(int w, int h) {
-        if (low == null || low.getWidth() != w || low.getHeight() != h) { low = Bitmap.createBitmap(Math.max(1, w), Math.max(1, h), Bitmap.Config.ARGB_8888); lowC = new Canvas(low); }
-        low.eraseColor(0); main = c; c = lowC; pix = true; fill.setAntiAlias(false); stroke.setAntiAlias(false);
+        w = Math.max(1, w); h = Math.max(1, h); long key = (long) w << 20 | h;
+        Bitmap b = lows.get(key); if (b == null) { b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888); lows.put(key, b); lowCs.put(key, new Canvas(b)); }
+        b.eraseColor(0); stack.push(c); open.push(b); c = lowCs.get(key); pix = true; fill.setAntiAlias(false); stroke.setAntiAlias(false);
     }
     @Override public void endPixels(float x, float y, int s) {
-        c = main; pix = false; fill.setAntiAlias(true); stroke.setAntiAlias(true); blit.setFilterBitmap(false);
-        c.save(); c.translate(x, y); c.scale(s, s); c.drawBitmap(low, 0, 0, blit); c.restore();
+        Bitmap b = open.pop(); c = stack.pop(); pix = !open.isEmpty(); fill.setAntiAlias(!pix); stroke.setAntiAlias(!pix); blit.setFilterBitmap(false);
+        c.save(); c.translate(x, y); c.scale(s, s); c.drawBitmap(b, 0, 0, blit); c.restore();
     }
     @Override public int w() { return W; }
     @Override public int h() { return H; }

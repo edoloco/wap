@@ -54,8 +54,9 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
             case KeyEvent.KEYCODE_DPAD_RIGHT: case KeyEvent.KEYCODE_D: return Input.RIGHT;
             case KeyEvent.KEYCODE_DPAD_UP: case KeyEvent.KEYCODE_W: return Input.UP;
             case KeyEvent.KEYCODE_DPAD_DOWN: case KeyEvent.KEYCODE_S: return Input.DOWN;
-            case KeyEvent.KEYCODE_BUTTON_A: case KeyEvent.KEYCODE_BUTTON_X: case KeyEvent.KEYCODE_BUTTON_R1: case KeyEvent.KEYCODE_BUTTON_R2: case KeyEvent.KEYCODE_J: case KeyEvent.KEYCODE_Z: case KeyEvent.KEYCODE_DPAD_CENTER: return Input.A;
-            case KeyEvent.KEYCODE_BUTTON_B: case KeyEvent.KEYCODE_BUTTON_Y: case KeyEvent.KEYCODE_BUTTON_L1: case KeyEvent.KEYCODE_BUTTON_L2: case KeyEvent.KEYCODE_K: case KeyEvent.KEYCODE_X: case KeyEvent.KEYCODE_SPACE: return Input.B;
+            case KeyEvent.KEYCODE_BUTTON_A: case KeyEvent.KEYCODE_BUTTON_R1: case KeyEvent.KEYCODE_BUTTON_R2: case KeyEvent.KEYCODE_J: case KeyEvent.KEYCODE_Z: case KeyEvent.KEYCODE_DPAD_CENTER: return Input.A;
+            case KeyEvent.KEYCODE_BUTTON_B: case KeyEvent.KEYCODE_K: case KeyEvent.KEYCODE_X: case KeyEvent.KEYCODE_SPACE: return Input.B;
+            case KeyEvent.KEYCODE_BUTTON_X: case KeyEvent.KEYCODE_BUTTON_Y: case KeyEvent.KEYCODE_BUTTON_L1: case KeyEvent.KEYCODE_BUTTON_L2: case KeyEvent.KEYCODE_L: case KeyEvent.KEYCODE_C: case KeyEvent.KEYCODE_SHIFT_LEFT: return Input.X;
             default: return 0;
         }
     }
