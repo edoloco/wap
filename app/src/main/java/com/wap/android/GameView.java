@@ -29,6 +29,7 @@ final class GameView extends SurfaceView implements SurfaceHolder.Callback, Runn
         synchronized (app) {
             app.pad.visible = true;
             int a = e.getActionMasked(), ix = e.getActionIndex(); boolean play = app.screen == App.PLAY;
+            if (a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_MOVE) app.drag(e.getX(0), e.getY(0));
             if (a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_POINTER_DOWN) { if (!app.tap(e.getX(ix), e.getY(ix)) && play) app.pad.pointer(e.getPointerId(ix), e.getX(ix), e.getY(ix), true); else if (play) performClick(); }
             else if (a == MotionEvent.ACTION_MOVE && play) { for (int i = 0; i < e.getPointerCount(); i++) app.pad.pointer(e.getPointerId(i), e.getX(i), e.getY(i), true); }
             else if (a == MotionEvent.ACTION_POINTER_UP) app.pad.pointer(e.getPointerId(ix), 0, 0, false);

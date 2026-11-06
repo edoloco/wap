@@ -4,12 +4,13 @@ import com.wap.core.*;
 public final class RobotArt {
     public static final int INK = 0xFF141414, WHITE = 0xFFFFFFFF;
     public static final int[] COLOR = {0xFFFF0000, 0xFF1266FF};
+    static final int GLOW = 0xFFFFF0A8;
     static final float TH = 13.5f, SH = 13.5f, UA = 9, FA = 8.5f, ANK = 3.4f, SW = .34f;
     static final float[] HEAD = {-2.4f,0, 2.6f,0, 5.4f,-4.2f, 5.7f,-8.4f, 4.2f,-10.6f, 1,-11.4f, -3.4f,-11, -5,-9.5f, -5.2f,-5.2f};
     static final float[] CHEST = {-5.4f,-.4f, 6.3f,.3f, 5.8f,11, -6,10.5f, -5.7f,4.5f};
     static final float[] BELLY = {-3.6f,10.6f, 4,10.6f, 4.2f,16.6f, -2.6f,16.8f};
     static final float[] HIPS = {-5.6f,1, -3,-1.6f, 3.4f,-1.2f, 6,.8f, 3.6f,6, .6f,6.8f, -1.8f,3.4f, -5.6f,3.6f};
-    static final float[] PAD = {-3.6f,-1.6f, 0,-3.1f, 3.2f,-1.6f, 3.8f,2, -.8f,3.6f, -4.2f,1.4f};
+    static final float[] OPEN = {0,-2, 3,-2.4f, 7,-5, 7.8f,-4.2f, 4.6f,-1.4f, 8.4f,-.7f, 8.4f,.6f, 4.6f,.7f, 7.2f,3.8f, 6.4f,4.6f, 3,2.4f, 0,2};
     static final float[] BRACER = {-.8f,-2.8f, 9.4f,-4.6f, 9.4f,4.4f, -.2f,3.2f};
     static final float[] THIGH = {-1,-3.2f, 1.8f,-4.2f, 8,-3.2f, 12.6f,-2.2f, 12.2f,2.4f, 7,3.8f, 1,4, -1,2.6f};
     static final float[] SHIN = {.8f,-2.4f, 3,-3.4f, 8,-2.9f, 12.4f,-2.7f, 12.2f,2.6f, 6,3.2f, 1.6f,3};
@@ -21,7 +22,7 @@ public final class RobotArt {
 
     /** Estado de animación solo visual de un robot. */
     public static final class View {
-        float phase, pel = -29, lean, fx = 4, fy = -ANK, bx = -3, by = -ANK, a1 = 80, a2 = 95, b1 = 100, b2 = 85, flash; int assemble, clock, state = -1;
+        float phase, pel = -29, lean, fx = 4, fy = -ANK, bx = -3, by = -ANK, a1 = 80, a2 = 95, b1 = 100, b2 = 85, flash; int assemble, clock, state = -1; public int shotT; boolean open;
         float gFront, gBack; public String label = ""; public int labelT;
     }
     /** Cuadros que se mantiene cada dibujo: a 60 ticks por segundo, 5 equivalen a 12 cuadros por segundo. */
@@ -32,7 +33,9 @@ public final class RobotArt {
         {  4,-ANK,   3,-14,  92, 30,  96, 34, -29.8f, 12},
         {-12, -9,   13,-ANK,  48,-12, 128, 72, -28.2f, 12},
         {  3,-14,    4,-ANK,  96, 34,  92, 30, -29.8f, 12}};
-    static final float[] IDLE_A = {4.5f,-ANK,-3.5f,-ANK, 78, 96,102, 84, -28.8f, 3}, IDLE_B = {4.5f,-ANK,-3.5f,-ANK, 80, 98,100, 82, -28.2f, 3};
+    static final float[] IDLE_A = {4.5f,-ANK,-3.5f,-ANK, 82, 92, 98, 88, -28.8f, 2}, IDLE_B = {4.5f,-ANK,-3.5f,-ANK, 83, 94, 97, 86, -28.2f, 2};
+    /** Preparación y postura de disparo, según las referencias. */
+    static final float[] MID_F = {11,-ANK,-7,-ANK, 35, 50, 100, 95, -26, 4}, STANCE_F = {15,-ANK,-12,-ANK, 0, 0, 170, 8, -22, 0};
     static final float[] UP_F = {10,-15,-5,-1, 4,-2,172,108,-30,5}, DOWN_F = {9,-9,-6,-3, 20,10,165,120,-30,5};
     static final float[] WALL_F = {9,-14,7,-5,-8,-8,160,110,-30,-7}, SLIDE_F = {23,-ANK,-3,-ANK,150,185,120,150,-11,-58}, HOOK_F = {7,-8,-6,-2,-60,-60,120,60,-32,4};
     private static float ground(Terrain t, int x, int y) {
@@ -45,11 +48,14 @@ public final class RobotArt {
         float sp = Math.abs(r.vx); boolean run = r.grounded && sp > .3f && !r.sliding() && r.rope != 2;
         if (run) v.phase = (v.phase + sp) % (STRIDE * 4);
         int st = r.sliding() ? 4 : r.rope == 2 ? 5 : r.wallDir != 0 ? 6 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
-        if (r.fireT > 0) st += 10;
+        boolean act = r.windT > 0 || r.fireT > 0;
+        if (act) st = st == 0 ? (r.windT > 3 ? 20 : 21) : st + 10;
         v.clock++;
         if (st != v.state || v.clock % HOLD == 0) {
             v.state = st;
-            switch (st % 10) {
+            switch (st >= 20 ? st : st % 10) {
+                case 20: pose(v, MID_F); break;
+                case 21: pose(v, STANCE_F); break;
                 case 4: pose(v, SLIDE_F); break;
                 case 6: pose(v, WALL_F); break;
                 case 5: {
@@ -61,7 +67,8 @@ public final class RobotArt {
                 case 1: pose(v, RUN_F[(int) (v.phase / STRIDE) & 3]); break;
                 default: pose(v, v.clock / 25 % 2 == 0 ? IDLE_A : IDLE_B);
             }
-            if (r.fireT > 0 && !r.sliding()) { v.a1 = 0; v.a2 = 0; }
+            if (st > 9 && st < 20 && !r.sliding() && r.rope != 2) { v.a1 = 0; v.a2 = 0; }
+            v.open = act && st != 20 && !r.sliding();
             v.gFront = r.grounded ? ground(g.t, r.px + (int) (v.fx * r.facing), r.py) : 0;
             v.gBack = r.grounded ? ground(g.t, r.px + (int) (v.bx * r.facing), r.py) : 0;
         }
@@ -69,6 +76,7 @@ public final class RobotArt {
         if (r.hurtT > 8) v.flash = 3;
         if (v.assemble > 0) v.assemble--;
         if (v.labelT > 0) v.labelT--;
+        if (v.shotT > 0) v.shotT--;
     }
     private static void bone(Gfx g, float x, float y, float deg) { g.save(); g.translate(x, y); g.rotate((float) Math.toRadians(deg)); }
     private static void stick(Gfx g, float len, float w) { g.rrect(0, -w, len, w * 2, w, INK, 0, 0); }
@@ -81,7 +89,7 @@ public final class RobotArt {
             case Robot.CHEST: g.translate(0, -5); limb(g, CHEST, c); break;
             case Robot.BELLY: g.translate(0, -13); limb(g, BELLY, c); break;
             case Robot.HIP: g.translate(0, -2); limb(g, HIPS, WHITE); break;
-            case Robot.SH_F: case Robot.SH_B: limb(g, PAD, WHITE); break;
+            case Robot.SH_F: case Robot.SH_B: g.circle(0, 0, 3.6f, WHITE, INK, SW); break;
             case Robot.BR_F: case Robot.BR_B: g.translate(-4.5f, 0); limb(g, BRACER, c); break;
             case Robot.TH_F: case Robot.TH_B: g.translate(-6, 0); limb(g, THIGH, c); break;
             default: g.translate(-6, 0); limb(g, SHIN, c);
@@ -100,11 +108,13 @@ public final class RobotArt {
     private static void eyes(Gfx g) {
         g.circle(1.2f, -6.6f, 1.6f, WHITE, INK, SW); g.circle(4.3f, -6.6f, 1.3f, WHITE, INK, SW);
     }
-    private static void arm(Gfx g, float sx, float sy, float d1, float d2, boolean bracer, int c) {
+    private static void arm(Gfx g, float sx, float sy, float d1, float d2, boolean bracer, int c, boolean open, boolean glow) {
         float ex = sx + (float) Math.cos(Math.toRadians(d1)) * UA, ey = sy + (float) Math.sin(Math.toRadians(d1)) * UA;
         bone(g, sx, sy, d1); stick(g, UA, 1.25f); ball(g, 0, 1.8f); ball(g, UA, 1.7f); g.restore();
-        bone(g, ex, ey, d2); stick(g, FA, 1.1f); g.translate(FA, 0); limb(g, HAND, INK); g.translate(-FA, 0);
-        if (bracer) limb(g, BRACER, c);
+        bone(g, ex, ey, d2); stick(g, FA, 1.1f); g.translate(FA, 0);
+        if (open && glow) g.grad(OPEN, INK, GLOW, 0, 8, INK, SW); else limb(g, open ? OPEN : HAND, INK);
+        g.translate(-FA, 0);
+        if (bracer) { if (glow) g.grad(BRACER, c, GLOW, 0, 11, INK, SW); else limb(g, BRACER, c); }
         g.restore();
     }
     private static void leg(Gfx g, float hx, float hy, float ax, float ay, boolean th, boolean sn, int c) {
@@ -136,24 +146,36 @@ public final class RobotArt {
     /** El dibujo en sí, en coordenadas locales mirando a la derecha. */
     public static void drawPose(Gfx g, View v, int ar, int c, int unused) {
         float e = (v.assemble / HOLD * HOLD) / 30f; e *= e;
+        boolean on = e < .1f, glow = v.shotT > 0;
         float px = 0, py = v.pel, lr = (float) Math.toRadians(v.lean), sn = (float) Math.sin(lr), cs = (float) Math.cos(lr);
-        float cx = px + sn * 17, cy = py - cs * 17;
+        float cx = px + sn * 17, cy = py - cs * 17, sp = e * 16;
         float sfx = cx + cs * 5.5f, sfy = cy + sn * 5.5f + 1, sbx = cx - cs * 5.5f, sby = cy - sn * 5.5f + 1;
-        arm(g, sbx, sby, v.b1, v.b2, (ar >> Robot.BR_B & 1) != 0 && e < .1f, c);
-        leg(g, px - 2.5f, py + 1, v.bx, v.by + v.gBack, (ar >> Robot.TH_B & 1) != 0 && e < .1f, (ar >> Robot.SN_B & 1) != 0 && e < .1f, c);
+        arm(g, sfx, sfy, v.a1, v.a2, (ar >> Robot.BR_F & 1) != 0 && on, c, v.open, glow);
+        if ((ar >> Robot.SH_F & 1) != 0) g.circle(sfx + sp * .8f, sfy, 3, WHITE, INK, SW);
+        leg(g, px + 2.5f, py + 1, v.fx, v.fy - 2.5f + v.gFront, (ar >> Robot.TH_F & 1) != 0 && on, (ar >> Robot.SN_F & 1) != 0 && on, c);
         g.save(); g.translate(px, py); g.rotate(lr); g.translate(0, -17);
         g.rrect(-1.4f, 8, 2.8f, 8, .6f, INK, 0, 0); g.poly(TORSO, INK, 0, 0); g.poly(PELVIS, INK, 0, 0);
         g.line(0, 0, 0, -6, INK, 1.8f); g.circle(0, -6.2f, 1.5f, INK, 0, 0);
-        float sp = e * 16;
         if ((ar >> Robot.BELLY & 1) != 0) { g.save(); g.translate(0, sp * .3f); limb(g, BELLY, c); g.restore(); }
-        if ((ar >> Robot.CHEST & 1) != 0) { g.save(); g.translate(0, -sp * .3f); limb(g, CHEST, c); g.restore(); }
-        if ((ar >> Robot.HELMET & 1) != 0) { g.save(); g.translate(0, -3.4f - sp); g.rotate(-lr * .8f); limb(g, HEAD, c); eyes(g); g.restore(); }
+        if ((ar >> Robot.CHEST & 1) != 0) { g.save(); g.translate(0, -sp * .3f); if (glow) g.grad(CHEST, c, GLOW, -7, 7, INK, SW); else limb(g, CHEST, c); g.restore(); }
+        if ((ar >> Robot.HELMET & 1) != 0) { g.save(); g.translate(0, -3.4f - sp); g.rotate(-lr * .8f); if (glow) g.grad(HEAD, c, GLOW, -6, 6, INK, SW); else limb(g, HEAD, c); eyes(g); g.restore(); }
         g.restore();
-        leg(g, px + 2.5f, py + 1, v.fx, v.fy + v.gFront, (ar >> Robot.TH_F & 1) != 0 && e < .1f, (ar >> Robot.SN_F & 1) != 0 && e < .1f, c);
+        leg(g, px - 2.5f, py + 1, v.bx, v.by + 2.5f + v.gBack, (ar >> Robot.TH_B & 1) != 0 && on, (ar >> Robot.SN_B & 1) != 0 && on, c);
         if ((ar >> Robot.HIP & 1) != 0) { g.save(); g.translate(px, py); g.rotate(lr); g.translate(0, -1.4f + sp * .5f); limb(g, HIPS, WHITE); g.restore(); }
-        arm(g, sfx, sfy, v.a1, v.a2, (ar >> Robot.BR_F & 1) != 0 && e < .1f, c);
-        if ((ar >> Robot.SH_B & 1) != 0) { g.save(); g.translate(sbx - sp * .8f, sby); limb(g, PAD, WHITE); g.restore(); }
-        if ((ar >> Robot.SH_F & 1) != 0) { g.save(); g.translate(sfx + sp * .8f, sfy); g.scale(.82f, .9f); limb(g, PAD, WHITE); g.restore(); }
+        arm(g, sbx, sby, v.b1, v.b2, (ar >> Robot.BR_B & 1) != 0 && on, c, false, false);
+        if ((ar >> Robot.SH_B & 1) != 0) g.circle(sbx - sp * .8f, sby, 4.2f, WHITE, INK, SW);
+        if (v.shotT > 0 && v.open) muzzle(g, sfx + (float) Math.cos(Math.toRadians(v.a1)) * (UA + FA + 8), sfy + (float) Math.sin(Math.toRadians(v.a1)) * (UA + FA + 8), 2 - (v.shotT - 1) / 4);
+    }
+    static final float[] BURST = {-2,-5, 3,-2, 7,-8, 8,-3, 16,-2, 9,1, 12,5, 5,3, 2,7, -1,3, -5,1};
+    static final float[] SHARD_A = {0,-7, 7,-5, 3,-2}, SHARD_B = {4,1, 10,-1, 12,2, 19,2, 11,4, 6,4};
+    /** Destello por cuadros frente a la mano: círculo, llama y restos. */
+    private static void muzzle(Gfx g, float x, float y, int frame) {
+        final int C = 0xFFFFF890;
+        g.save(); g.translate(x, y);
+        if (frame <= 0) g.circle(6, 0, 5.5f, 0xFFFFFFB8, 0, 0);
+        else if (frame == 1) g.poly(BURST, C, 0, 0);
+        else { g.poly(SHARD_A, C, 0, 0); g.poly(SHARD_B, C, 0, 0); }
+        g.restore();
     }
     public static View poster() { View v = new View(); v.pel = -30; v.fx = 10; v.fy = -15; v.bx = -5; v.by = -1; v.a1 = 4; v.a2 = -2; v.b1 = 172; v.b2 = 108; v.lean = 5; return v; }
     public static void assemble(View v) { v.assemble = 30; }

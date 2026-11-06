@@ -16,7 +16,9 @@ public final class Robot {
     public int slideT, airT, fireT, fireSlot = 4; boolean jumping;
     public int rope; public float rx, ry, rvx, rvy, rlen; // 0 sin gancho, 1 volando, 2 enganchado
     public final Wpn[] loadout = new Wpn[5]; public final int[] ammo = new int[5], reload = new int[5], delay = new int[5], charge = new int[5];
-    public int wallDir; int lastWall, wallT, wallLock;
+    public int wallDir, windT; int windSlot, lastWall, wallT, wallLock;
+    /** Preparación breve antes del primer disparo: 6 ticks, una décima de segundo. */
+    public static final int WIND = 6;
     int prev, dirT, dirWas, heldSlot = -1, heldBtn, pending, pendT;
 
     Robot(int id, int lives) { this.id = id; this.lives = lives; }
@@ -64,7 +66,7 @@ public final class Robot {
         hp = MAX_HP; armor = (1 << PIECES) - 1; deadT = 0; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
         int[] p = g.freeSpot(id == 0 ? g.robots[1] : g.robots[0]); px = p[0]; py = p[1];
         for (int i = 0; i < 5; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
-        wallDir = 0; wallT = 0; wallLock = 0;
+        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0;
         g.fx(Fx.SPAWN, px, py - 27, id, 0);
     }
     public void damage(World g, float d, float kx, float ky, int by, float hx, float hy) {
@@ -86,7 +88,7 @@ public final class Robot {
             Fx f = g.lastFx; f.c = (hx < px ? 1.5f : -1.5f) + kx; f.d = -3;
         }
         if (hp <= 0) {
-            hp = 0; rope = 0; deadT = 150; java.util.Arrays.fill(charge, 0); lives--; deaths++;
+            hp = 0; rope = 0; deadT = 150; windT = 0; java.util.Arrays.fill(charge, 0); lives--; deaths++;
             if (by != id) g.robots[by].kills++;
             g.fx(Fx.DEATH, px, py - 27, id, 0);
             if (lives < 0) { lives = 0; g.over(by == id ? 1 - id : by, id); deadT = 9999; lives = -1; }
@@ -101,7 +103,9 @@ public final class Robot {
         Wpn w = loadout[slot];
         if (reload[slot] > 0 || delay[slot] > 0) return false;
         float deg = 0, base = 0; // todas las armas salen rectas, hacia donde mira el robot
-        float mx = px + facing * 14, my = py - (h == STAND_H ? 37 : 16);
+        boolean planted = grounded && Math.abs(vx) < .4f && slideT == 0;
+        float my = py - (h != STAND_H ? 16 : planted ? 38 : 46), mx = px + facing * 10; // sale de la mano extendida
+        for (int d = 12; d <= 30 && !g.t.solid((int) (px + facing * d), (int) my); d += 2) mx = px + facing * d;
         for (int i = 0; i < w.parts; i++) {
             float a = base + (float) Math.toRadians(g.rng.r(-w.spread, w.spread));
             float v = w.speed * (w.parts > 1 ? g.rng.r(.82f, 1.1f) : 1);
@@ -109,7 +113,7 @@ public final class Robot {
             if (w.beam) g.beam(w, id, mx, my, dx, dy); else g.spawn(w, id, mx, my, dx * v + (w.grav > .1f ? vx * .4f : 0), dy * v);
         }
         g.fx(Fx.FLASH, mx, my, deg * facing, id).b = Wpn.index(w.name);
-        vx -= facing * w.recoil; fireT = 14; fireSlot = slot;
+        vx -= facing * w.recoil; fireT = 22; fireSlot = slot;
         ammo[slot]--; delay[slot] = w.delay;
         if (ammo[slot] <= 0) reload[slot] = w.reload;
         return true;
@@ -125,10 +129,14 @@ public final class Robot {
         else jump(g);
     }
     /** Arma normal: dispara. Arma con carga: el primer comando carga y, ya cargada, el siguiente la lanza. */
+    private void trigger(World g, int s) {
+        if (reload[s] > 0 || delay[s] > 0 || windT > 0) return;
+        if (fireT > 0 || h != STAND_H) fire(g, s); else { windT = WIND; windSlot = s; }
+    }
     private void use(World g, int s) {
         Wpn w = loadout[s];
-        if (w.charge == 0) { heldSlot = s; fire(g, s); return; }
-        if (charge[s] >= w.charge) { charge[s] = 0; fire(g, s); }
+        if (w.charge == 0) { heldSlot = s; trigger(g, s); return; }
+        if (charge[s] >= w.charge) { if (reload[s] == 0 && delay[s] == 0 && windT == 0) { charge[s] = 0; trigger(g, s); } }
         else if (charge[s] == 0 && reload[s] == 0) { charge[s] = 1; g.fx(Fx.CHARGE, px, py - 30, 0, id).b = Wpn.index(w.name); }
     }
     private void jump(World g) {
@@ -170,7 +178,8 @@ public final class Robot {
             boolean dirNow = (in & (Input.UP | Input.DOWN)) != 0 || fresh;
             if (dirNow || --pendT <= 0) { int b = pending; pending = 0; action(g, b, in, fresh); }
         }
-        if (heldSlot >= 0 && (in & heldBtn) != 0) fire(g, heldSlot); else heldSlot = -1;
+        if (windT > 0 && --windT == 0) fire(g, windSlot);
+        if (heldSlot >= 0 && (in & heldBtn) != 0) trigger(g, heldSlot); else heldSlot = -1;
         if (vy >= 0) jumping = false;
         if (jumping && (in & Input.B) == 0 && vy < -2.2f) vy *= .72f;
 

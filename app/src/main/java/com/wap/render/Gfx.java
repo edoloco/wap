@@ -5,6 +5,8 @@ public interface Gfx {
     void save(); void restore(); void translate(float x, float y); void rotate(float rad); void scale(float x, float y);
     void clear(int c);
     void poly(float[] p, int fill, int stroke, float sw);
+    /** Polígono con degradado horizontal entre x0 y x1. */
+    void grad(float[] p, int c0, int c1, float x0, float x1, int stroke, float sw);
     void circle(float x, float y, float r, int fill, int stroke, float sw);
     void line(float x0, float y0, float x1, float y1, int c, float w);
     void rect(float x, float y, float w, float h, int c);

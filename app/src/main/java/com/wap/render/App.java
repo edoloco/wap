@@ -3,14 +3,15 @@ import com.wap.core.*;
 import java.util.ArrayList;
 /** Pantallas y flujo de la aplicación. No conoce Android; recibe entradas y dibuja por Gfx. */
 public final class App {
-    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4;
+    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5;
+    static final int[] SWATCH = {0xFFFF0000, 0xFFFF7A00, 0xFFFFD200, 0xFF19C24A, 0xFF00B8D4, 0xFF1266FF, 0xFF8214FF, 0xFFFF2FA8, 0xFF8A5A2B, 0xFF6B7280};
     static final int RED = 0xFFFF0000, INK = RobotArt.INK, WHITE = 0xFFFFFFFF, MUTE = 0xFF6B7280, LINE = 0xFFCBD2DC;
     static final String[] LEVELS = {"FÁCIL", "NORMAL", "DIFÍCIL"}; static final float[] SKILL = {.45f, .9f, 1.6f};
     static final int[] LIVES = {3, 5, 10, 15, 30};
     static final String[] DEF = {"GRENADE", "BAZOOKA", "PLASMA CANNON", "MINE", "PLASMA GUN"};
     public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey; public Updater up;
     final Store st; final Audio au; public final TouchPad pad = new TouchPad(); public final Renderer ren = new Renderer();
-    public World w; Bot bot; float W = 640, H = 360, u = 1; int cd; int level = 1, livesIx = 2, selSlot = 4, cur, seed = 12345, overT; long frames;
+    public World w; Bot bot; float W = 640, H = 360, u = 1; int cd; int paintRow, level = 1, livesIx = 2, selSlot = 4, cur, seed = 12345, overT; long frames;
     final int[] slots = new int[5]; final int[] in = new int[2];
     final ArrayList<float[]> btns = new ArrayList<>(); final ArrayList<Runnable> acts = new ArrayList<>();
     final RobotArt.View hero = RobotArt.poster();
@@ -18,6 +19,7 @@ public final class App {
     public App(Store st, Audio au) {
         this.st = st; this.au = au;
         for (int i = 0; i < 5; i++) { slots[i] = Wpn.index(st.get("arma" + i, DEF[i])); }
+        try { RobotArt.COLOR[0] = 0xFF000000 | Integer.parseInt(st.get("color", "FF0000"), 16); } catch (Exception e) { }
         try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
     }
     public void seed(int s) { seed = s; }
@@ -25,14 +27,20 @@ public final class App {
         Wpn[] a = new Wpn[5], b = new Wpn[5]; seed = seed * 1103515245 + 12345;
         Rng r = new Rng(seed ^ 0x5A5A);
         for (int i = 0; i < 5; i++) { a[i] = Wpn.ALL[slots[i]]; b[i] = Wpn.ALL[r.i(Wpn.ALL.length)]; }
+        RobotArt.COLOR[1] = near(RobotArt.COLOR[0], 0xFF1266FF) ? 0xFFFF0000 : 0xFF1266FF;
         w = new World(seed, LIVES[livesIx] , a, b); bot = new Bot(seed + 1, 1, SKILL[level]); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
         pad.clear();
     }
+    static boolean near(int a, int b) {
+        int r = (a >> 16 & 255) - (b >> 16 & 255), g = (a >> 8 & 255) - (b >> 8 & 255), l = (a & 255) - (b & 255);
+        return r * r + g * g + l * l < 14000;
+    }
     public void back() {
+        if (screen == PAINT) { save(); go(TITLE); return; }
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); go(TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { for (int i = 0; i < 5; i++) st.put("arma" + i, Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
+    void save() { st.put("color", String.format("%06X", RobotArt.COLOR[0] & 0xFFFFFF)); for (int i = 0; i < 5; i++) st.put("arma" + i, Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
     void go(int s) { screen = s; focus = 0; pad.clear(); }
     public boolean tap(float x, float y) {
         for (int i = btns.size() - 1; i >= 0; i--) { float[] b = btns.get(i); if (x >= b[0] && y >= b[1] && x <= b[2] && y <= b[3]) { au.play(Audio.MENU); acts.get(i).run(); return true; } }
@@ -51,6 +59,7 @@ public final class App {
                 if (w.finished && ++overT > 110) go(OVER);
             }
         } else if (screen == ARMS) navArms(press);
+        else if (screen == PAINT) navPaint(press, keys);
         else navList(press);
     }
     void sounds() {
@@ -72,6 +81,47 @@ public final class App {
         if ((p & (Input.UP | Input.LEFT)) != 0) { focus = (focus + n - 1) % n; au.play(Audio.MENU); }
         if ((p & Input.A) != 0 && focus < n) { au.play(Audio.MENU); acts.get(focus).run(); }
         else if ((p & Input.B) != 0) back();
+    }
+    void channel(int ch, int v) { int s = (2 - ch) * 8, c = RobotArt.COLOR[0]; RobotArt.COLOR[0] = c & ~(255 << s) | Math.max(0, Math.min(255, v)) << s; }
+    int channel(int ch) { return RobotArt.COLOR[0] >> (2 - ch) * 8 & 255; }
+    void navPaint(int p, int held) {
+        if ((p & Input.DOWN) != 0) paintRow = (paintRow + 1) % 3;
+        if ((p & Input.UP) != 0) paintRow = (paintRow + 2) % 3;
+        if ((held & Input.LEFT) != 0) channel(paintRow, channel(paintRow) - 3);
+        if ((held & Input.RIGHT) != 0) channel(paintRow, channel(paintRow) + 3);
+        if ((p & (Input.A | Input.B)) != 0) back();
+    }
+    /** Arrastre sobre las barras de color. */
+    public void drag(float x, float y) {
+        if (screen != PAINT) return;
+        for (int i = 0; i < 3; i++) {
+            float ty = sliderY(i);
+            if (Math.abs(y - ty) < 22 * u && x > sliderX() - 16 * u && x < sliderX() + sliderW() + 16 * u) { paintRow = i; channel(i, (int) ((x - sliderX()) / sliderW() * 255)); }
+        }
+    }
+    float sliderX() { return W * .5f + 24 * u; } float sliderW() { return W * .5f - 60 * u; } float sliderY(int i) { return 66 * u + i * 56 * u; }
+    void paint(Gfx g) {
+        g.clear(WHITE);
+        float s = H / 72f; RobotArt.View v = new RobotArt.View();
+        g.save(); g.translate(W * .24f, H * .93f); g.scale(s, s); RobotArt.drawPose(g, v, (1 << Robot.PIECES) - 1, RobotArt.COLOR[0], 0); g.restore();
+        g.text("COLOR DEL ROBOT", sliderX(), 28 * u, 20 * u, INK, -1);
+        String[] n = {"ROJO", "VERDE", "AZUL"}; int[] tone = {0xFFFF0000, 0xFF19A84A, 0xFF1266FF};
+        for (int i = 0; i < 3; i++) {
+            float y = sliderY(i), x = sliderX(), w = sliderW(), k = channel(i) / 255f;
+            g.text(n[i], x, y - 11 * u, 11 * u, INK, -1); g.text("" + channel(i), x + w, y - 11 * u, 11 * u, INK, 1);
+            g.rrect(x, y - 5 * u, w, 10 * u, 2 * u, 0xFFE4E7EC, i == paintRow && padSeen ? INK : LINE, 1.4f * u);
+            g.rrect(x, y - 5 * u, Math.max(4 * u, w * k), 10 * u, 2 * u, tone[i], 0, 0);
+            g.circle(x + w * k, y, 11 * u, WHITE, INK, 2 * u);
+        }
+        float sz = (sliderW() + 8 * u) / SWATCH.length, y = sliderY(2) + 26 * u;
+        for (int i = 0; i < SWATCH.length; i++) {
+            final int c = SWATCH[i]; float x = sliderX() + i * sz;
+            g.rrect(x, y, sz - 5 * u, 28 * u, 2 * u, c, INK, RobotArt.COLOR[0] == c ? 2.6f * u : 1 * u);
+            btn(x, y, sz - 5 * u, 28 * u, () -> { RobotArt.COLOR[0] = c; save(); });
+        }
+        float by = H - 46 * u;
+        g.rrect(sliderX(), by, sliderW(), 36 * u, 3 * u, INK, INK, 1); g.text("LISTO", sliderX() + sliderW() / 2, by + 24 * u, 15 * u, WHITE, 0);
+        btn(sliderX(), by, sliderW(), 36 * u, this::back);
     }
     static final int COLS = 3, ROWS = 10;
     void navArms(int p) {
@@ -101,6 +151,7 @@ public final class App {
         switch (screen) {
             case TITLE: title(g); break;
             case ARMS: arms(g); break;
+            case PAINT: paint(g); break;
             default:
                 ren.drawWorld(g, w, 0); hud(g);
                 if (screen == PLAY) {
@@ -120,7 +171,7 @@ public final class App {
     }
     void veil(Gfx g) { g.rect(0, 0, W, H, 0xB8141414); }
     void menu(Gfx g, float x, float y, float w, String[] l, Runnable[] a) {
-        float h = (l.length > 4 ? 37 : 40) * u, gap = (l.length > 4 ? 6 : 8) * u;
+        float h = (l.length > 5 ? 34 : l.length > 4 ? 37 : 40) * u, gap = (l.length > 4 ? 5 : 8) * u;
         for (int i = 0; i < l.length; i++) {
             boolean f = i == focus && !pad.visible || i == focus && padSeen;
             g.rrect(x, y, w, h, 3 * u, f ? RED : WHITE, INK, 2 * u);
@@ -132,13 +183,13 @@ public final class App {
         g.clear(WHITE);
         int G = (int) (32 * u); for (int x = 0; x < W; x += G) g.line(x, 0, x, H, Renderer.GRID, 1); for (int y = 0; y < H; y += G) g.line(0, y, W, y, Renderer.GRID, 1);
         float s = H / 72f; hero.lean = frames / 30 % 2 == 0 ? 4 : 6;
-        g.save(); g.translate(W * .25f, H * .92f); g.scale(s, s); RobotArt.drawPose(g, hero, (1 << Robot.PIECES) - 1, RED, 0); g.restore();
+        g.save(); g.translate(W * .25f, H * .92f); g.scale(s, s); RobotArt.drawPose(g, hero, (1 << Robot.PIECES) - 1, RobotArt.COLOR[0], 0); g.restore();
         float x = W * .5f, wd = W * .42f;
-        g.text("WAP", x - 3 * u, H * .2f, 62 * u, INK, -1);
-        String[] l = {"JUGAR", "ELEGIR 5 ARMAS", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
-        Runnable[] a = {this::start, () -> go(ARMS), () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }, () -> { level = (level + 1) % 3; save(); }};
-        if (up != null) { l = new String[]{l[0], l[1], l[2], l[3], up.label()}; a = new Runnable[]{a[0], a[1], a[2], a[3], () -> up.act()}; g.text(up.version(), W - 8 * u, H - 7 * u, 10 * u, MUTE, 1); }
-        menu(g, x, H * .24f, wd, l, a);
+        g.text("WAP", x - 3 * u, H * .19f, 58 * u, INK, -1);
+        String[] l = {"JUGAR", "ELEGIR 5 ARMAS", "COLOR DEL ROBOT", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
+        Runnable[] a = {this::start, () -> go(ARMS), () -> go(PAINT), () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }, () -> { level = (level + 1) % 3; save(); }};
+        if (up != null) { l = new String[]{l[0], l[1], l[2], l[3], l[4], up.label()}; a = new Runnable[]{a[0], a[1], a[2], a[3], a[4], () -> up.act()}; g.text(up.version(), W - 8 * u, H - 7 * u, 10 * u, MUTE, 1); }
+        menu(g, x, H * .22f, wd, l, a);
     }
     void arms(Gfx g) {
         g.clear(WHITE);

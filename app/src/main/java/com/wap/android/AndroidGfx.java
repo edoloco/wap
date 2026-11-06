@@ -1,5 +1,5 @@
 package com.wap.android;
-import android.graphics.Bitmap; import android.graphics.Canvas; import android.graphics.Paint; import android.graphics.Path; import android.graphics.RectF; import android.graphics.Typeface;
+import android.graphics.Bitmap; import android.graphics.Canvas; import android.graphics.LinearGradient; import android.graphics.Shader; import android.graphics.Paint; import android.graphics.Path; import android.graphics.RectF; import android.graphics.Typeface;
 import com.wap.render.Gfx;
 import java.util.HashMap;
 /** Implementación de Gfx sobre el Canvas de Android. */
@@ -25,6 +25,13 @@ final class AndroidGfx implements Gfx {
         for (int i = 2; i < p.length; i += 2) path.lineTo(p[i], p[i + 1]);
         path.close();
         if (f != 0) { fill.setColor(f); c.drawPath(path, fill); }
+        if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw); c.drawPath(path, stroke); }
+    }
+    @Override public void grad(float[] p, int c0, int c1, float x0, float x1, int s, float sw) {
+        path.rewind(); path.moveTo(p[0], p[1]);
+        for (int i = 2; i < p.length; i += 2) path.lineTo(p[i], p[i + 1]);
+        path.close();
+        fill.setColor(0xFFFFFFFF); fill.setShader(new LinearGradient(x0, 0, x1, 0, c0, c1, Shader.TileMode.CLAMP)); c.drawPath(path, fill); fill.setShader(null);
         if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw); c.drawPath(path, stroke); }
     }
     @Override public void circle(float x, float y, float r, int f, int s, float sw) {

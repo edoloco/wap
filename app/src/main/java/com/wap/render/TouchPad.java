@@ -30,7 +30,7 @@ public final class TouchPad {
     }
     public void draw(Gfx g, int m) {
         if (!visible) return;
-        final int F = 0x44FFFFFF, ON = 0xCCFF0000, L = 0xAA141414;
+        final int F = 0x30141414, ON = 0xCCFF0000, L = 0xAA141414;
         float a = 25 * u, b = 74 * u;
         int[][] arm = {{Input.UP, 0}, {Input.RIGHT, 1}, {Input.DOWN, 2}, {Input.LEFT, 3}};
         for (int[] q : arm) {

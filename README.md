@@ -23,7 +23,7 @@ En el aire, empujar contra una pared te afirma; B rebota hacia el lado contrario
 La Plasma Cannon se activa una vez para cargar y, cuando el robot brilla, otra vez para lanzarla.
 
 Dirección y botón casi a la vez activan el arma. Si ya vienes corriendo, A dispara y B salta.
-Todas las armas salen rectas, hacia donde mira el robot. El robot no escarba: el escenario se destruye con las armas.
+Todas las armas salen rectas, desde la mano del robot, tras una preparación corta. El robot no escarba: el escenario se destruye con las armas.
 
 ## Estructura
 - `core`: simulación determinista, sin dependencias de Android. La entrada de cada tick es una máscara de bits, base del futuro modo online.
