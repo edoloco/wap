@@ -39,9 +39,11 @@ public class Sim {
         w=flat();r=w.robots[0];run(w,Input.DOWN,1);run(w,Input.DOWN|Input.B,1);check(r.sliding(),"abajo + B desliza");x=r.px;run(w,Input.DOWN,15);check(r.h==Robot.SLIDE_H&&r.px>x+40,"el deslizamiento baja la altura y avanza");
         w=flat();r=w.robots[0];run(w,0,1);run(w,Input.A,1);run(w,0,5);check(r.ammo[4]==r.loadout[4].clip-1,"A sola = arma 5");
         w=flat();r=w.robots[0];int yy=r.py;run(w,Input.B,1);run(w,Input.B,8);check(r.py<yy,"B sola salta");
-        w=flat();for(int y2=420;y2<440;y2++)for(int x2=400;x2<760;x2++)w.t.m[y2*1800+x2]=1;r=w.robots[0];run(w,Input.UP,1);run(w,Input.UP|Input.A,1);for(int i=0;i<40&&r.rope!=2;i++)run(w,0,1);check(r.rope==2,"arriba + A lanza el gancho y se engancha");
-        yy=r.py;run(w,Input.UP,60);check(r.py<yy-40,"arriba recoge el gancho y sube ("+(yy-r.py)+" px)");run(w,0,1);run(w,Input.UP,1);run(w,Input.UP|Input.A,1);check(r.rope==0,"arriba + A suelta el gancho");
-        w=flat();r=w.robots[0];int b4=count(w);for(int y2=100;y2<600;y2++)for(int x2=r.px+8;x2<r.px+60;x2++)w.t.m[y2*1800+x2]=1;b4=count(w);run(w,Input.RIGHT,80);check(count(w)<b4,"empujar contra la tierra cava");
+        w=flat();for(int y2=420;y2<440;y2++)for(int x2=400;x2<900;x2++)w.t.m[y2*1800+x2]=1;r=w.robots[0];run(w,Input.UP,1);run(w,Input.UP|Input.A,1);for(int i=0;i<40&&r.rope!=2;i++)run(w,Input.A,1);check(r.rope==2,"arriba + A engancha manteniendo A");
+        yy=r.py;run(w,Input.A,60);check(r.py<yy-60&&r.rope==2,"el gancho lleva solo al destino ("+(yy-r.py)+" px)");int hold=r.py;run(w,Input.A,30);check(Math.abs(r.py-hold)<4,"se queda colgado mientras mantiene A");run(w,0,30);check(r.rope==0&&r.py>hold+20,"soltar A suelta el gancho y cae");
+        w=flat();r=w.robots[0];run(w,Input.UP,1);run(w,Input.UP|Input.A,1);run(w,0,2);check(r.rope==0,"soltar antes de enganchar cancela el gancho");
+        w=flat();r=w.robots[0];int b4;for(int y2=100;y2<600;y2++)for(int x2=r.px+8;x2<r.px+60;x2++)w.t.m[y2*1800+x2]=1;b4=count(w);run(w,Input.RIGHT,80);check(count(w)==b4,"el robot ya no escarba");run(w,Input.DOWN,60);run(w,Input.UP,60);check(count(w)==b4,"arriba y abajo tampoco escarban");
+        w=flat();r=w.robots[0];Shot sh2=null;run(w,Input.UP,1);run(w,Input.UP|Input.B,1);boolean recto=true;w.robots[0].loadout[2]=Wpn.ALL[Wpn.index("BAZOOKA")];w=flat();r=w.robots[0];r.loadout[2]=Wpn.ALL[Wpn.index("BAZOOKA")];r.loadout[0]=r.loadout[2];run(w,Input.UP,1);run(w,Input.UP|Input.B,1);for(Shot q:w.shots)recto&=Math.abs(q.vy)<.5f;run(w,0,50);run(w,Input.DOWN,1);run(w,Input.DOWN|Input.A,1);for(Shot q:w.shots)recto&=Math.abs(q.vy)<.5f;check(recto&&w.shots.size()>0,"arriba y abajo también disparan recto");
         w=flat();b4=count(w);w.explode(600,600,36,30,32,3,1);check(count(w)<b4,"la explosión destruye el terreno");
         w=flat();r=w.robots[0];w.robots[1].px=r.px+40;int ac=r.armorCount();w.explode(r.px,r.py-30,36,44,0,3,1);check(r.armorCount()<ac,"el daño arranca piezas de armadura ("+ac+"→"+r.armorCount()+")");
         w=flat();r=w.robots[0];int lv=r.lives;for(int i=0;i<30&&r.lives==lv;i++){r.invuln=0;w.explode(r.px,r.py-30,36,44,0,0,1);}check(r.lives==lv-1&&r.deadT>0,"sin vida pierde una vida");for(int i=0;i<200;i++)w.step(new int[2]);check(r.alive()&&r.hp==100&&r.armorCount()==12,"reaparece con armadura completa");
@@ -53,6 +55,10 @@ public class Sim {
             int before=count(w);float hp=e.hp;for(int t=0;t<3;t++){run(w,0,1);run(w,Input.A,1);run(w,Input.A,40);r.delay[4]=0;r.reload[4]=0;if(r.ammo[4]<=0)r.ammo[4]=1;run(w,0,240);}
             System.out.printf("  %-14s tierra %6d  daño %5.1f  disparos vivos %d%n",p.name,before-count(w),hp-e.hp+100*e.deaths,w.shots.size());}
     }
+    static void sheet(String out)throws Exception{int S=8,W=1500,H=520;BufferedImage b=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);J g=new J(b);g.clear(0xFFC7D2E0);World w=flat();Robot r=w.robots[0];RobotArt.View v=new RobotArt.View();r.vx=2.5f;int n=0;
+        for(int i=0;i<4;i++){v=new RobotArt.View();for(int k=0;k<(int)(15*i/2.5f)+6;k++){r.vx=2.5f;RobotArt.update(v,r,w);}g.save();g.translate(150+i*235,430);g.scale(S,S);RobotArt.drawPose(g,v,r.armor,0xFFFF0000,0);g.restore();}
+        r.vx=0;r.grounded=false;r.vy=-3;v=new RobotArt.View();RobotArt.update(v,r,w);g.save();g.translate(1120,430);g.scale(S,S);RobotArt.drawPose(g,v,r.armor,0xFFFF0000,0);g.restore();
+        r.grounded=true;r.vy=0;r.slideT=9;v=new RobotArt.View();RobotArt.update(v,r,w);g.save();g.translate(1370,430);g.scale(S,S);RobotArt.drawPose(g,v,r.armor,0xFFFF0000,0);g.restore();ImageIO.write(b,"png",new File(out,"poses.png"));}
     static void soak(){
         long t0=System.currentTimeMillis();int finished=0,ex=0;int[] kills=new int[2];
         for(int seed=1;seed<=12;seed++){Rng q=new Rng(seed*77);Wpn[] a=new Wpn[5],b=new Wpn[5];for(int i=0;i<5;i++){a[i]=Wpn.ALL[q.i(Wpn.ALL.length)];b[i]=Wpn.ALL[q.i(Wpn.ALL.length)];}
@@ -68,9 +74,9 @@ public class Sim {
         app.draw(g);ImageIO.write(b,"png",new File(out,"1_titulo.png"));
         app.screen=App.ARMS;app.draw(g);ImageIO.write(b,"png",new File(out,"2_armas.png"));
         app.screen=App.TITLE;app.start();g.tiles.clear();for(int i=0;i<95;i++)app.tick();app.draw(g);ImageIO.write(b,"png",new File(out,"3_inicio.png"));
-        Random r=new Random(3);int s=0;for(int i=0;i<2600;i++){int m=(i/70%2==0?Input.RIGHT:Input.LEFT);if(i%50<4)m|=Input.B;if(i%37==0)m|=Input.A;if(i%97==1)m=0;if(i%97==2)m=Input.DOWN|Input.A;
+        Random r=new Random(3);int s=0;for(int i=0;i<1500;i++){if(i%2==0)app.draw(g);int m=(i/70%2==0?Input.RIGHT:Input.LEFT);if(i%50<4)m|=Input.B;if(i%37==0)m|=Input.A;if(i%97==1)m=0;if(i%97==2)m=Input.DOWN|Input.A;
             if(i%160==20||i%160==21)m=i%160==20?Input.UP:Input.UP|Input.A;if(i%211==5)m=Input.DOWN;if(i%211==6)m=Input.DOWN|Input.B;app.keys=m;app.tick();
             if(app.screen!=App.PLAY)break;if(i>120&&i%(190)==0&&app.w.robots[0].alive()){app.draw(g);ImageIO.write(b,"png",new File(out,"j_"+(s++)+".png"));}}
     }
-    public static void main(String[] a)throws Exception{mech();weapons();determinism();soak();shots(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    public static void main(String[] a)throws Exception{mech();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

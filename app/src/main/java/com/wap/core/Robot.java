@@ -6,13 +6,14 @@ public final class Robot {
     public static final int STAND_H = 54, SLIDE_H = 26, HW = 7;
     /** Margen en ticks para que dirección + botón cuente como habilidad y no como correr + acción. */
     public static final int SMASH_WINDOW = 9, BUFFER = 3;
+    public static final float HOOK_SHOT = 15, HOOK_PULL = 7.5f, HOOK_RANGE = 400;
     public static final float RUN = 2.5f, GRAV = .28f, JUMP = 6.5f, SLIDE = 4.6f;
     static final float MAX_HP = 100, BONE_HP = 25;
 
     public final int id; public int px, py, h = STAND_H, facing = 1; float remX, remY;
     public float vx, vy; public boolean grounded, blocked; int coyote;
     public float hp = MAX_HP; public int lives, kills, deaths, deadT, invuln, hurtT, armor = (1 << PIECES) - 1;
-    public int slideT, airT, fireT, fireSlot = 4, digT;
+    public int slideT, airT, fireT, fireSlot = 4; boolean jumping;
     public int rope; public float rx, ry, rvx, rvy, rlen; // 0 sin gancho, 1 volando, 2 enganchado
     public final Wpn[] loadout = new Wpn[5]; public final int[] ammo = new int[5], reload = new int[5], delay = new int[5];
     int prev, dirT, dirWas, heldSlot = -1, heldBtn, pending, pendT;
@@ -91,10 +92,7 @@ public final class Robot {
     private boolean fire(World g, int slot) {
         Wpn w = loadout[slot];
         if (reload[slot] > 0 || delay[slot] > 0) return false;
-        float deg = slot == 0 ? 42 : slot == 2 ? -48 : 0;
-        if (grounded && slot == 0 && w.lob > 0) deg = 24;
-        deg -= w.lob;
-        float base = (float) Math.toRadians(deg);
+        float deg = 0, base = 0; // todas las armas salen rectas, hacia donde mira el robot
         float mx = px + facing * 14, my = py - (h == STAND_H ? 37 : 16);
         for (int i = 0; i < w.parts; i++) {
             float a = base + (float) Math.toRadians(g.rng.r(-w.spread, w.spread));
@@ -113,7 +111,7 @@ public final class Robot {
         boolean side = freshDir && ((in & Input.LEFT) != 0 ^ (in & Input.RIGHT) != 0);
         heldSlot = -1; heldBtn = btn;
         if (btn == Input.A) {
-            if (up) { if (rope != 0) rope = 0; else throwHook(g); }
+            if (up) throwHook(g, in);
             else if (down) { heldSlot = 0; fire(g, 0); }
             else if (side) { heldSlot = 1; fire(g, 1); }
             else { heldSlot = 4; fire(g, 4); }
@@ -125,12 +123,15 @@ public final class Robot {
         }
     }
     private void jump(World g) {
-        if (rope == 2) { rope = 0; vy = Math.min(vy, -3.5f); return; }
-        if ((grounded || coyote > 0) && slideT == 0) { vy = -JUMP; grounded = false; coyote = 0; g.fx(Fx.JUMP, px, py, 0, 0); }
+        if (rope != 0) { rope = 0; return; }
+        if ((grounded || coyote > 0) && slideT == 0) { vy = -JUMP; jumping = true; grounded = false; coyote = 0; g.fx(Fx.JUMP, px, py, 0, 0); }
     }
-    private void throwHook(World g) {
+    private void throwHook(World g, int in) {
+        int side = ((in & Input.RIGHT) != 0 ? 1 : 0) - ((in & Input.LEFT) != 0 ? 1 : 0);
+        if (side != 0) facing = side;
+        float a = (float) Math.toRadians(side != 0 ? 45 : 72);
         rope = 1; rx = px + facing * 6; ry = py - 44;
-        rvx = facing * 7.5f + vx * .5f; rvy = -12 + Math.min(vy, 0) * .5f; g.fx(Fx.HOOK, rx, ry, 0, id);
+        rvx = facing * (float) Math.cos(a) * HOOK_SHOT; rvy = -(float) Math.sin(a) * HOOK_SHOT; g.fx(Fx.HOOK, rx, ry, 0, id);
     }
     void step(World g, int in) {
         for (int i = 0; i < 5; i++) { if (delay[i] > 0) delay[i]--; if (reload[i] > 0 && --reload[i] == 0) ammo[i] = loadout[i].clip; }
@@ -153,7 +154,8 @@ public final class Robot {
             if (dirNow || --pendT <= 0) { int b = pending; pending = 0; action(g, b, in, fresh); }
         }
         if (heldSlot >= 0 && (in & heldBtn) != 0) fire(g, heldSlot); else heldSlot = -1;
-        if ((in & Input.B) == 0 && vy < -2.2f && rope != 2 && !inKnock()) vy *= .72f;
+        if (vy >= 0) jumping = false;
+        if (jumping && (in & Input.B) == 0 && vy < -2.2f) vy *= .72f;
 
         if (slideT > 0) {
             slideT--; vx = facing * SLIDE;
@@ -162,37 +164,30 @@ public final class Robot {
         } else {
             if (h != STAND_H && free(t, px, py, STAND_H)) h = STAND_H;
             float target = dir * (RUN + (12 - armorCount()) * .035f) * (h != STAND_H ? .6f : 1);
-            if (dir != 0 && rope != 2) facing = dir;
-            if (dir != 0 && rope == 2) facing = dir;
-            if (rope == 2) vx += dir * .13f;
-            else {
+            if (dir != 0 && rope == 0) facing = dir;
+            if (rope != 2) {
                 float acc = grounded ? .55f : .3f, d = target - vx;
                 if (Math.abs(vx) > RUN * 1.4f && Math.signum(vx) == Math.signum(target)) d = 0;
                 if (dir == 0 && !grounded) acc = .04f;
                 vx += Math.max(-acc, Math.min(acc, d));
             }
         }
+        if (rope != 0 && (in & Input.A) == 0) rope = 0; // soltar A suelta el gancho
         if (rope == 1) {
-            rvy += .22f; float n = 3;
-            for (int i = 0; i < n && rope == 1; i++) {
-                rx += rvx / n; ry += rvy / n;
-                if (t.solid((int) rx, (int) ry)) { rope = 2; rlen = Math.max(40, dist()); g.fx(Fx.HOOK, rx, ry, 1, id); }
+            for (int i = 0; i < 3 && rope == 1; i++) {
+                rx += rvx / 3; ry += rvy / 3;
+                if (t.solid((int) rx, (int) ry)) { rope = 2; g.fx(Fx.HOOK, rx, ry, 1, id); }
             }
-            if (rope == 1 && dist() > 420) rope = 0;
+            if (rope == 1 && dist() > HOOK_RANGE) rope = 0;
         } else if (rope == 2) {
             if (!t.solid((int) rx, (int) ry) && !t.solid((int) rx + 2, (int) ry) && !t.solid((int) rx - 2, (int) ry) && !t.solid((int) rx, (int) ry - 2) && !t.solid((int) rx, (int) ry + 2)) rope = 0;
-            if ((in & Input.UP) != 0) rlen = Math.max(36, rlen - 2.8f);
-            if ((in & Input.DOWN) != 0) rlen = Math.min(420, rlen + 2.8f);
-            if (rlen > 80) rlen -= .5f;
-            float cx = px, cy = py - 40, dx = cx - rx, dy = cy - ry, d = (float) Math.hypot(dx, dy);
-            if (d > rlen && d > 1) {
-                float nx = dx / d, ny = dy / d, vr = vx * nx + vy * ny;
-                if (vr > 0) { vx -= nx * vr; vy -= ny * vr; }
-                float pull = Math.min(1.3f, (d - rlen) * .14f); vx -= nx * pull; vy -= ny * pull;
+            else {
+                float dx = rx - px, dy = ry - (py - 44), d = (float) Math.hypot(dx, dy);
+                if (Math.abs(dx) > 4) facing = dx > 0 ? 1 : -1;
+                if (d > 24) { vx = dx / d * HOOK_PULL; vy = dy / d * HOOK_PULL; } else { vx = 0; vy = 0; }
             }
-            vx *= .995f;
         }
-        vy = Math.min(10, vy + GRAV);
+        if (rope != 2) vy = Math.min(10, vy + GRAV);
         if (vy > 0 && rope != 2 && Math.abs(vx) > 6) vx *= .97f;
         boolean wasGround = grounded;
         moveX(t, vx);
@@ -200,18 +195,7 @@ public final class Robot {
         if (grounded) coyote = 6; else if (coyote > 0) coyote--;
         if (grounded && !wasGround && airT > 22) g.fx(Fx.JUMP, px, py, 1, 0);
         airT = grounded ? 0 : airT + 1;
-        if (blocked && dir != 0 && slideT == 0) {
-            if (++digT % 8 == 1) {
-                t.carveE(px + dir * 15, py - 26, 19, 29);
-                g.fx(Fx.CHIPS, px + dir * 16, py - 26, 6, 1);
-            }
-        } else if ((in & Input.DOWN) != 0 && grounded && dir == 0 && rope == 0 && slideT == 0) {
-            if (++digT > 12 && digT % 8 == 1) { t.carveE(px, py + 8, 15, 13); g.fx(Fx.CHIPS, px, py + 2, 6, 1); }
-        } else if ((in & Input.UP) != 0 && grounded && dir == 0 && rope == 0) {
-            if (++digT > 12 && digT % 8 == 1) { t.carveE(px, py - h - 6, 15, 16); g.fx(Fx.CHIPS, px, py - h, 4, 1); }
-        } else digT = 0;
         if (grounded && slideT == 0 && h != STAND_H && dir == 0) vx *= .7f;
     }
-    private boolean inKnock() { return hurtT > 0; }
     private float dist() { return (float) Math.hypot(rx - px, ry - (py - 40)); }
 }

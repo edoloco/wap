@@ -21,45 +21,53 @@ public final class RobotArt {
 
     /** Estado de animación solo visual de un robot. */
     public static final class View {
-        float phase, pel = -29, lean, fx = 4, fy = -ANK, bx = -3, by = -ANK, a1 = 80, a2 = 95, b1 = 100, b2 = 85, flash; int assemble;
-        float gFront, gBack;
+        float phase, pel = -29, lean, fx = 4, fy = -ANK, bx = -3, by = -ANK, a1 = 80, a2 = 95, b1 = 100, b2 = 85, flash; int assemble, clock, state = -1;
+        float gFront, gBack; public String label = ""; public int labelT;
     }
-    private static float lerp(float a, float b, float k) { return a + (b - a) * k; }
+    /** Cuadros que se mantiene cada dibujo: a 60 ticks por segundo, 5 equivalen a 12 cuadros por segundo. */
+    public static final int HOLD = 5; static final float STRIDE = 15;
+    //                           fx   fy   bx   by   a1   a2   b1   b2   pel    lean
+    static final float[][] RUN_F = {
+        { 13,-ANK, -12, -9, 128, 72,  48,-12, -28.2f, 12},
+        {  4,-ANK,   3,-14,  92, 30,  96, 34, -29.8f, 12},
+        {-12, -9,   13,-ANK,  48,-12, 128, 72, -28.2f, 12},
+        {  3,-14,    4,-ANK,  96, 34,  92, 30, -29.8f, 12}};
+    static final float[] IDLE_A = {4.5f,-ANK,-3.5f,-ANK, 78, 96,102, 84, -28.8f, 3}, IDLE_B = {4.5f,-ANK,-3.5f,-ANK, 80, 98,100, 82, -28.2f, 3};
+    static final float[] UP_F = {10,-15,-5,-1, 4,-2,172,108,-30,5}, DOWN_F = {9,-9,-6,-3, 20,10,165,120,-30,5};
+    static final float[] SLIDE_F = {23,-ANK,-3,-ANK,150,185,120,150,-11,-58}, HOOK_F = {7,-8,-6,-2,-60,-60,120,60,-32,4};
     private static float ground(Terrain t, int x, int y) {
         for (int k = -11; k < 13; k++) if (t.solid(x, y + k)) return k;
         return 0;
     }
+    private static void pose(View v, float[] f) { v.fx = f[0]; v.fy = f[1]; v.bx = f[2]; v.by = f[3]; v.a1 = f[4]; v.a2 = f[5]; v.b1 = f[6]; v.b2 = f[7]; v.pel = f[8]; v.lean = f[9]; }
+    /** Avanza la animación. El cuerpo se mueve a 60, pero el dibujo cambia por cuadros, como un sprite. */
     public static void update(View v, Robot r, World g) {
-        float pel = -28.8f, lean = 3, fx = 4.5f, fy = -ANK, bx = -3.5f, by = -ANK, a1 = 78, a2 = 96, b1 = 102, b2 = 84;
-        float k = .4f, sp = Math.abs(r.vx);
-        if (r.sliding()) {
-            pel = -11; lean = -58; fx = 23; fy = -ANK; bx = -3; by = -ANK; a1 = 150; a2 = 185; b1 = 120; b2 = 150; k = .55f;
-        } else if (r.rope == 2) {
-            pel = -32; lean = Math.max(-14, Math.min(14, r.vx * 3)); fx = 5 - r.vx; fy = -7; bx = -5 - r.vx; by = -2; b1 = 120; b2 = 60;
-        } else if (!r.grounded) {
-            pel = -30; lean = 5;
-            if (r.vy < 1) { fx = 10; fy = -15; bx = -5; by = -1; a1 = 4; a2 = -2; b1 = 172; b2 = 108; }
-            else { fx = 9; fy = -9; bx = -6; by = -3; a1 = 20; a2 = 10; b1 = 165; b2 = 120; }
-        } else if (sp > .3f) {
-            v.phase += sp * 3.14159f / 24f; v.phase %= 6.28318f;
-            float c = (float) Math.cos(v.phase), s = (float) Math.sin(v.phase);
-            fx = 12 * c; fy = -ANK - (s > 0 ? 12 * s : 0);
-            bx = -12 * c; by = -ANK - (s < 0 ? -12 * s : 0);
-            pel = -28.4f + Math.abs((float) Math.sin(v.phase * 2)) * -1.5f; lean = 11;
-            a1 = 86 - 48 * c; a2 = a1 - 58; b1 = 86 + 48 * c; b2 = b1 - 58; k = .55f;
+        float sp = Math.abs(r.vx); boolean run = r.grounded && sp > .3f && !r.sliding() && r.rope != 2;
+        if (run) v.phase = (v.phase + sp) % (STRIDE * 4);
+        int st = r.sliding() ? 4 : r.rope == 2 ? 5 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
+        if (r.fireT > 0) st += 10;
+        v.clock++;
+        if (st != v.state || v.clock % HOLD == 0) {
+            v.state = st;
+            switch (st % 10) {
+                case 4: pose(v, SLIDE_F); break;
+                case 5: {
+                    pose(v, HOOK_F);
+                    v.a1 = v.a2 = (float) Math.toDegrees(Math.atan2(r.ry - (r.py - 40), (r.rx - r.px) * r.facing));
+                    break; }
+                case 2: pose(v, UP_F); break;
+                case 3: pose(v, DOWN_F); break;
+                case 1: pose(v, RUN_F[(int) (v.phase / STRIDE) & 3]); break;
+                default: pose(v, v.clock / 25 % 2 == 0 ? IDLE_A : IDLE_B);
+            }
+            if (r.fireT > 0 && !r.sliding()) { v.a1 = 0; v.a2 = 0; }
+            v.gFront = r.grounded ? ground(g.t, r.px + (int) (v.fx * r.facing), r.py) : 0;
+            v.gBack = r.grounded ? ground(g.t, r.px + (int) (v.bx * r.facing), r.py) : 0;
         }
-        if (r.grounded && !r.sliding()) {
-            if (r.digT > 0) { float w = (float) Math.sin(g.tick * .55f); a1 = 10 + 35 * w; a2 = a1 - 10; b1 = 12 - 35 * w; b2 = b1 - 10; lean = 18; }
-        }
-        if (r.fireT > 0) { float d = r.fireSlot == 0 ? 42 : r.fireSlot == 2 ? -48 : 0; a1 = d; a2 = d; k = Math.max(k, .7f); }
-        v.pel = lerp(v.pel, pel, k); v.lean = lerp(v.lean, lean, k);
-        v.fx = lerp(v.fx, fx, k); v.fy = lerp(v.fy, fy, k); v.bx = lerp(v.bx, bx, k); v.by = lerp(v.by, by, k);
-        v.a1 = lerp(v.a1, a1, k); v.a2 = lerp(v.a2, a2, k); v.b1 = lerp(v.b1, b1, k); v.b2 = lerp(v.b2, b2, k);
-        v.gFront = r.grounded ? ground(g.t, r.px + (int) (v.fx * r.facing), r.py) : 0;
-        v.gBack = r.grounded ? ground(g.t, r.px + (int) (v.bx * r.facing), r.py) : 0;
         if (v.flash > 0) v.flash--;
         if (r.hurtT > 8) v.flash = 3;
         if (v.assemble > 0) v.assemble--;
+        if (v.labelT > 0) v.labelT--;
     }
     private static void bone(Gfx g, float x, float y, float deg) { g.save(); g.translate(x, y); g.rotate((float) Math.toRadians(deg)); }
     private static void stick(Gfx g, float len, float w) { g.rrect(0, -w, len, w * 2, w, INK, 0, 0); }
@@ -118,7 +126,7 @@ public final class RobotArt {
     }
     /** El dibujo en sí, en coordenadas locales mirando a la derecha. */
     public static void drawPose(Gfx g, View v, int ar, int c, int unused) {
-        float e = v.assemble / 30f; e *= e;
+        float e = (v.assemble / HOLD * HOLD) / 30f; e *= e;
         float px = 0, py = v.pel, lr = (float) Math.toRadians(v.lean), sn = (float) Math.sin(lr), cs = (float) Math.cos(lr);
         float cx = px + sn * 17, cy = py - cs * 17;
         float sfx = cx + cs * 5.5f, sfy = cy + sn * 5.5f + 1, sbx = cx - cs * 5.5f, sby = cy - sn * 5.5f + 1;
@@ -130,7 +138,7 @@ public final class RobotArt {
         float sp = e * 16;
         if ((ar >> Robot.BELLY & 1) != 0) { g.save(); g.translate(0, sp * .3f); limb(g, BELLY, c); g.restore(); }
         if ((ar >> Robot.CHEST & 1) != 0) { g.save(); g.translate(0, -sp * .3f); limb(g, CHEST, c); g.restore(); }
-        if ((ar >> Robot.HELMET & 1) != 0) { g.save(); g.translate(0, -3.4f - sp); limb(g, HEAD, c); eyes(g); g.restore(); }
+        if ((ar >> Robot.HELMET & 1) != 0) { g.save(); g.translate(0, -3.4f - sp); g.rotate(-lr * .8f); limb(g, HEAD, c); eyes(g); g.restore(); }
         g.restore();
         leg(g, px + 2.5f, py + 1, v.fx, v.fy + v.gFront, (ar >> Robot.TH_F & 1) != 0 && e < .1f, (ar >> Robot.SN_F & 1) != 0 && e < .1f, c);
         if ((ar >> Robot.HIP & 1) != 0) { g.save(); g.translate(px, py); g.rotate(lr); g.translate(0, -1.4f + sp * .5f); limb(g, HIPS, WHITE); g.restore(); }

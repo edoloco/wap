@@ -1,6 +1,6 @@
 # WAP
 
-Juego de acción 2D para Android: terreno destructible y armas de Liero, movimiento de Mega Man.
+Juego de acción 2D para Android: escenario plataformero destructible, armas de Liero y movimiento de Mega Man.
 
 ## Instalar
 Descarga `wap.apk` desde la sección **Releases** del repositorio, en el teléfono Android, y permite la instalación de fuentes externas. Cada push a `main` compila una versión nueva.
@@ -11,7 +11,7 @@ Descarga `wap.apk` desde la sección **Releases** del repositorio, en el teléfo
 | ◀ ▶ | Caminar |
 | A | Disparar (arma 5) |
 | B | Saltar |
-| ▲ + A | Gancho |
+| ▲ + A | Gancho: mantén A y te lleva solo; suelta A para soltarte |
 | ▼ + A | Arma 1 |
 | ◀▶ + A | Arma 2 |
 | ▲ + B | Arma 3 |
@@ -19,7 +19,7 @@ Descarga `wap.apk` desde la sección **Releases** del repositorio, en el teléfo
 | ▼ + B | Deslizarse |
 
 Dirección y botón casi a la vez activan el arma. Si ya vienes corriendo, A dispara y B salta.
-Empujar contra la tierra, o mantener ▲ o ▼, cava.
+Todas las armas salen rectas, hacia donde mira el robot. El robot no escarba: el escenario se destruye con las armas.
 
 ## Estructura
 - `core`: simulación determinista, sin dependencias de Android. La entrada de cada tick es una máscara de bits, base del futuro modo online.

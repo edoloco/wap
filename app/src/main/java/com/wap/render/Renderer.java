@@ -5,7 +5,18 @@ import java.util.Random;
 /** Dibuja el mundo: mapa por baldosas, robots, proyectiles, partículas e interfaz de partida. */
 public final class Renderer {
     public static final int PAPER = 0xFFFFFFFF, GRID = 0xFFDCE7F2, INK = RobotArt.INK;
-    static final int DIRT = 0xFF262A33, DIRT2 = 0xFF3D4351, ROCK = 0xFF7A8192, ROCK2 = 0xFF596072, EDGE = 0xFFAAB2C0;
+    static final int DIRT = 0xFF3B5478, DIRT2 = 0xFFCB8C3C;
+    static final int BG = 256; final int[] bg = new int[BG * BG]; boolean bgNew = true;
+    void paintBg() {
+        for (int y = 0; y < BG; y++) for (int x = 0; x < BG; x++) {
+            int c = 0xFFC7D2E0, gx = x % 128, gy = y % 128;
+            if (gx < 2 || gy < 2) c = 0xFFADBACC; else if (gx == 2 || gy == 2) c = 0xFFDCE4EE;
+            else if (gx > 20 && gx < 108 && gy > 20 && gy < 108) c = 0xFFBDC9D9;
+            if (y > 150 && y < 178) c = (x / 12 + y / 12) % 2 == 0 ? 0xFFB3C0D2 : 0xFFA8B6CA;
+            if ((gx - 10) * (gx - 10) + (gy - 10) * (gy - 10) < 7) c = 0xFF9AA9BE;
+            bg[y * BG + x] = c;
+        }
+    }
     static final class P { float x, y, vx, vy, life, max, rot, vr, size, g = .2f; int kind, slot, color; boolean ground; }
     public final RobotArt.View[] views = {new RobotArt.View(), new RobotArt.View()};
     final ArrayList<P> ps = new ArrayList<>(); final ArrayList<float[]> beams = new ArrayList<>(); final ArrayList<float[]> booms = new ArrayList<>();
@@ -17,13 +28,9 @@ public final class Renderer {
     void fillTile(Terrain t, int tx, int ty) {
         int S = Terrain.TILE, ox = tx * S, oy = ty * S, i = 0;
         for (int y = oy; y < oy + S; y++) for (int x = ox; x < ox + S; x++) {
-            int m = t.at(x, y), c = 0;
-            if (m != 0 && x < Terrain.W && y < Terrain.H) {
-                boolean edge = t.at(x - 2, y) == 0 || t.at(x + 2, y) == 0 || t.at(x, y - 2) == 0 || t.at(x, y + 2) == 0 || t.at(x - 1, y - 1) == 0 || t.at(x + 1, y + 1) == 0;
-                if (edge) c = EDGE;
-                else if (m == 1) { int d = (x + y + (hash(x >> 3, y >> 3) & 3)) % 11; c = d < 2 ? DIRT2 : DIRT; }
-                else c = (x + y) % 7 < 2 || (x - y + 7000) % 7 < 2 ? ROCK2 : ROCK;
-            }
+            int c = 0;
+            if (x < Terrain.W && y < Terrain.H && t.m[y * Terrain.W + x] != 0)
+                c = t.at(x - 1, y) == 0 || t.at(x + 1, y) == 0 || t.at(x, y - 1) == 0 || t.at(x, y + 1) == 0 ? INK : t.tex[y * Terrain.W + x];
             px[i++] = c;
         }
     }
@@ -32,7 +39,7 @@ public final class Renderer {
         P p = new P(); p.kind = kind; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.life = p.max = life; p.size = size; p.color = color;
         p.rot = r.nextFloat() * 6.28f; p.vr = (r.nextFloat() - .5f) * .5f; ps.add(p); return p;
     }
-    static final int SQUARE = 0, SMOKE = 1, ARMOR = 2, BONE = 3, FIRE = 4;
+    static final int LABEL = 48, SQUARE = 0, SMOKE = 1, ARMOR = 2, BONE = 3, FIRE = 4;
     public void consume(World w, boolean reduceMotion) {
         for (Fx f : w.fx) switch (f.type) {
             case Fx.EXPLODE: {
@@ -43,7 +50,8 @@ public final class Renderer {
                 break; }
             case Fx.CHIPS: for (int i = 0; i < f.a; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 4, -r.nextFloat() * 3, 24, 1.6f, DIRT2); break;
             case Fx.SMOKE: { P p = part(f.a > 0 ? FIRE : SMOKE, f.x, f.y, 0, -.2f, f.a > 0 ? 14 : 24, f.a > 0 ? 3 : 3.5f, 0xFF9098A8); p.g = 0; break; }
-            case Fx.FLASH: booms.add(new float[]{f.x, f.y, 9, 8, 0}); break;
+            case Fx.FLASH: booms.add(new float[]{f.x, f.y, 9, 8, 0}); { RobotArt.View v = views[f.who]; v.label = Wpn.ALL[(int) f.b].name; v.labelT = LABEL; } break;
+            case Fx.HOOK: if (f.a == 0) { RobotArt.View v = views[f.who]; v.label = "GANCHO"; v.labelT = LABEL; } break;
             case Fx.HIT: for (int i = 0; i < 5; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 5, (r.nextFloat() - .5f) * 5, 14, 1.3f, 0xFFFFC020); break;
             case Fx.ARMOR: { P p = part(ARMOR, f.x, f.y, f.c, f.d, 170, 1, RobotArt.COLOR[f.who]); p.slot = (int) f.a; p.g = .22f; break; }
             case Fx.DEATH: {
@@ -93,13 +101,14 @@ public final class Renderer {
     }
     public void drawWorld(Gfx g, World w, int who) {
         camera(g, w, who);
-        g.clear(PAPER);
+        g.clear(0xFFC7D2E0);
         float vw = g.w() / zoom, vh = g.h() / zoom, x0 = camX - vw / 2, y0 = camY - vh / 2;
         g.save(); g.scale(zoom, zoom);
         float sx = shake > .3f ? (r.nextFloat() - .5f) * shake : 0, sy = shake > .3f ? (r.nextFloat() - .5f) * shake : 0;
         g.translate(-x0 + sx, -y0 + sy);
-        int G = 48; for (float x = (int) (x0 / G) * G; x < x0 + vw; x += G) g.line(x, y0, x, y0 + vh, GRID, .6f);
-        for (float y = (int) (y0 / G) * G; y < y0 + vh; y += G) g.line(x0, y, x0 + vw, y, GRID, .6f);
+        if (bgNew) paintBg();
+        float bx0 = x0 * .55f, by0 = y0 * .55f; int bi = -1;
+        for (int q = (int) Math.floor(by0 / BG); q * BG < by0 + vh; q++) for (int k = (int) Math.floor(bx0 / BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
         for (Bonus b : w.bonus) crate(g, b.x, b.y, b.kind);
         for (Shot s : w.shots) shot(g, s);
         int S = Terrain.TILE; Terrain t = w.t;
@@ -114,6 +123,14 @@ public final class Renderer {
             Robot o = w.robots[i]; if (!o.alive()) continue;
             if (o.rope != 0) { float hx = o.px + o.facing * 10, hy = o.py - 42; g.line(hx, hy, o.rx, o.ry, INK, 1.1f); g.circle(o.rx, o.ry, 2.4f, 0xFFFFFFFF, INK, .7f); }
             RobotArt.draw(g, views[i], o, RobotArt.COLOR[i]);
+        }
+        for (int i = 0; i < 2; i++) {
+            Robot o = w.robots[i]; RobotArt.View v = views[i];
+            if (!o.alive() || v.labelT <= 0) continue;
+            float z = 9, tw = g.textW(v.label, z), ly = o.py - o.h - 13 - (LABEL - v.labelT) * .16f, lx = Math.max(x0 + tw / 2 + 5, Math.min(x0 + vw - tw / 2 - 5, o.px));
+            int a = Math.min(255, v.labelT * 18) << 24;
+            g.rrect(lx - tw / 2 - 4, ly - 9, tw + 8, 13, 2, a | 0x141414, 0, 0);
+            g.text(v.label, lx, ly + 1, z, a | (RobotArt.COLOR[i] & 0xFFFFFF) | (i == 0 ? 0x8080 : 0x806000), 0);
         }
         for (P p : ps) switch (p.kind) {
             case SQUARE: g.rect(p.x, p.y, p.size, p.size, p.color); break;

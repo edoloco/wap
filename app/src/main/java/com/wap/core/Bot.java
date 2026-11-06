@@ -1,7 +1,7 @@
 package com.wap.core;
 /** Contrincante: genera la misma máscara de entrada que un jugador humano. */
 public final class Bot {
-    final Rng r; final int me; final float skill; int detour, detourDir = 1, comboT, combo, moveT, moveDir = 1, stuckT, lastX, jumpT, hookT, fireHold, pressT;
+    final Rng r; final int me; final float skill; int hookHold, detour, detourDir = 1, comboT, combo, moveT, moveDir = 1, stuckT, lastX, jumpT, hookT, fireHold, pressT;
     public Bot(int seed, int me, float skill) { r = new Rng(seed); this.me = me; this.skill = skill; }
     private boolean clear(World g, float x0, float y0, float x1, float y1) {
         int n = (int) (Math.hypot(x1 - x0, y1 - y0) / 8) + 1;
@@ -63,27 +63,26 @@ public final class Bot {
         if (see && m.facing != to) dir = to;
         if (Math.abs(m.px - lastX) < 1) stuckT++; else stuckT = 0;
         lastX = m.px;
-        if (!nav && !see && dy > 50 && ad < 260 && m.grounded && detour == 0 && m.rope == 0) dir = 0;
         if (dir > 0) out |= Input.RIGHT; else if (dir < 0) out |= Input.LEFT;
-        if (!nav && dir == 0 && !see && dy > 50) out |= Input.DOWN;
         if (nav && wy < -24 && m.grounded && m.rope == 0 && jumpT < 0) { out |= Input.B; jumpT = 18; }
         if (--jumpT < 0 && m.grounded && (stuckT > 12 && stuckT < 60 || r.f() < .012f || dy < -44 && ad < 330 && r.f() < .1f)) { out |= Input.B; jumpT = 22; }
         else if (!m.grounded && m.vy < 0 && jumpT > 8) out |= Input.B;
-        if (--hookT < 0 && m.rope == 0 && (nav ? wy < -44 && !m.grounded : dy < -70 || stuckT > 80) && r.f() < .2f) { comboT = 2; combo = Input.UP | Input.A; hookT = 50; return 0; }
-        if (m.rope == 2) { hookT = 30; if (nav ? wy < -14 && m.rlen > 40 : dy < -30 && m.rlen > 44) out |= Input.UP; else { comboT = 2; combo = Input.B; } }
+        if (--hookT < 0 && m.rope == 0 && (nav ? wy < -40 || stuckT > 60 : dy < -70 || stuckT > 60) && r.f() < .2f) { comboT = 2; combo = Input.UP | Input.A | (moveDir > 0 ? Input.RIGHT : moveDir < 0 ? Input.LEFT : 0); hookT = 40; hookHold = 70; return 0; }
+        if (m.rope != 0) { hookT = 20; if (--hookHold > 0 && (nav ? wy < -12 : dy < -12)) out |= Input.A; return out; }
         if (pressT > 0) pressT--;
         float aimOK = ady < 42 ? 1 : 0;
         if (see && (dx > 0) == (m.facing > 0) && r.f() < .10f * skill) {
             if (ady < 44 && ad < 520) {
-                int s = r.i(3);
-                int side = to > 0 ? Input.RIGHT : Input.LEFT;
-                if (s == 0 && ready(m, 1)) { comboT = 2; combo = side | Input.A; return 0; }
-                if (s == 1 && ready(m, 3)) { comboT = 2; combo = side | Input.B; return 0; }
+                int q = r.i(5), side = to > 0 ? Input.RIGHT : Input.LEFT;
+                if (q == 0 && ready(m, 1)) { comboT = 2; combo = side | Input.A; return 0; }
+                if (q == 1 && ready(m, 3)) { comboT = 2; combo = side | Input.B; return 0; }
+                if (q == 2 && ready(m, 0)) { comboT = 2; combo = Input.DOWN | Input.A; return 0; }
+                if (q == 3 && ready(m, 2)) { comboT = 2; combo = Input.UP | Input.B; return 0; }
                 fireHold = 6 + r.i(30);
-            } else if (dy < -40 && ady > ad * .5f && ready(m, 2)) { comboT = 2; combo = Input.UP | Input.B; return 0; }
-            else if (dy > 40 && ready(m, 0)) { comboT = 2; combo = Input.DOWN | Input.A; return 0; }
+            } else if (dy < -40 && ad < 320 && m.grounded && jumpT < 0) { out |= Input.B; jumpT = 22; }
         }
         if (!see && fireHold == 0 && ad < 260 && ady < 44 && m.facing == to && r.f() < .03f * skill) fireHold = 20;
+        if (stuckT > 28 && stuckT % 40 == 29) fireHold = 24; // si algo le corta el paso, lo destruye
         if (see && ad < 100 && ady < 20 && m.grounded && r.f() < .01f) { comboT = 2; combo = Input.DOWN | Input.B; }
         if (fireHold > 0) { fireHold--; if (aimOK > 0 || r.f() < .3f) out |= Input.A; }
         return out;

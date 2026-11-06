@@ -131,7 +131,7 @@ public final class App {
     void title(Gfx g) {
         g.clear(WHITE);
         int G = (int) (32 * u); for (int x = 0; x < W; x += G) g.line(x, 0, x, H, Renderer.GRID, 1); for (int y = 0; y < H; y += G) g.line(0, y, W, y, Renderer.GRID, 1);
-        float s = H / 72f; hero.lean = 5 + (float) Math.sin(frames * .03f) * 2;
+        float s = H / 72f; hero.lean = frames / 30 % 2 == 0 ? 4 : 6;
         g.save(); g.translate(W * .25f, H * .92f); g.scale(s, s); RobotArt.drawPose(g, hero, (1 << Robot.PIECES) - 1, RED, 0); g.restore();
         float x = W * .5f, wd = W * .42f;
         g.text("WAP", x - 3 * u, H * .24f, 76 * u, INK, -1);
