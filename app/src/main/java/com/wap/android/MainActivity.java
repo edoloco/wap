@@ -18,9 +18,12 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
         final android.net.wifi.WifiManager wifi = (android.net.wifi.WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
         final android.net.wifi.WifiManager.MulticastLock lock = wifi != null ? wifi.createMulticastLock("wap-salas") : null;
         if (lock != null) lock.setReferenceCounted(false);
+        final android.net.wifi.WifiManager.WifiLock fast = wifi != null ? wifi.createWifiLock(Build.VERSION.SDK_INT >= 29 ? android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY : android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "wap-partida") : null;
+        if (fast != null) fast.setReferenceCounted(false);
         app.dev = new App.Device() {
             @Override public String name() { return "Sala de " + Build.MODEL; }
             @Override public void listen(boolean on) { if (lock == null) return; try { if (on) lock.acquire(); else if (lock.isHeld()) lock.release(); } catch (RuntimeException e) { } }
+            @Override public void lowLatency(boolean on) { if (fast == null) return; try { if (on) fast.acquire(); else if (fast.isHeld()) fast.release(); } catch (RuntimeException e) { } }
             @Override public void askText(String title, String current, int max, java.util.function.Consumer<String> done) {
                 runOnUiThread(() -> {
                     final android.widget.EditText ed = new android.widget.EditText(MainActivity.this);

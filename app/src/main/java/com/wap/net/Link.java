@@ -1,9 +1,9 @@
 package com.wap.net;
-import java.io.*; import java.net.*; import java.util.Arrays; import java.util.concurrent.ConcurrentHashMap;
+import java.io.*; import java.net.*; import java.util.Arrays; import java.util.concurrent.ConcurrentHashMap; import java.util.concurrent.LinkedBlockingQueue;
 /** Conexión TCP entre dos teléfonos: saludo inicial, entradas de cada tick y huellas del estado. */
 public final class Link implements Closeable {
     public static final int PORT = 47812;
-    static final int HELLO = 1, INPUT = 2, HASH = 3, BYE = 4;
+    static final int HELLO = 1, INPUT = 2, HASH = 3, BYE = 4, PING = 5, PONG = 6;
     /** Datos de cada jugador al empezar: reglas, semilla, vidas, color y armas. */
     public static final class Hello {
         public int rules, seed, lives, color; public int[] slots = new int[0]; public String name = "";
@@ -37,6 +37,8 @@ public final class Link implements Closeable {
                 while (true) {
                     int type = in.readByte();
                     if (type == INPUT) put(in.readByte());
+                    else if (type == PING) { long t0 = in.readLong(); queue(PONG, t0); } // responde al instante
+                    else if (type == PONG) sample((System.nanoTime() - in.readLong()) / 1e6f);
                     else if (type == HASH) { int k = in.readInt(); hashes.put(k, in.readInt()); }
                     else if (type == BYE) { closed = true; return; }
                     else throw new IOException("mensaje desconocido");
@@ -44,21 +46,46 @@ public final class Link implements Closeable {
             } catch (IOException e) { if (!closed) error = "Se perdió la conexión con el otro teléfono"; closed = true; }
         }, "partida-red");
         t.setDaemon(true); t.start();
+        writer = true;
+        Thread wt = new Thread(() -> { // los envíos van en su propio hilo: la red lenta nunca frena el dibujo
+            try {
+                while (true) {
+                    long[] m = outQ.take(); if (m == null || m[0] == BYE) break;
+                    synchronized (wl) {
+                        out.writeByte((int) m[0]);
+                        if (m[0] == INPUT) out.writeByte((int) m[1]); else if (m[0] == HASH) { out.writeInt((int) m[1]); out.writeInt((int) m[2]); } else out.writeLong(m[1]);
+                        if (outQ.isEmpty()) out.flush();
+                    }
+                }
+            } catch (Exception e) { if (!closed) error = "Se perdió la conexión con el otro teléfono"; closed = true; }
+        }, "partida-envio");
+        wt.setDaemon(true); wt.start();
     }
+    private final LinkedBlockingQueue<long[]> outQ = new LinkedBlockingQueue<>();
+    private void queue(long... m) { if (!closed) outQ.add(m); }
+    /** Ping de ida y vuelta (ms): promedio y variación, para ajustar el retraso de entradas. */
+    public volatile float rtt = -1, rttDev = 0;
+    private void sample(float ms) {
+        if (rtt < 0) { rtt = ms; rttDev = ms / 4; return; }
+        float d = Math.abs(ms - rtt); rttDev += (d - rttDev) * .2f; rtt += (ms - rtt) * .15f;
+    }
+    public void ping() { queue(PING, System.nanoTime()); }
     private void put(byte b) {
         byte[] r = remote; if (count == r.length) { r = Arrays.copyOf(r, r.length * 2); remote = r; }
         r[count] = b; count = count + 1;
     }
     public int count() { return count; }
     public int input(int i) { return remote[i] & 0xFF; }
-    public void sendInput(int m) { write(INPUT, m, 0, true); }
-    public void sendHash(int tick, int h) { write(HASH, tick, h, false); }
+    public void sendInput(int m) { if (started()) queue(INPUT, m); else write(INPUT, m, 0, true); }
+    public void sendHash(int tick, int h) { if (started()) queue(HASH, tick, h); else write(HASH, tick, h, false); }
+    private volatile boolean writer; private boolean started() { return writer; }
     private void write(int type, int a, int b, boolean small) {
         if (closed) return;
         try { synchronized (wl) { out.writeByte(type); if (small) out.writeByte(a); else { out.writeInt(a); out.writeInt(b); } out.flush(); } }
         catch (IOException e) { error = "Se perdió la conexión con el otro teléfono"; closed = true; }
     }
     @Override public void close() {
+        outQ.add(new long[]{BYE});
         try { synchronized (wl) { out.writeByte(BYE); out.flush(); } } catch (IOException e) { }
         closed = true; try { s.close(); } catch (IOException e) { }
     }

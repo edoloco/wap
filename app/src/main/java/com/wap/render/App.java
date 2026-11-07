@@ -8,7 +8,9 @@ public final class App {
     /** Servicios del teléfono para jugar en red. */
     public interface Device { String name(); void listen(boolean on);
         /** Pide un texto con el teclado del teléfono; done recibe el texto o null si se cancela. */
-        default void askText(String title, String current, int max, java.util.function.Consumer<String> done) {} }
+        default void askText(String title, String current, int max, java.util.function.Consumer<String> done) {}
+        /** WiFi en modo de baja latencia durante la partida en línea (sin ahorro de energía). */
+        default void lowLatency(boolean on) {} }
     static final int[] SWATCH = {0xFF5E5650, 0xFFFF0000, 0xFFFF7A00, 0xFFFFD200, 0xFF19C24A, 0xFF00B8D4, 0xFF1266FF, 0xFF8214FF, 0xFFFF2FA8, 0xFF2A2A2A};
     static final int RED = 0xFFE8323C, INK = RobotArt.INK, WHITE = 0xFFFFFFFF, MUTE = 0xFF9AA6D6, LINE = 0xFFCBD2DC;
     /** Paleta de la interfaz en pixel art. */
@@ -109,9 +111,10 @@ public final class App {
         ren.reset(w); cd = 90; screen = PLAY; overT = 0; pad.clear();
         String hn = or(h.name, "PLAYER 1"), cn = or(c.name, "PLAYER 2"); if (hn.equals(cn)) cn = cn.length() < NAME_MAX - 1 ? cn + " 2" : "PLAYER 2";
         setNames(hn, cn, true); // en línea se ve el nombre de cada uno sobre su personaje
+        if (dev != null) dev.lowLatency(true);
     }
     void endOnline(String msg) {
-        if (link != null) link.close(); link = null; ls = null; online = false;
+        if (link != null) link.close(); link = null; ls = null; online = false; if (dev != null) dev.lowLatency(false);
         if (msg != null) { toast = msg; toastT = 300; }
         go(TITLE);
     }
@@ -143,12 +146,7 @@ public final class App {
             if (link.closed && !w.finished) { endOnline(link.error != null ? link.error : "El otro jugador salió de la partida."); return; }
             if (cd > 0) { cd--; return; }
             int mm = screen == PLAY ? m : 0;
-            for (int n = 0; n < 3; n++) {
-                ls.pump(w, mm);
-                if (!ls.step(w)) break;
-                ren.tick(w); sounds(); ren.consume(w, false);
-                if (!ls.behind(w)) break;
-            }
+            ls.advance(w, mm, () -> { ren.tick(w); sounds(); ren.consume(w, false); });
             if (w.finished && screen != OVER && ++overT > 110) go(OVER);
             if (screen == OVER) navList(press);
             return;
@@ -414,6 +412,10 @@ public final class App {
     void hud(Gfx g) {
         Robot me = w.robots[this.me], e = w.robots[1 - this.me];
         float bw = 168 * u; bar(g, 4, 4, bw, me, this.me); bar(g, W - 4 - bw, 4, bw, e, 1 - this.me);
+        if (online && ls != null) { // calidad de la conexión, para saber si la lentitud es de la red
+            float p = ls.ping(); int c = p < 0 ? MUTE : p < 60 ? MINT : p < 120 ? GOLD : RED;
+            txt(g, p < 0 ? "RED ..." : "RED " + Math.round(p) + " MS", 6, 42, 8, c, -1);
+        }
         int n = SLOTS; float cw = Math.min(112 * u, (W - 2 * bw - 16) / n), x = W / 2 - cw * n / 2;
         for (int i = 0; i < n; i++) {
             float y = 4, h = 27, cx = x + i * cw; Wpn wp = me.loadout[i];

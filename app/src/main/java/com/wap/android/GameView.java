@@ -3,7 +3,7 @@ import android.content.Context; import android.graphics.Canvas; import android.o
 import com.wap.render.App;
 /** Bucle principal: simula a 60 ticks fijos por segundo y dibuja cada cuadro. */
 final class GameView extends SurfaceView implements SurfaceHolder.Callback, Runnable {
-    final App app; private final AndroidGfx gfx = new AndroidGfx(); private Thread th; private volatile boolean run;
+    final App app; private final AndroidGfx gfx = new AndroidGfx(); private float drawMs; private Thread th; private volatile boolean run;
     GameView(Context c, App a) { super(c); app = a; getHolder().addCallback(this); setFocusable(true); setFocusableInTouchMode(true); }
     @Override public void surfaceCreated(SurfaceHolder h) { run = true; th = new Thread(this, "game"); th.start(); }
     @Override public void surfaceChanged(SurfaceHolder h, int f, int w, int hh) { }
@@ -20,7 +20,9 @@ final class GameView extends SurfaceView implements SurfaceHolder.Callback, Runn
                 synchronized (app) {
                     int n = 0;
                     while (acc >= step && n++ < 4) { app.tick(); acc -= step; }
-                    gfx.begin(c, c.getWidth(), c.getHeight()); app.draw(gfx);
+                    long d0 = System.nanoTime(); gfx.begin(c, c.getWidth(), c.getHeight()); app.draw(gfx);
+                    drawMs += ((System.nanoTime() - d0) / 1e6f - drawMs) * .05f; // promedio del tiempo de dibujo
+                    if (!app.ren.lite && drawMs > 14) app.ren.lite = true; else if (app.ren.lite && drawMs < 6) app.ren.lite = false;
                 }
             } finally { if (c != null) try { h.unlockCanvasAndPost(c); } catch (IllegalStateException e) { } }
         }

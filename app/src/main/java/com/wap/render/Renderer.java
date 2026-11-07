@@ -45,7 +45,7 @@ public final class Renderer {
         }
     }
     P part(int kind, float x, float y, float vx, float vy, float life, float size, int color) {
-        if (ps.size() > 500) ps.remove(0);
+        if (ps.size() > (lite ? 220 : 500)) ps.remove(0);
         P p = new P(); p.kind = kind; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.life = p.max = life; p.size = size; p.color = color;
         p.rot = r.nextFloat() * 6.28f; p.vr = (r.nextFloat() - .5f) * .5f; ps.add(p); return p;
     }
@@ -159,7 +159,7 @@ public final class Renderer {
                 continue;
             }
             if (s.w.look == Wpn.RAY) { P q = part(TRAIL, s.x, s.y, 0, 0, 26, 21, 0xFF6FDDFF); q.g = 0; P q2 = part(TRAIL, s.x, s.y, 0, 0, 16, 9, 0xFFFFFFFF); q2.g = 0; continue; } // Kamehameha
-            if (sp > 5) continue;
+            if (sp > 5 || lite && (w.tick & 1) == 1) continue;
             int c; float z;
             switch (s.w.look) {
                 case Wpn.ROCKET: c = 0xFFFF8A2A; z = 4; if (w.tick % 2 == 0) { P q = part(SMOKE, s.x, s.y, 0, -.1f, 40, 2.2f, 0x50404650); q.g = 0; } break;
@@ -231,7 +231,7 @@ public final class Renderer {
                 case FIRE: g.glow(p.x, p.y, p.size * 2.2f * k + 1, alpha(p.color, k)); break;
                 case TRAIL: g.glow(p.x, p.y, p.size * (.4f + .8f * k), alpha(p.color, k * .9f)); break;
                 case EMBER: g.glow(p.x, p.y, p.size * 2, alpha(p.color, k)); g.rect(p.x - .5f, p.y - .5f, 1, 1, alpha(0xFFFFE0A0, k)); break;
-                case SPARK: g.line(p.x, p.y, p.x - p.vx * 1.8f, p.y - p.vy * 1.8f, alpha(p.color, k), .9f); g.glow(p.x, p.y, 3, alpha(p.color, k * .6f)); break;
+                case SPARK: g.line(p.x, p.y, p.x - p.vx * 1.8f, p.y - p.vy * 1.8f, alpha(p.color, k), .9f); if (!lite) g.glow(p.x, p.y, 3, alpha(p.color, k * .6f)); break;
                 default:
             }
         }
@@ -261,6 +261,8 @@ public final class Renderer {
     }
     /** Nombres de los jugadores (en línea se dibujan sobre cada personaje). */
     public String[] names = {"PLAYER 1", "PLAYER 2"}; public boolean showNames;
+    /** Modo liviano: si el teléfono no alcanza a dibujar a tiempo, menos partículas y luces más simples. */
+    public boolean lite;
     /** Avisos de bajas arriba de la pantalla. */
     public final ArrayList<String> feedMsg = new ArrayList<>(); final ArrayList<int[]> feedInfo = new ArrayList<>(); static final int FEED_T = 300;
     public void feed(String msg, int color) { feedMsg.add(0, msg); feedInfo.add(0, new int[]{FEED_T, color}); while (feedMsg.size() > 3) { feedMsg.remove(3); feedInfo.remove(3); } }

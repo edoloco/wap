@@ -48,5 +48,7 @@ PERSONALIZAR (antes "Color del robot") cambia el color y el nombre. En línea, e
 El importador de dibujos (`tools/arte.sh`, `arte/dibujos/`) queda listo, pero el juego usa por ahora el personaje original.
 
 ## En línea (red local)
+
+Retraso adaptable (versión 17): cada teléfono mide el ping y sube o baja solo el adelanto de entradas (3 a 8 ticks, 50 a 133 ms). Si hubo un congelón, después se recuperan los ticks atrasados para que la partida no quede más lenta. Los envíos van en su propio hilo, el WiFi se pone en baja latencia durante la partida y arriba a la izquierda se ve el ping ("RED 45 MS"). Si un teléfono no alcanza a dibujar a tiempo, baja partículas y luces solo. `tools/Red.java` simula dos teléfonos con WiFi lento y mide la velocidad real de la partida.
 Ambos teléfonos en la misma red Wi-Fi. Uno elige "Crear sala" y el otro la ve en la lista y se une.
 Cada teléfono simula la misma partida con las entradas de los dos; deben tener la misma versión del juego.
