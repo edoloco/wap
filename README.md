@@ -47,6 +47,14 @@ PERSONALIZAR (antes "Color del robot") cambia el color y el nombre. En línea, e
 
 El importador de dibujos (`tools/arte.sh`, `arte/dibujos/`) queda listo, pero el juego usa por ahora el personaje original.
 
+## Editor de niveles
+
+En el menú, **EDITOR DE NIVELES** crea un nivel vacío o parte de uno aleatorio. Herramientas: tierra destructible en 8 colores (3 grosores), bloque morado, acero indestructible, caja, metal, computador, piedra, ducto, agua (se toca la altura de la superficie, o "SIN AGUA"), borrar y mover la vista; con zoom de 3 niveles. Con mando: la cruceta mueve un cursor, A aplica, X cambia de herramienta y B sale. El nivel se guarda al salir o al probarlo; tocar el nombre lo renombra. **NIVEL** en el menú elige entre ALEATORIO y los niveles guardados.
+
+Bajo el agua se avanza más lento (65 %), la gravedad es menor y el salto es más lento pero de la misma altura; el fuego se apaga y los disparos se frenan.
+
+En línea, si el anfitrión eligió un nivel suyo, se manda al otro teléfono en el saludo y se usa solo para esa partida; al final se pregunta si conservarlo.
+
 ## En línea (red local)
 
 Retraso adaptable (versión 17): cada teléfono mide el ping y sube o baja solo el adelanto de entradas (3 a 8 ticks, 50 a 133 ms). Si hubo un congelón, después se recuperan los ticks atrasados para que la partida no quede más lenta. Los envíos van en su propio hilo, el WiFi se pone en baja latencia durante la partida y arriba a la izquierda se ve el ping ("RED 45 MS"). Si un teléfono no alcanza a dibujar a tiempo, baja partículas y luces solo. `tools/Red.java` simula dos teléfonos con WiFi lento y mide la velocidad real de la partida.

@@ -243,7 +243,63 @@ public final class Terrain {
             final int fx = x, fw = (w + 2) * G, fy = y;
             props.removeIf(q -> q[0] + q[2] > fx && q[0] < fx + fw && q[1] + q[3] > fy && q[1] < base);
         }
-        steel(0, 0, W, 16); steel(0, H - 16, W, 16); steel(0, 0, 16, H); steel(W - 16, 0, 16, H);
+        frame();
         java.util.Arrays.fill(dirty, true);
+    }
+    /** Marco indestructible alrededor del mapa. */
+    void frame() { steel(0, 0, W, 16); steel(0, H - 16, W, 16); steel(0, 0, 16, H); steel(W - 16, 0, 16, H); }
+    /** Piso de bloques, como el de los niveles aleatorios. */
+    void floor() { for (int i = 0; i * G < W; i++) for (int d = 0; d < 2; d++) panel(i * G, H - 64 + d * G); frame(); }
+
+    // ---------- Herramientas del editor de niveles
+    public static final int EDGE = 16, GRID = G;
+    static boolean inside(int x, int y) { return x >= EDGE && y >= EDGE && x < W - EDGE && y < H - EDGE; }
+    /** Color de tierra con un poco de textura (vetas en bloques de 4 px), para que no se vea plana. */
+    static int earthTex(int c, int x, int y) {
+        int h = hash(x >> 2, y >> 2) & 7, k = h < 2 ? -18 : h > 5 ? 12 : 0;
+        int r = Math.max(0, Math.min(255, (c >> 16 & 255) + k)), g = Math.max(0, Math.min(255, (c >> 8 & 255) + k)), b = Math.max(0, Math.min(255, (c & 255) + k));
+        return 0xFF000000 | r << 16 | g << 8 | b;
+    }
+    /** Pinta tierra destructible del color elegido; no tapa bloques ni objetos. */
+    public void earth(int cx, int cy, int r, int color) {
+        for (int y = cy - r; y <= cy + r; y++) for (int x = cx - r; x <= cx + r; x++) {
+            if (!inside(x, y) || (x - cx) * (x - cx) + (y - cy) * (y - cy) > r * r) continue;
+            int i = y * W + x, k = m[i]; if (k != 0 && k != DEBRIS && k != DECOR && k != PANEL) continue;
+            m[i] = PANEL; tex[i] = earthTex(color, x, y);
+        }
+        mark(cx - r, cy - r, cx + r, cy + r);
+    }
+    /** Borra todo lo que no sea el marco ni un objeto (los objetos los quita el mundo). */
+    public void wipe(int cx, int cy, int r) {
+        for (int y = cy - r; y <= cy + r; y++) for (int x = cx - r; x <= cx + r; x++) {
+            if (!inside(x, y) || (x - cx) * (x - cx) + (y - cy) * (y - cy) > r * r) continue;
+            int i = y * W + x; if (!isProp(m[i])) m[i] = 0;
+        }
+        mark(cx - r, cy - r, cx + r, cy + r);
+    }
+    /** Bloque de 32 px alineado a la grilla: PANEL (morado, destructible) o STEEL (indestructible). */
+    public void block(int x, int y, int mat) {
+        x -= Math.floorMod(x, G); y -= Math.floorMod(y, G);
+        if (!inside(x, y) || !inside(x + G - 1, y + G - 1)) return;
+        for (int j = y; j < y + G; j += 4) for (int i = x; i < x + G; i += 4) if (isProp(at(i, j))) return;
+        if (mat == STEEL) steel(x, y, G, G); else panel(x, y);
+        mark(x, y, x + G, y + G);
+    }
+    /** Ducto de ventilación horizontal de tres bloques. */
+    public void vent(int x, int y) {
+        x -= Math.floorMod(x, G); y -= Math.floorMod(y, G);
+        if (!inside(x, y) || !inside(x + 3 * G - 1, y + G - 1)) return;
+        for (int j = y; j < y + G; j += 4) for (int i = x; i < x + 3 * G; i += 4) if (isProp(at(i, j))) return;
+        ventH(x, y, 3 * G); mark(x, y, x + 3 * G, y + G);
+    }
+    /** Objeto con resistencia (caja, metal, piedra o computador) si el lugar está libre. Devuelve sus datos o null. */
+    public int[] object(int x, int y, int mat) {
+        int s = mat == COMPUTER ? 64 : G; x -= Math.floorMod(x, G); y -= Math.floorMod(y, G);
+        if (!inside(x, y) || !inside(x + s - 1, y + s - 1)) return null;
+        for (int j = y; j < y + s; j += 2) for (int i = x; i < x + s; i += 2) if (solid(i, j)) return null;
+        int n = props.size();
+        if (mat == COMPUTER) computer(x, y, hash(x, y) & 63); else crate(x, y, mat);
+        mark(x, y, x + s, y + s);
+        return props.size() > n ? props.get(props.size() - 1) : null;
     }
 }

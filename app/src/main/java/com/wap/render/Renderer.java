@@ -91,13 +91,14 @@ public final class Renderer {
                 for (int i = 0; i < 12; i++) { P p = part(SPARK, f.x, f.y, (r.nextFloat() - .5f) * 7, -r.nextFloat() * 5, 16, 1, 0xFFFFFFFF); p.g = .15f; }
                 break; }
             case Fx.CHARGE: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? (Wpn.ALL[(int) f.b].trap ? "TRAMPA LISTA" : "CARGADO") : Wpn.ALL[(int) f.b].name; v.labelT = LABEL; break; }
-            case Fx.LASSO: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "¡ATRAPADO!" : "¡LIBRE!"; v.labelT = LABEL;
+            case Fx.LASSO: { RobotArt.View v = views[f.who]; v.label = f.a == 1 ? "¡ATRAPADO!" : f.a == 2 ? "¡SALTA!" : "¡LIBRE!"; v.labelT = LABEL;
                 for (int i = 0; i < 10; i++) { float a = i * .628f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3, (float) Math.sin(a) * 3, 12, 1, f.a > 0 ? 0xFF7FE8FF : 0xFFFFFFFF); p.g = 0; }
                 break; }
             case Fx.TRAP: {
                 if (f.a == 0) booms.add(new float[]{f.x, f.y - 6, 22, 0, 0, 3});
                 else { RobotArt.View v = views[f.who]; v.label = "¡ATRAPADO!"; v.labelT = LABEL; booms.add(new float[]{f.x, f.y - 30, 46, 0, 0, 1}); if (!reduceMotion) shake = Math.min(14, shake + 6); }
                 break; }
+            case Fx.SPLASH: for (int i = 0; i < 6 + (int) f.a * 2; i++) { float a = -1.57f + (r.nextFloat() - .5f) * 1.6f, v = 1 + r.nextFloat() * f.a * .5f; P p = part(SQUARE, f.x + (r.nextFloat() - .5f) * 10, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v, 24 + r.nextInt(12), 1.5f, r.nextBoolean() ? 0xFFBFE4FF : 0xFF7FB8FF); p.g = .18f; } break;
             case Fx.WALL: { P p = part(DUST, f.x, f.y, 0, -.3f, 14, 2, 0x88E2E7EE); p.g = 0; break; }
             case Fx.HOOK: if (f.a == 0) { RobotArt.View v = views[f.who]; v.label = "GANCHO"; v.labelT = LABEL; } break;
             case Fx.HIT: for (int i = 0; i < 7; i++) { float a = r.nextFloat() * 6.28f, v = 2 + r.nextFloat() * 3; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v, 10 + r.nextInt(6), 1, 0xFFFFE9A0); p.g = .1f; } break;
@@ -139,6 +140,7 @@ public final class Renderer {
     /** Estelas de luz detrás de los proyectiles. */
     /** Las estelas solo van detrás de lo lento: en lo rápido se veían como puntitos. */
     void trails(World w) {
+        for (Robot o : w.robots) if (o.alive() && o.wet && w.tick % 12 == o.id * 6) { P p = part(DUST, o.px + o.facing * 4, o.py - 46, (r.nextFloat() - .5f) * .3f, -.6f, 40, 1.4f, 0x99E8F6FF); p.g = 0; } // burbujas
         for (Robot o : w.robots) if (o.alive() && o.beamT > 0 && w.tick % 2 == 0) { float a = r.nextFloat() * 6.28f, v = 1 + r.nextFloat() * 2.5f; P p = part(SPARK, o.beamX, o.beamY, (float) Math.cos(a) * v, (float) Math.sin(a) * v, 10, 1, r.nextBoolean() ? 0xFFFFB040 : 0xFF8FE9FF); p.g = 0; }
         for (Shot s : w.shots) {
             if (s.wait > 0) continue;
@@ -188,8 +190,9 @@ public final class Renderer {
     }
     /** El mundo se dibuja suavizado, con zoom libre; solo la interfaz queda en pixel art. */
     public void drawWorld(Gfx g, World w, int who) {
-        zoom = g.h() / 280f; vw = g.w() / zoom; vh = g.h() / zoom;
-        camera(w, who);
+        zoom = g.h() / 280f * zoomMul; vw = g.w() / zoom; vh = g.h() / zoom;
+        if (freeCam) { camX = Math.max(vw / 2f, Math.min(Terrain.W - vw / 2f, camX)); camY = Math.max(vh / 2f, Math.min(Terrain.H - vh / 2f, camY)); if (vw > Terrain.W) camX = Terrain.W / 2f; if (vh > Terrain.H) camY = Terrain.H / 2f; }
+        else camera(w, who);
         float x0 = camX - vw / 2f, y0 = camY - vh / 2f; vx0 = x0; vy0 = y0;
         g.clear(0xFFC7D2E0);
         g.save(); g.scale(zoom, zoom);
@@ -218,6 +221,7 @@ public final class Renderer {
             if (o.rope != 0) { float hx = o.px + o.facing * 12, hy = o.py - 33; g.line(hx, hy, o.rx, o.ry, INK, 1.1f); g.circle(o.rx, o.ry, 2.4f, 0xFFFFFFFF, INK, .7f); }
             RobotArt.draw(g, views[i], o, RobotArt.COLOR[i]);
         }
+        water(g, w, x0, y0);
         for (P p : ps) {
             float k = p.life / p.max;
             if (p.kind == SQUARE) g.rect(p.x, p.y, p.size, p.size, p.color);
@@ -261,6 +265,18 @@ public final class Renderer {
     }
     /** Nombres de los jugadores (en línea se dibujan sobre cada personaje). */
     public String[] names = {"PLAYER 1", "PLAYER 2"}; public boolean showNames;
+    /** Editor de niveles: cámara libre y zoom propio. */
+    public boolean freeCam; public float zoomMul = 1;
+    /** Agua: celeste translúcido desde la superficie hacia abajo, con una línea ondulada. */
+    void water(Gfx g, World w, float x0, float y0) {
+        if (w.water < 0) return; float top = w.water;
+        g.rect(x0, top, vw, Terrain.H - top, 0x553C8CFF);
+        int n = (int) (vw / 6) + 2; float[] q = new float[(n + 2) * 2]; int k = 0;
+        for (int i = 0; i <= n; i++) { float x = x0 + i * 6; q[k++] = x; q[k++] = top + (float) Math.sin(x * .07f + w.tick * .08f) * 1.4f; }
+        q[k++] = x0 + n * 6; q[k++] = top + 6; float[] wave = java.util.Arrays.copyOf(q, k);
+        g.poly(wave, 0x6687C4FF, 0, 0);
+        for (int i = 0; i + 3 < (n + 1) * 2; i += 2) g.line(q[i], q[i + 1], q[i + 2], q[i + 3], 0xCCE8F6FF, 1.2f);
+    }
     /** Modo liviano: si el teléfono no alcanza a dibujar a tiempo, menos partículas y luces más simples. */
     public boolean lite;
     /** Avisos de bajas arriba de la pantalla. */

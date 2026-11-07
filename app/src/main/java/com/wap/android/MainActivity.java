@@ -38,6 +38,7 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
                 });
             }
         };
+        app.files = new DiskFiles(new java.io.File(getFilesDir(), "niveles"));
         app.up = new AppUpdater(this); ((AppUpdater) app.up).check();
         view = new GameView(this, app); setContentView(view); view.requestFocus();
         im = (InputManager) getSystemService(INPUT_SERVICE); im.registerInputDeviceListener(this, null); checkPads();

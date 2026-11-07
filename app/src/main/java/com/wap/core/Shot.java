@@ -12,7 +12,12 @@ public final class Shot {
         if (w.smoke && age % 2 == 0) g.fx(Fx.SMOKE, x, y, 0, 0);
         if (w.look == Wpn.FLAME && age % 3 == 0 && w.burn) g.fx(Fx.SMOKE, x, y - 3, 1, 0);
         if (w.dropEvery > 0 && age % w.dropEvery == 0) g.spawn(w.splinter, owner, x, y, 0, 1.5f);
-        if (!stuck) { vy += w.grav; vx *= w.drag; vy *= w.drag; }
+        if (!stuck) {
+            if (g.wet(y)) { // bajo el agua: menos gravedad y más roce; el fuego se apaga
+                if (w.look == Wpn.FLAME) { dead = true; return; }
+                vy += w.grav * .4f; vx *= w.drag * .985f; vy *= w.drag * .985f;
+            } else { vy += w.grav; vx *= w.drag; vy *= w.drag; }
+        }
         if (w.sticky) {
             if (w.trigger > 0 && age > 40) for (Robot r : g.robots) if (r.alive() && near(r, w.trigger)) { explode(g); return; }
             if (w.burn) for (Robot r : g.robots) if (r.alive() && age % 6 == 0 && near(r, 14)) r.damage(g, w.dmg * 3, 0, -.2f, owner, x, y);

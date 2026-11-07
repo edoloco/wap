@@ -3,21 +3,38 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 13;
+    public static final int RULES = 14;
     public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
     public final Robot[] robots = new Robot[2];
     public final ArrayList<Shot> shots = new ArrayList<>(); public final ArrayList<Bonus> bonus = new ArrayList<>(); public final ArrayList<Prop> props = new ArrayList<>();
     public final ArrayList<Fx> fx = new ArrayList<>(); public Fx lastFx;
     public boolean finished; public int winner = -1;
 
-    public World(int seed, int lives, Wpn[] a, Wpn[] b) {
-        rng = new Rng(seed); t.generate(rng);
+    /** Altura del agua (-1: sin agua). Bajo el agua se cae más lento y se corre más despacio. */
+    public int water = -1;
+    public World(int seed, int lives, Wpn[] a, Wpn[] b) { this(seed, lives, a, b, null); }
+    /** Partida en un nivel guardado (o aleatorio si level es null). */
+    public World(int seed, int lives, Wpn[] a, Wpn[] b, Level level) {
+        rng = new Rng(seed);
+        if (level != null) { level.apply(t); water = level.water; } else t.generate(rng);
         robots[0] = new Robot(0, lives); robots[1] = new Robot(1, lives);
         System.arraycopy(a, 0, robots[0].loadout, 0, Robot.SLOTS); System.arraycopy(b, 0, robots[1].loadout, 0, Robot.SLOTS);
         for (int[] q : t.props) props.add(new Prop(q));
         robots[1].px = -9999; robots[0].spawnAt(this); robots[1].spawnAt(this);
         robots[1].facing = robots[0].px < robots[1].px ? -1 : 1; robots[0].facing = -robots[1].facing;
     }
+    /** Editor: agrega un objeto ya puesto en el mapa. */
+    public void addProp(int[] q) { if (q != null) props.add(new Prop(q)); }
+    /** Editor: quita los objetos que toca un círculo. */
+    public void removeProps(int cx, int cy, int r) {
+        for (Prop p : props) if (!p.gone) {
+            float nx = Math.max(p.x, Math.min(cx, p.x + p.w)), ny = Math.max(p.y, Math.min(cy, p.y + p.h));
+            if ((nx - cx) * (nx - cx) + (ny - cy) * (ny - cy) <= r * r) { p.gone = true; t.erase(p.x, p.y, p.w, p.h); t.props.removeIf(q -> q[0] == p.x && q[1] == p.y); }
+        }
+        props.removeIf(p -> p.gone);
+    }
+    /** ¿Está bajo el agua ese punto? */
+    public boolean wet(float y) { return water >= 0 && y > water; }
     public Fx fx(int type, float x, float y, float a, int who) {
         Fx f = new Fx(); f.type = type; f.x = x; f.y = y; f.a = a; f.who = who; if (fx.size() < 800) fx.add(f); lastFx = f; return f;
     }
@@ -172,7 +189,7 @@ public final class World {
     public int hash() {
         int h = rng.s ^ tick;
         for (Robot r : robots) h = h * 31 + r.px * 7 + r.py * 13 + (int) (r.hp * 16) + r.lives + Float.floatToIntBits(r.vx) + r.armor;
-        h = h * 31 + shots.size();
+        h = h * 31 + shots.size() + water;
         for (Shot s : shots) h = h * 31 + Float.floatToIntBits(s.x) + 7 * Float.floatToIntBits(s.y);
         for (Prop p : props) h = h * 31 + Float.floatToIntBits(p.hp) + p.x * 17 + p.y * 3;
         for (Robot r : robots) h = h * 31 + r.stunT + 3 * r.thrownT + 5 * Float.floatToIntBits(r.vy);

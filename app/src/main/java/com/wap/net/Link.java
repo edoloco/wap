@@ -7,11 +7,15 @@ public final class Link implements Closeable {
     /** Datos de cada jugador al empezar: reglas, semilla, vidas, color y armas. */
     public static final class Hello {
         public int rules, seed, lives, color; public int[] slots = new int[0]; public String name = "";
-        void write(DataOutputStream o) throws IOException { o.writeInt(rules); o.writeInt(seed); o.writeInt(lives); o.writeInt(color); o.writeByte(slots.length); for (int s : slots) o.writeShort(s); o.writeUTF(name); }
+        /** Nivel del anfitrión (vacío: aleatorio). El invitado lo usa solo para esta partida. */
+        public byte[] level = new byte[0];
+        void write(DataOutputStream o) throws IOException { o.writeInt(rules); o.writeInt(seed); o.writeInt(lives); o.writeInt(color); o.writeByte(slots.length); for (int s : slots) o.writeShort(s); o.writeUTF(name); o.writeInt(level.length); o.write(level); }
         static Hello read(DataInputStream i) throws IOException {
             Hello h = new Hello(); h.rules = i.readInt(); h.seed = i.readInt(); h.lives = i.readInt(); h.color = i.readInt();
             int n = i.readUnsignedByte(); if (n > 8) throw new IOException("saludo inválido"); h.slots = new int[n];
-            for (int k = 0; k < n; k++) h.slots[k] = i.readShort(); h.name = i.readUTF(); return h;
+            for (int k = 0; k < n; k++) h.slots[k] = i.readShort(); h.name = i.readUTF();
+            int len = i.readInt(); if (len < 0 || len > 16 << 20) throw new IOException("nivel demasiado grande");
+            h.level = new byte[len]; i.readFully(h.level); return h;
         }
     }
     private final Socket s; private final DataInputStream in; private final DataOutputStream out; private final Object wl = new Object();
@@ -26,7 +30,7 @@ public final class Link implements Closeable {
     public static Link connect(String host, int port) throws IOException { Socket s = new Socket(); s.connect(new InetSocketAddress(host, port), 4000); return new Link(s); }
     public void send(Hello h) throws IOException { synchronized (wl) { out.writeByte(HELLO); h.write(out); out.flush(); } }
     public Hello readHello() throws IOException {
-        s.setSoTimeout(6000);
+        s.setSoTimeout(15000); // el saludo puede traer un nivel
         if (in.readByte() != HELLO) throw new IOException("protocolo distinto");
         Hello h = Hello.read(in); s.setSoTimeout(0); return h;
     }

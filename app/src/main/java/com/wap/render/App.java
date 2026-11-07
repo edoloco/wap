@@ -4,7 +4,7 @@ import com.wap.net.*;
 import java.util.ArrayList; import java.util.List;
 /** Pantallas y flujo de la aplicación. No conoce Android; recibe entradas y dibuja por Gfx. */
 public final class App {
-    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6;
+    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8;
     /** Servicios del teléfono para jugar en red. */
     public interface Device { String name(); void listen(boolean on);
         /** Pide un texto con el teclado del teléfono; done recibe el texto o null si se cancela. */
@@ -23,6 +23,13 @@ public final class App {
     static String key(int i) { return "arma" + (i == 3 ? 4 : i); } // conserva lo elegido en versiones anteriores
     public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey; public Updater up; public Device dev;
     String myName = ""; final String[] names = {"PLAYER 1", "PLAYER 2"};
+    /** Niveles guardados: archivos de la app. levelName es el elegido para jugar ("" = aleatorio). */
+    public Files files = new Files.Memory(); String levelName = ""; final Editor editor = new Editor(this);
+    /** Nivel que se está probando desde el editor (al terminar se vuelve al editor). */
+    String testing; Level testLevel;
+    public String levelName() { return levelName; }
+    /** Nivel recibido del otro teléfono en una partida en línea, para ofrecer conservarlo al final. */
+    Level received; boolean receivedSaved;
     int myColor = 0xFF5E5650, me; boolean online, hosting; Lockstep ls; Link link; Lan.Browser browser; Lan.Beacon beacon; java.net.ServerSocket server;
     volatile Link pending; volatile Link.Hello pendHost, pendGuest; volatile String netMsg = ""; String toast = ""; int toastT; volatile boolean busy;
     final Store st; final Audio au; public final TouchPad pad = new TouchPad(); public final Renderer ren = new Renderer();
@@ -35,7 +42,7 @@ public final class App {
         this.st = st; this.au = au;
         for (int i = 0; i < SLOTS; i++) { slots[i] = Wpn.index(st.get(key(i), DEF[i])); }
         try { myColor = 0xFF000000 | Integer.parseInt(st.get("traje", "5E5650"), 16); } catch (Exception e) { }
-        myName = clean(st.get("nombre", ""));
+        myName = clean(st.get("nombre", "")); levelName = st.get("nivel", "");
         try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
     }
     public void seed(int s) { seed = s; }
@@ -44,10 +51,63 @@ public final class App {
         Rng r = new Rng(seed ^ 0x5A5A);
         for (int i = 0; i < SLOTS; i++) { a[i] = Wpn.ALL[slots[i]]; b[i] = Wpn.ALL[r.i(Wpn.ALL.length)]; }
         RobotArt.COLOR[0] = myColor; RobotArt.COLOR[1] = near(myColor, 0xFF1266FF) ? 0xFFFF0000 : 0xFF1266FF; me = 0; online = false;
-        w = new World(seed, LIVES[livesIx] , a, b); bot = new Bot(seed + 1, 1, SKILL[level]); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
+        Level lv = testing != null ? testLevel : levelName.isEmpty() ? null : loadLevel(levelName);
+        if (lv == null && testing == null && !levelName.isEmpty()) { levelName = ""; save(); } // el nivel elegido ya no existe
+        w = new World(seed, LIVES[livesIx], a, b, lv); bot = new Bot(seed + 1, 1, SKILL[level]); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
         setNames(or(myName, "PLAYER 1"), "PLAYER 2", false);
         pad.clear();
     }
+    // ---------- Niveles guardados
+    static String file(String name) { return name.replaceAll("[^A-Z0-9ÁÉÍÓÚÑÜ _-]", "_") + ".wapn"; }
+    public List<String> levelNames() {
+        List<String> l = new ArrayList<>();
+        for (String f : files.list()) if (f.endsWith(".wapn")) { Level v = loadFile(f); if (v != null) l.add(v.name); }
+        java.util.Collections.sort(l); return l;
+    }
+    Level loadFile(String f) { try { byte[] d = files.read(f); return d == null ? null : Level.load(d); } catch (Exception e) { return null; } }
+    Level loadLevel(String name) { return loadFile(file(name)); }
+    void saveLevel(Level l) { files.write(file(l.name), l.save()); }
+    String unusedName(String base) { List<String> l = levelNames(); for (int i = 1; ; i++) { String n = base + " " + i; if (!l.contains(n)) return n; } }
+    public void openEditor(Level l) { editor.open(l); go(EDIT); }
+    /** Sale del editor: guarda (o borra) el nivel y vuelve a la lista. */
+    public void leaveEditor(boolean delete) {
+        if (delete) { files.delete(file(editor.name)); if (editor.name.equals(levelName)) { levelName = ""; save(); } toast = "NIVEL BORRADO"; }
+        else { saveLevel(editor.level()); toast = "NIVEL GUARDADO"; }
+        toastT = 120; editor.close(); testing = null; go(LEVEL_LIST);
+    }
+    /** Prueba el nivel contra el rival; al terminar se vuelve al editor. */
+    void testLevel() { Level l = editor.level(); saveLevel(l); testLevel = l; testing = l.name; editor.close(); start(); }
+    void backToEditor() { Level l = testLevel; testing = null; testLevel = null; openEditor(l); }
+    void renameLevel() {
+        if (dev == null) return; final String old = editor.name;
+        dev.askText("Nombre del nivel", old, NAME_MAX, n -> {
+            if (n == null) return; n = clean(n); if (n.isEmpty() || n.equals(old)) return;
+            if (levelNames().contains(n)) { toast = "YA EXISTE UN NIVEL CON ESE NOMBRE"; toastT = 150; return; }
+            files.delete(file(old)); editor.name = n; saveLevel(editor.level()); if (old.equals(levelName)) { levelName = n; save(); }
+        });
+    }
+    /** Cambia el nivel para jugar: aleatorio y después los guardados. */
+    public void nextLevel() {
+        List<String> l = levelNames(); l.add(0, "");
+        int i = l.indexOf(levelName); levelName = l.get((i + 1) % l.size()); save();
+    }
+    void levels(Gfx g) {
+        sky(g);
+        txtS(g, "EDITOR DE NIVELES", W / 2, 30 * u, 24 * u, GOLD, 0);
+        List<String> l = new ArrayList<>(); List<Runnable> a = new ArrayList<>();
+        l.add("NUEVO NIVEL VACÍO"); a.add(() -> openEditor(Level.empty(unusedName("NIVEL"))));
+        l.add("NUEVO DESDE UNO ALEATORIO"); a.add(() -> { seed = seed * 1103515245 + 12345; openEditor(Level.random(seed, unusedName("NIVEL"))); });
+        List<String> names = levelNames(); int per = 4, pages = Math.max(1, (names.size() + per - 1) / per); levelPage = Math.min(levelPage, pages - 1);
+        for (int i = levelPage * per; i < Math.min(names.size(), levelPage * per + per); i++) { final String n = names.get(i); l.add("EDITAR  " + n); a.add(() -> { Level v = loadLevel(n); if (v != null) openEditor(v); }); }
+        if (pages > 1) { l.add("MÁS NIVELES (" + (levelPage + 1) + "/" + pages + ")"); a.add(() -> { levelPage = (levelPage + 1) % Math.max(1, (levelNames().size() + 3) / 4); focus = 0; }); }
+        l.add("VOLVER"); a.add(() -> go(TITLE));
+        menu(g, W / 2 - 150 * u, 46 * u, 300 * u, l.toArray(new String[0]), a.toArray(new Runnable[0]));
+        if (toastT > 0) { g.rect(0, H - 16, W, 16, MINT); txtS(g, toast, W / 2, H - 4, 8, CREAM, 0); }
+    }
+    int levelPage;
+    /** Para las pruebas: elegir herramienta y aplicarla en un punto del mapa. */
+    public void editorTool(int t) { editor.tool = t; }
+    public void editorApply(int x, int y) { editor.apply(x, y, true); }
     static final int NAME_MAX = 12;
     /** Nombre en mayúsculas, sin saltos de línea y con largo máximo. */
     static String clean(String n) { if (n == null) return ""; n = n.replaceAll("[\\r\\n\\t|]", " ").trim().toUpperCase(); return n.length() > NAME_MAX ? n.substring(0, NAME_MAX) : n; }
@@ -60,7 +120,9 @@ public final class App {
     // ---------- Partida en red local
     Link.Hello hello(int seedV, int lives) {
         Link.Hello h = new Link.Hello(); h.rules = World.RULES; h.seed = seedV; h.lives = lives; h.color = myColor; h.slots = slots.clone();
-        h.name = myName; return h;
+        h.name = myName;
+        if (seedV != 0 && !levelName.isEmpty()) { Level lv = loadLevel(levelName); if (lv != null) h.level = lv.save(); } // el anfitrión manda su nivel
+        return h;
     }
     void openLobby() {
         go(LOBBY); netMsg = "Busca una sala o crea la tuya. Ambos teléfonos deben estar en la misma red Wi-Fi."; if (dev != null) dev.listen(true);
@@ -107,11 +169,20 @@ public final class App {
         for (int i = 0; i < SLOTS; i++) { a[i] = Wpn.ALL[Math.floorMod(h.slots[i], Wpn.ALL.length)]; b[i] = Wpn.ALL[Math.floorMod(c.slots[i], Wpn.ALL.length)]; }
         int peer = me == 0 ? c.color : h.color; if (near(peer, myColor)) peer = near(myColor, 0xFF1266FF) ? 0xFFFF0000 : 0xFF1266FF;
         RobotArt.COLOR[me] = myColor; RobotArt.COLOR[1 - me] = peer;
-        w = new World(h.seed, h.lives, a, b); bot = null; link = l; l.startReader(); ls = new Lockstep(l, me); online = true;
+        Level lv = null; received = null; receivedSaved = false;
+        if (h.level.length > 0) try { lv = Level.load(h.level); } catch (Exception e) { endOnline("El nivel del otro teléfono no se pudo abrir."); return; }
+        if (lv != null && me == 1) { received = lv; receivedSaved = levelNames().contains(lv.name) && java.util.Arrays.equals(loadLevel(lv.name).save(), h.level); } // se descarga solo para esta partida
+        w = new World(h.seed, h.lives, a, b, lv); bot = null; link = l; l.startReader(); ls = new Lockstep(l, me); online = true;
         ren.reset(w); cd = 90; screen = PLAY; overT = 0; pad.clear();
         String hn = or(h.name, "PLAYER 1"), cn = or(c.name, "PLAYER 2"); if (hn.equals(cn)) cn = cn.length() < NAME_MAX - 1 ? cn + " 2" : "PLAYER 2";
         setNames(hn, cn, true); // en línea se ve el nombre de cada uno sobre su personaje
         if (dev != null) dev.lowLatency(true);
+    }
+    /** Guarda el nivel recibido (con otro nombre si ya hay uno igual). */
+    void keepReceived() {
+        Level l = received; if (l == null) return;
+        if (levelNames().contains(l.name)) l.name = unusedName(l.name.length() > NAME_MAX - 3 ? l.name.substring(0, NAME_MAX - 3) : l.name);
+        saveLevel(l); receivedSaved = true; toast = "NIVEL GUARDADO: " + l.name; endOnline(null); toastT = 200;
     }
     void endOnline(String msg) {
         if (link != null) link.close(); link = null; ls = null; online = false; if (dev != null) dev.lowLatency(false);
@@ -124,11 +195,14 @@ public final class App {
         if (screen == LOBBY) { closeLobby(); go(TITLE); return; }
         if (screen == OVER && online) { endOnline(null); return; }
         if (screen == PAINT) { save(); go(TITLE); return; }
+        if (screen == EDIT) { leaveEditor(false); return; }
+        if (screen == LEVEL_LIST) { go(TITLE); return; }
+        if (testing != null && (screen == OVER || screen == PAUSE)) { backToEditor(); return; }
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); go(TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
-    void go(int s) { screen = s; focus = 0; pad.clear(); }
+    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
+    public void go(int s) { screen = s; focus = 0; pad.clear(); }
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
     public void pointer(int id, float x, float y, boolean down) { pad.pointer(id, x / uiScale, y / uiScale, down); }
     public boolean tap(float x, float y) {
@@ -161,6 +235,7 @@ public final class App {
             }
         } else if (screen == ARMS) navArms(press);
         else if (screen == PAINT) navPaint(press, keys);
+        else if (screen == EDIT) editor.tick(keys, press);
         else navList(press);
     }
     void sounds() {
@@ -176,7 +251,8 @@ public final class App {
             case Fx.PICK: au.play(Audio.PICK); break;
             case Fx.DEATH: { au.play(Audio.DEATH); int d = (int) f.a, k = (int) f.b; // aviso arriba de la pantalla
                 ren.feed(k == d || k < 0 ? names[d] + " SE BANEÓ DE LA VIDA" : names[d] + " FUE ELIMINADO POR " + names[k], RobotArt.COLOR[d]); break; }
-            case Fx.LASSO: au.play(f.a > 0 ? Audio.HOOK : Audio.JUMP); break;
+            case Fx.SPLASH: au.play(Audio.JUMP); break;
+            case Fx.LASSO: au.play(f.a == 1 ? Audio.HOOK : Audio.JUMP); break;
             case Fx.TRAP: au.play(f.a > 0 ? Audio.BIG : Audio.PICK); break;
             default:
         }
@@ -203,7 +279,11 @@ public final class App {
         if ((p & (Input.A | Input.B)) != 0) back();
     }
     /** Arrastre sobre las barras de color. */
+    /** Dedo que toca, se mueve o se levanta (el editor dibuja con esto). */
+    public void down(float x, float y) { if (screen == EDIT) editor.down(x, y); }
+    public void up() { if (screen == EDIT) editor.up(); }
     public void drag(float x, float y) {
+        if (screen == EDIT) { editor.drag(x, y); return; }
         if (screen != PAINT) return;
         x /= uiScale; y /= uiScale;
         for (int i = 0; i < 3; i++) {
@@ -301,7 +381,7 @@ public final class App {
     public void draw(Gfx g) {
         int s = Math.max(1, Math.round(g.h() / 190f)); uiScale = s;
         boolean game = screen == PLAY || screen == PAUSE || screen == OVER;
-        if (game) ren.drawWorld(g, w, me); else g.clear(DEEP);
+        if (game) ren.drawWorld(g, w, me); else if (screen == EDIT) ren.drawWorld(g, editor.w, 0); else g.clear(DEEP);
         g.beginPixels((g.w() + s - 1) / s, (g.h() + s - 1) / s); // toda la interfaz va en pixel art
         W = (g.w() + s - 1) / s; H = (g.h() + s - 1) / s; u = H / 360f; pad.layout(W, H); btns.clear(); acts.clear(); heroV = null;
         switch (screen) {
@@ -309,6 +389,8 @@ public final class App {
             case ARMS: arms(g); break;
             case PAINT: paint(g); break;
             case LOBBY: lobby(g); break;
+            case EDIT: editor.draw(g); if (toastT > 0) { g.rect(0, 26, W, 14, MINT); txtS(g, toast, W / 2, 37, 8, CREAM, 0); } break;
+            case LEVEL_LIST: levels(g); break;
             default:
                 ren.overlay(g, s); hud(g);
                 if (online && ls.stall > 45) txtS(g, "ESPERANDO AL OTRO TELÉFONO...", W / 2, H * .5f, 16 * u, CREAM, 0);
@@ -324,12 +406,18 @@ public final class App {
                 } else if (screen == PAUSE) {
                     veil(g); txtS(g, "PAUSA", W / 2, H * .3f, 40 * u, GOLD, 0);
                     if (online) { txt(g, "LA PARTIDA SIGUE MIENTRAS ESTÁS AQUÍ", W / 2, H * .37f, 12 * u, CREAM, 0); menu(g, W / 2 - 120 * u, H * .42f, 240 * u, new String[]{"SEGUIR", "SALIR DE LA PARTIDA"}, new Runnable[]{() -> screen = PLAY, () -> endOnline(null)}); }
+                    else if (testing != null) menu(g, W / 2 - 110 * u, H * .4f, 220 * u, new String[]{"SEGUIR", "VOLVER AL EDITOR"}, new Runnable[]{() -> screen = PLAY, this::backToEditor});
                     else menu(g, W / 2 - 110 * u, H * .4f, 220 * u, new String[]{"SEGUIR", "VOLVER AL MENÚ"}, new Runnable[]{() -> screen = PLAY, () -> go(TITLE)});
                 } else {
                     veil(g); boolean win = w.winner == me;
                     txtS(g, win ? "¡GANASTE!" : "PERDISTE", W / 2, H * .28f, 48 * u, win ? GOLD : RED, 0);
                     txt(g, "BAJAS " + w.robots[me].kills + "   MUERTES " + w.robots[me].deaths, W / 2, H * .37f, 14 * u, CREAM, 0);
-                    if (online) menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"VOLVER AL MENÚ"}, new Runnable[]{() -> endOnline(null)});
+                    if (online && received != null && !receivedSaved) { // nivel del otro teléfono: ¿conservarlo?
+                        txt(g, "¿QUIERES CONSERVAR EL NIVEL \"" + received.name + "\"?", W / 2, H * .44f, 12 * u, GOLD, 0);
+                        menu(g, W / 2 - 110 * u, H * .48f, 220 * u, new String[]{"SÍ, GUARDARLO", "NO, VOLVER AL MENÚ"}, new Runnable[]{this::keepReceived, () -> endOnline(null)});
+                    }
+                    else if (online) menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"VOLVER AL MENÚ"}, new Runnable[]{() -> endOnline(null)});
+                    else if (testing != null) menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"VOLVER AL EDITOR", "JUGAR OTRA VEZ"}, new Runnable[]{this::backToEditor, this::start});
                     else menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"REVANCHA", "VOLVER AL MENÚ"}, new Runnable[]{this::start, () -> go(TITLE)});
                 }
         }
@@ -348,7 +436,7 @@ public final class App {
     }
     void veil(Gfx g) { g.rect(0, 0, W, H, 0xC0101330); }
     void menu(Gfx g, float x, float y, float w, String[] l, Runnable[] a) {
-        float h = (l.length > 6 ? 31 : l.length > 5 ? 34 : l.length > 4 ? 37 : 40) * u, gap = (l.length > 6 ? 5 : l.length > 4 ? 6 : 9) * u;
+        float h = (l.length > 7 ? 26 : l.length > 6 ? 31 : l.length > 5 ? 34 : l.length > 4 ? 37 : 40) * u, gap = (l.length > 7 ? 4 : l.length > 6 ? 5 : l.length > 4 ? 6 : 9) * u;
         for (int i = 0; i < l.length; i++) {
             boolean f = i == focus && padSeen;
             if (f) box(g, x, y, w, h, RED, 0xFFFF8A8F, 0xFF8E1520); else box(g, x, y, w, h, BLUE, SKY, NAVY);
@@ -362,10 +450,11 @@ public final class App {
         hero(g, hero, W * .25f, H * .92f);
         float x = W * .5f, wd = W * .44f;
         txtS(g, "WAP", x, H * .17f, 48 * u, GOLD, -1);
-        String[] l = {"JUGAR", "EN LÍNEA (RED LOCAL)", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
-        Runnable[] a = {this::start, this::openLobby, () -> go(ARMS), () -> go(PAINT), () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }, () -> { level = (level + 1) % 3; save(); }};
-        if (up != null) { l = new String[]{l[0], l[1], l[2], l[3], l[4], l[5], up.label()}; a = new Runnable[]{a[0], a[1], a[2], a[3], a[4], a[5], () -> up.act()}; txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
-        menu(g, x, H * .21f, wd, l, a);
+        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA (RED LOCAL)", "NIVEL  " + (levelName.isEmpty() ? "ALEATORIO" : levelName), "EDITOR DE NIVELES", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + LIVES[livesIx] + "   RIVAL  " + LEVELS[level]));
+        List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, this::nextLevel, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> go(ARMS), () -> go(PAINT),
+            () -> { if (livesIx == LIVES.length - 1) { livesIx = 0; level = (level + 1) % 3; } else livesIx++; save(); }));
+        if (up != null) { l.add(up.label()); a.add(() -> up.act()); txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
+        menu(g, x, H * .21f, wd, l.toArray(new String[0]), a.toArray(new Runnable[0]));
         if (toastT > 0) { g.rect(0, H - 16, W, 16, RED); txtS(g, toast, W / 2, H - 4, 8, CREAM, 0); }
     }
     void lobby(Gfx g) {
