@@ -39,7 +39,7 @@ La clave en `keystore/` es solo de desarrollo y pública; para Play Store hay qu
 ## Reglas entre personajes
 Los personajes no se atraviesan: uno puede pararse sobre el otro. Caer encima es un pisotón: quita poca vida y aturde.
 Una barrida lanza al rival. Si te golpean mientras te deslizas, sales lanzado y pierdes la mitad del daño.
-El arma DROP agarra al rival que está al frente y lo lanza hacia atrás; al chocar pierde entre 12 % y 25 % de vida según la fuerza.
+CANNON PUNCH lanza un guante de box del color del traje; si golpea al rival lo despide en el sentido del golpe y al chocar pierde entre 12 % y 25 % de vida. DEATH RAY dispara cinco cargas celestes que forman un rayo; BOUNCY LASER rebota en diagonal hasta 10 veces; FAN no hace daño, desvía balas y nunca se acaba. Las cajas y objetos se empujan con los golpes, caen si pierden apoyo y se rompen al agotar su resistencia.
 
 ## En línea (red local)
 Ambos teléfonos en la misma red Wi-Fi. Uno elige "Crear sala" y el otro la ve en la lista y se une.
