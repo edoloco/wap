@@ -21,7 +21,7 @@ public final class Renderer {
     public final RobotArt.View[] views = {new RobotArt.View(), new RobotArt.View()};
     final ArrayList<P> ps = new ArrayList<>(); final ArrayList<float[]> beams = new ArrayList<>(); final ArrayList<float[]> booms = new ArrayList<>();
     final Random r = new Random(7); final int[] px = new int[Terrain.TILE * Terrain.TILE];
-    public float camX = 900, camY = 500, shake; public int zoom = 3; int vx0, vy0, vw, vh; boolean first = true;
+    public float camX = 900, camY = 500, shake; public float zoom = 3; float vx0, vy0, vw, vh; boolean first = true;
 
     public void reset(World w) { ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; bgNew = true; java.util.Arrays.fill(loaded, false); }
     static int hash(int x, int y) { int h = x * 374761393 + y * 668265263; h = (h ^ h >> 13) * 1274126177; return h ^ h >> 16; }
@@ -36,8 +36,9 @@ public final class Renderer {
         for (int wy = ty * S; wy < ty * S + S; wy++) for (int wx = tx * S; wx < tx * S + S; wx++) {
             int c = 0, k = t.at(wx, wy);
             if (wx >= Terrain.W || wy >= Terrain.H || k == 0 || k == Terrain.DECOR) c = 0;
+            else if (Terrain.isProp(k)) c = 0;
             else if (k == Terrain.DEBRIS) c = t.tex[wy * Terrain.W + wx] & 0xFFFFFF | 0x80000000;
-            else if (air(t, wx - 1, wy) || air(t, wx + 1, wy) || air(t, wx, wy - 1) || air(t, wx, wy + 1)) c = INK;
+            else if (air(t, wx - 1, wy) || air(t, wx + 1, wy) || air(t, wx, wy - 1) || air(t, wx, wy + 1) || Terrain.isProp(t.at(wx, wy - 1))) c = INK;
             else if (!Terrain.isProp(k) && air(t, wx, wy - 2)) c = tone(t.tex[wy * Terrain.W + wx], 1.25f, 30);
             else c = t.tex[wy * Terrain.W + wx];
             px[q++] = c;
@@ -127,19 +128,18 @@ public final class Renderer {
         camX += (tx - camX) * .1f; camY += (ty - camY) * .12f;
         camX = Math.max(vw / 2f, Math.min(Terrain.W - vw / 2f, camX)); camY = Math.max(vh / 2f, Math.min(Terrain.H - vh / 2f, camY));
     }
-    /** El mundo se dibuja a 1 píxel por unidad y se amplía por un factor entero: todo queda en pixel art. */
+    /** El mundo se dibuja suavizado, con zoom libre; solo la interfaz queda en pixel art. */
     public void drawWorld(Gfx g, World w, int who) {
-        zoom = Math.max(1, Math.round(g.h() / 280f)); vw = (g.w() + zoom - 1) / zoom; vh = (g.h() + zoom - 1) / zoom;
+        zoom = g.h() / 280f; vw = g.w() / zoom; vh = g.h() / zoom;
         camera(w, who);
-        int x0 = Math.round(camX - vw / 2f), y0 = Math.round(camY - vh / 2f); vx0 = x0; vy0 = y0;
+        float x0 = camX - vw / 2f, y0 = camY - vh / 2f; vx0 = x0; vy0 = y0;
         g.clear(0xFFC7D2E0);
-        g.beginPixels(vw, vh);
-        g.save();
-        int sx = shake > .6f ? Math.round((r.nextFloat() - .5f) * shake) : 0, sy = shake > .6f ? Math.round((r.nextFloat() - .5f) * shake) : 0;
+        g.save(); g.scale(zoom, zoom);
+        float sx = shake > .3f ? (r.nextFloat() - .5f) * shake : 0, sy = shake > .3f ? (r.nextFloat() - .5f) * shake : 0;
         g.translate(-x0 + sx, -y0 + sy);
         if (bgNew) paintBg();
-        int bx0 = Math.round(x0 * .55f), by0 = Math.round(y0 * .55f);
-        for (int q = Math.floorDiv(by0, BG); q * BG < by0 + vh; q++) for (int k = Math.floorDiv(bx0, BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
+        float bx0 = x0 * .55f, by0 = y0 * .55f;
+        for (int q = (int) Math.floor(by0 / BG); q * BG < by0 + vh; q++) for (int k = (int) Math.floor(bx0 / BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
         for (Bonus b : w.bonus) crate(g, b.x, b.y, b.kind);
         for (Shot s : w.shots) shot(g, s);
         int S = Terrain.TILE, budget = 3; Terrain t = w.t;
@@ -149,7 +149,7 @@ public final class Renderer {
                 if (d) { fillTile(t, tx, ty); t.dirty[id] = false; loaded[id] = true; }
                 g.tile(id, px, S, d, tx * S, ty * S);
             }
-        for (Prop p : w.props) if (!p.gone && p.x < x0 + vw && p.x + p.w > x0 && p.y < y0 + vh && p.y + p.h > y0) damage(g, p);
+        for (Prop p : w.props) if (!p.gone && p.x < x0 + vw && p.x + p.w > x0 && p.y < y0 + vh && p.y + p.h > y0) { prop(g, p); damage(g, p); }
         for (P p : ps) if (p.kind == CHUNK) {
             g.save(); g.translate(p.x, p.y); g.rotate(p.rot); float z = p.size, k = p.slot % 3 * .2f + .6f;
             g.poly(new float[]{-z, -z * k, z * .7f, -z, z, z * .4f, -z * .3f, z * k}, p.color, 0x66141414, .5f); g.restore();
@@ -169,9 +169,55 @@ public final class Renderer {
         for (float[] b : beams) { boolean gs = b[5] == 1; g.line(b[0], b[1], b[2], b[3], gs ? 0xFF1266FF : 0xFFFF2040, gs ? b[4] * .35f : 1.6f); g.line(b[0], b[1], b[2], b[3], 0xFFFFFFFF, gs ? b[4] * .12f : .6f); }
         for (float[] b : booms) boom(g, b);
         g.restore();
-        labels(g, w, x0, y0);
-        pointer(g, w, who, x0, y0);
-        g.endPixels(0, 0, zoom);
+        lastW = w; lastWho = who;
+    }
+    World lastW; int lastWho;
+    /** Nombres y flecha del rival, dibujados en la capa de interfaz (pixel art) de escala s. */
+    public void overlay(Gfx g, int s) {
+        if (lastW == null) return;
+        labels(g, lastW, s); pointer(g, lastW, lastWho, s);
+    }
+    static final int OUT = INK; static final float OW = 1.1f;
+    /** Objetos del escenario dibujados en vector, encima del mapa. */
+    void prop(Gfx g, Prop p) {
+        float x = p.x, y = p.y, w = p.w, h = p.h;
+        switch (p.kind) {
+            case Terrain.COMPUTER: {
+                g.rrect(x + .5f, y + .5f, w - 1, h - 1, 5, 0xFF6B6B6B, OUT, OW);
+                g.rrect(x + 3, y + 3, w - 6, h - 6, 4, 0xFF5A5A5A, 0, 0);
+                g.rrect(x + 6, y + 6, w - 12, 22, 2, 0xFF8A8A8A, OUT, OW * .8f);
+                g.rect(x + 9, y + 9, w - 18, 16, 0xFF4E4E4E);
+                float[] q = new float[22]; int ph = (p.x / 7 + (int) (p.hp * 3)) % 9;
+                for (int i = 0; i < 11; i++) { q[i * 2] = x + 10 + i * (w - 20) / 10f; q[i * 2 + 1] = y + 17 + (float) Math.sin(i * 1.3 + ph) * 4 * (i % 3 == 1 ? 1.4f : .7f); }
+                for (int i = 0; i < 10; i++) g.line(q[i * 2], q[i * 2 + 1], q[i * 2 + 2], q[i * 2 + 3], 0xFF2EE85A, 1.1f);
+                int[] tone = {0xFFFFE23A, 0xFFFF2FD2, 0xFF2FC6FF, 0xFF3DDC97};
+                for (int i = 0; i < 4; i++) { g.rect(x + 25 + i * 4, y + 33, 3, 3, tone[i]); g.rect(x + 25 + i * 4, y + 37, 3, 3, tone[(i + 2) % 4]); }
+                reel(g, x + 15, y + 47); reel(g, x + w - 15, y + 47);
+                break; }
+            case Terrain.CRATE: {
+                g.rect(x, y, w, h, OUT); g.rect(x + 1, y + 1, w - 2, h - 2, 0xFFCB8C3C);
+                g.rect(x + 1, y + 1, w - 2, 4, 0xFFE3AD62); g.rect(x + 1, y + h - 5, w - 2, 4, 0xFFA66D29);
+                g.line(x + 5, y + 6, x + w - 5, y + h - 6, 0xFF7D4E18, 2.6f); g.line(x + w - 5, y + 6, x + 5, y + h - 6, 0xFF7D4E18, 2.6f);
+                g.rect(x + 1, y + 1, 4, h - 2, 0xFFB57A35); g.rect(x + w - 5, y + 1, 4, h - 2, 0xFFB57A35);
+                break; }
+            case Terrain.METAL: {
+                g.rrect(x + .5f, y + .5f, w - 1, h - 1, 2, 0xFF8D99A8, OUT, OW);
+                g.rect(x + 2, y + 2, w - 4, 3, 0xFFC1CBD7); g.rect(x + 2, y + h - 5, w - 4, 3, 0xFF5F6B7A);
+                for (int i = 0; i < 4; i++) g.circle(x + (i % 2 == 0 ? 6 : w - 6), y + (i < 2 ? 8 : h - 8), 1.6f, 0xFFDDE3EA, OUT, .6f);
+                break; }
+            case Terrain.STONE: {
+                g.rrect(x + .5f, y + .5f, w - 1, h - 1, 4, 0xFF9C9488, OUT, OW);
+                g.rrect(x + 3, y + 3, w - 6, 6, 3, 0xFFB8B0A3, 0, 0);
+                g.line(x + 4, y + h / 2, x + w - 4, y + h / 2, 0xFF5B554D, 1); g.line(x + w / 3, y + 4, x + w / 3, y + h / 2, 0xFF5B554D, 1); g.line(x + 2 * w / 3, y + h / 2, x + 2 * w / 3, y + h - 4, 0xFF5B554D, 1);
+                break; }
+            default:
+        }
+    }
+    /** Carrete de cinta: círculo blanco con tres ventanas negras. */
+    void reel(Gfx g, float x, float y) {
+        g.circle(x, y, 9, 0xFFFFFFFF, OUT, OW);
+        for (int i = 0; i < 3; i++) { double a = i * 2.094 - 1.57; g.circle(x + (float) Math.cos(a) * 4.6f, y + (float) Math.sin(a) * 4.6f, 2.1f, OUT, 0, 0); }
+        g.circle(x, y, 1.4f, OUT, 0, 0);
     }
     /** Grietas según la resistencia que le queda al objeto. */
     void damage(Gfx g, Prop p) {
@@ -187,15 +233,24 @@ public final class Renderer {
         }
     }
     /** Nombres sobre los personajes, en la pantalla para que se lean nítidos. */
-    /** Nombres sobre los personajes, con la fuente de pixel art. */
-    void labels(Gfx g, World w, int x0, int y0) {
+    /** Nombres sobre los personajes, con la fuente de pixel art, en la capa de interfaz de escala s. */
+    void labels(Gfx g, World w, int s) {
+        float lw = g.w(), k = zoom / s;
         for (int i = 0; i < 2; i++) {
             Robot o = w.robots[i]; RobotArt.View v = views[i];
             if (!o.alive() || v.labelT <= 0 || v.labelT < 8 && v.labelT % 2 == 0) continue;
-            float tw = PixelFont.width(v.label, 8); int ly = Math.round(o.py - o.h - 8 - (LABEL - v.labelT) / 6 - y0), lx = Math.round(Math.max(tw / 2 + 3, Math.min(vw - tw / 2 - 3, o.px - x0)));
+            float tw = PixelFont.width(v.label, 8); int ly = Math.round((o.py - o.h - 10 - (LABEL - v.labelT) / 6f - vy0) * k), lx = Math.round(Math.max(tw / 2 + 3, Math.min(lw - tw / 2 - 3, (o.px - vx0) * k)));
             g.rect(lx - tw / 2 - 2, ly - 9, tw + 4, 11, INK); g.rect(lx - tw / 2 - 2, ly + 2, tw + 4, 1, RobotArt.COLOR[i]);
             PixelFont.draw(g, v.label, lx, ly, 8, 0xFFFFF4D6, 0, 0);
         }
+    }
+    void pointer(Gfx g, World w, int who, int s) {
+        Robot e = w.robots[1 - who]; if (!e.alive()) return;
+        float k = zoom / s, lw = g.w(), lh = g.h(), sx = (e.px - vx0) * k, sy = (e.py - 30 - vy0) * k, m = 14;
+        if (sx > 0 && sx < lw && sy > 0 && sy < lh) return;
+        float cx = lw / 2f, cy = lh / 2f, dx = sx - cx, dy = sy - cy, q = Math.min((lw / 2f - m) / Math.max(1, Math.abs(dx)), (lh / 2f - m) / Math.max(1, Math.abs(dy)));
+        g.save(); g.translate(Math.round(cx + dx * q), Math.round(cy + dy * q)); g.rotate((float) Math.atan2(dy, dx));
+        g.poly(new float[]{7,0, -5,-6, -2,0, -5,6}, RobotArt.COLOR[1 - who], INK, 1); g.restore();
     }
     void boom(Gfx g, float[] b) {
         float k = b[3] / 15, R = b[2] * (.45f + .75f * (float) Math.sqrt(k)); int n = 11; float[] q = new float[n * 4];
@@ -238,13 +293,5 @@ public final class Renderer {
             case Wpn.SPARK: g.circle(s.x, s.y, 1.6f, 0xFFFFC020, INK, .4f); break;
             default: g.line(s.x, s.y, s.x - s.vx * .8f, s.y - s.vy * .8f, INK, 1.4f);
         }
-    }
-    void pointer(Gfx g, World w, int who, int x0, int y0) {
-        Robot e = w.robots[1 - who]; if (!e.alive()) return;
-        float sx = e.px - x0, sy = e.py - 30 - y0, m = 14;
-        if (sx > 0 && sx < vw && sy > 0 && sy < vh) return;
-        float cx = vw / 2f, cy = vh / 2f, dx = sx - cx, dy = sy - cy, k = Math.min((vw / 2f - m) / Math.max(1, Math.abs(dx)), (vh / 2f - m) / Math.max(1, Math.abs(dy)));
-        g.save(); g.translate(Math.round(cx + dx * k), Math.round(cy + dy * k)); g.rotate((float) Math.atan2(dy, dx));
-        g.poly(new float[]{7,0, -5,-6, -2,0, -5,6}, RobotArt.COLOR[1 - who], INK, 1); g.restore();
     }
 }

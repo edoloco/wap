@@ -22,7 +22,7 @@ public class Sim {
         public void rrect(float x,float y,float w,float h,float r,int f,int s,float sw){RoundRectangle2D.Float q=new RoundRectangle2D.Float(x,y,w,h,r*2,r*2);if(f!=0){c.setColor(col(f));c.fill(q);}if(s!=0){c.setColor(col(s));c.setStroke(new BasicStroke(sw(sw)));c.draw(q);}}
         public void text(String s,float x,float y,float z,int k,int a){c.setFont(new Font("SansSerif",Font.BOLD,12).deriveFont(z));c.setColor(col(k));float w=c.getFontMetrics().stringWidth(s);c.drawString(s,a==0?x-w/2:a>0?x-w:x,y);}
         public float textW(String s,float z){c.setFont(new Font("SansSerif",Font.BOLD,12).deriveFont(z));return c.getFontMetrics().stringWidth(s);}
-        public void tile(int id,int[] px,int S,boolean ch,float x,float y){BufferedImage b=tiles.get(id);if(b==null){b=new BufferedImage(S,S,BufferedImage.TYPE_INT_ARGB);tiles.put(id,b);ch=true;}if(ch)b.setRGB(0,0,S,S,px,0,S);c.drawImage(b,(int)x,(int)y,null);}
+        public void tile(int id,int[] px,int S,boolean ch,float x,float y){BufferedImage b=tiles.get(id);if(b==null){b=new BufferedImage(S,S,BufferedImage.TYPE_INT_ARGB);tiles.put(id,b);ch=true;}if(ch)b.setRGB(0,0,S,S,px,0,S);c.setRenderingHint(RenderingHints.KEY_INTERPOLATION,pix?RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR:RenderingHints.VALUE_INTERPOLATION_BILINEAR);c.drawImage(b,(int)x,(int)y,null);}
     }
     static Store store=new Store(){HashMap<String,String> m=new HashMap<>();public String get(String k,String d){return m.getOrDefault(k,d);}public void put(String k,String v){m.put(k,v);}};
     static Audio mute=i->{};
@@ -93,10 +93,17 @@ public class Sim {
             int before=count(w);float hp=e.hp;for(int t=0;t<3;t++){run(w,0,1);run(w,Input.A,1);run(w,Input.A,40);r.delay[3]=0;r.reload[3]=0;if(r.ammo[3]<=0)r.ammo[3]=1;run(w,0,240);}
             System.out.printf("  %-14s tierra %6d  daño %5.1f  disparos vivos %d%n",p.name,before-count(w),hp-e.hp+100*e.deaths,w.shots.size());}
     }
-    static void sheet(String out)throws Exception{int S=7,W=1540,H=420;BufferedImage b=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);J g=new J(b);g.clear(0xFFFFFFFF);g.beginPixels(W/S,H/S);int[] ticks={1,5,8,10,14};
-        for(int k=0;k<5;k++){World q=flat();Robot o=q.robots[0];for(int i=0;i<Robot.SLOTS;i++)o.loadout[i]=Wpn.ALL[0];RobotArt.View v=new RobotArt.View();int[] in=new int[2];in[0]=Input.A;int t=0;while(t<ticks[k]){q.step(in);if(q.fx.size()>0){for(Fx f:q.fx)if(f.type==Fx.FLASH)v.shotT=12;q.fx.clear();}RobotArt.update(v,o,q);in[0]=0;t++;}g.save();g.translate(22+k*40,55);RobotArt.drawPose(g,v,o.armor,RobotArt.COLOR[0],0);g.restore();}
-        World q=flat();Robot o=q.robots[0];RobotArt.View v=new RobotArt.View();for(int t=0;t<40;t++){q.step(new int[]{Input.RIGHT,0});RobotArt.update(v,o,q);}g.save();g.translate(205,55);RobotArt.drawPose(g,v,o.armor,RobotArt.COLOR[0],0);g.restore();
-        q=flat();o=q.robots[0];v=new RobotArt.View();q.step(new int[]{Input.B,0});for(int t=0;t<16;t++){q.step(new int[]{Input.B,0});RobotArt.update(v,o,q);}q.step(new int[]{0,0});for(int t=0;t<5;t++){q.step(new int[]{Input.B,0});RobotArt.update(v,o,q);}g.save();g.translate(205,55);g.restore();g.save();g.translate(185,20);RobotArt.drawPose(g,v,o.armor,RobotArt.COLOR[0],0);g.restore();g.endPixels(0,0,S);ImageIO.write(b,"png",new File(out,"poses.png"));}
+    static void sheet(String out)throws Exception{int W=1800,H=760;BufferedImage b=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);J g=new J(b);g.clear(0xFFFFFFFF);float S=5.2f;
+        java.util.List<Object[]> L=new java.util.ArrayList<>();
+        World q=flat();Robot o=q.robots[0];RobotArt.View v=new RobotArt.View();RobotArt.update(v,o,q);L.add(new Object[]{v,o.armor});
+        for(int f=0;f<4;f++){q=flat();o=q.robots[0];q.robots[1].px=1700;for(int t=0;t<30;t++)q.step(new int[]{Input.RIGHT,0});v=new RobotArt.View();v.phase=f*19+3-Math.abs(o.vx);RobotArt.update(v,o,q);L.add(new Object[]{v,o.armor});}
+        for(int k:new int[]{2,5,8,10,13,17}){q=flat();o=q.robots[0];q.robots[1].px=1700;v=new RobotArt.View();int[] in={Input.A,0};for(int t=0;t<k;t++){q.step(in);for(Fx f:q.fx)if(f.type==Fx.FLASH)v.shotT=12;q.fx.clear();RobotArt.update(v,o,q);in[0]=0;}L.add(new Object[]{v,o.armor});}
+        q=flat();o=q.robots[0];q.robots[1].px=1700;v=new RobotArt.View();for(int t=0;t<8;t++){q.step(new int[]{t==0?Input.B:Input.B,0});RobotArt.update(v,o,q);}L.add(new Object[]{v,o.armor});
+        q=flat();o=q.robots[0];q.robots[1].px=1700;v=new RobotArt.View();for(int t=0;t<26;t++){q.step(new int[]{t<20?Input.B:(t==20?0:Input.B),0});RobotArt.update(v,o,q);}L.add(new Object[]{v,o.armor});
+        q=flat();o=q.robots[0];q.robots[1].px=1700;v=new RobotArt.View();q.step(new int[]{Input.DOWN,0});q.step(new int[]{Input.DOWN|Input.B,0});for(int t=0;t<4;t++){q.step(new int[]{Input.DOWN,0});RobotArt.update(v,o,q);}L.add(new Object[]{v,o.armor});
+        for(int i=0;i<L.size();i++){g.save();g.translate(80+(i%8)*215,(i/8)*380+350);g.scale(S,S);RobotArt.drawPose(g,(RobotArt.View)L.get(i)[0],(int)L.get(i)[1],RobotArt.COLOR[0],0);g.restore();}
+        ImageIO.write(b,"png",new File(out,"poses.png"));}
+
     static void update()throws Exception{
         com.sun.net.httpserver.HttpServer h=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);byte[] apk=new byte[70000];new Random(1).nextBytes(apk);boolean[] ua={false};
         h.createContext("/api",x->{ua[0]="WAP-app".equals(x.getRequestHeaders().getFirst("User-Agent"));byte[] b="{\"name\":\"WAP 12\",\"assets\":[{\"name\":\"wap.apk\"}]}".getBytes();x.sendResponseHeaders(200,b.length);x.getResponseBody().write(b);x.close();});

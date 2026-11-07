@@ -195,11 +195,9 @@ public final class App {
     }
     float sliderX() { return W * .5f + 24 * u; } float sliderW() { return W * .5f - 60 * u; } float sliderY(int i) { return 66 * u + i * 56 * u; }
     /** Personaje grande en pixel art, para menús. */
-    void hero(Gfx g, RobotArt.View v, float cx, float by) {
-        int sc = Math.max(1, (int) (H * .8f / 58)), lw = (int) W / sc + 1, lh = (int) H / sc + 1;
-        g.beginPixels(lw, lh); g.save(); g.translate(Math.round(cx / sc), Math.round(by / sc));
-        RobotArt.drawPose(g, v, (1 << Robot.PIECES) - 1, myColor, 0); g.restore(); g.endPixels(0, 0, sc);
-    }
+    RobotArt.View heroV; float heroX, heroY;
+    /** El personaje del menú va suavizado, como en el juego: se dibuja después de la capa de interfaz. */
+    void hero(Gfx g, RobotArt.View v, float cx, float by) { heroV = v; heroX = cx; heroY = by; }
     // ---------- Piezas de interfaz en pixel art
     void txt(Gfx g, String s, float x, float y, float size, int c, int align) { PixelFont.draw(g, s, x, y, size, c, align, 0); }
     void txtS(Gfx g, String s, float x, float y, float size, int c, int align) { PixelFont.draw(g, s, x, y, size, c, align, DEEP); }
@@ -281,14 +279,14 @@ public final class App {
         boolean game = screen == PLAY || screen == PAUSE || screen == OVER;
         if (game) ren.drawWorld(g, w, me); else g.clear(DEEP);
         g.beginPixels((g.w() + s - 1) / s, (g.h() + s - 1) / s); // toda la interfaz va en pixel art
-        W = (g.w() + s - 1) / s; H = (g.h() + s - 1) / s; u = H / 360f; pad.layout(W, H); btns.clear(); acts.clear();
+        W = (g.w() + s - 1) / s; H = (g.h() + s - 1) / s; u = H / 360f; pad.layout(W, H); btns.clear(); acts.clear(); heroV = null;
         switch (screen) {
             case TITLE: title(g); break;
             case ARMS: arms(g); break;
             case PAINT: paint(g); break;
             case LOBBY: lobby(g); break;
             default:
-                hud(g);
+                ren.overlay(g, s); hud(g);
                 if (online && ls.stall > 45) txtS(g, "ESPERANDO AL OTRO TELÉFONO...", W / 2, H * .5f, 16 * u, CREAM, 0);
                 if (online && ls.desync) txtS(g, "PARTIDA DESINCRONIZADA", W / 2, H - 8 * u, 12 * u, RED, 0);
                 if (screen == PLAY) {
@@ -312,6 +310,7 @@ public final class App {
                 }
         }
         g.endPixels(0, 0, s);
+        if (heroV != null) { float k = H * s * .78f / 52; g.save(); g.translate(heroX * s, heroY * s); g.scale(k, k); RobotArt.drawPose(g, heroV, (1 << Robot.PIECES) - 1, myColor, 0); g.restore(); }
     }
     /** Texto largo partido en líneas que caben en el ancho. */
     void para(Gfx g, String t, float cx, float y, float maxW, int c) {

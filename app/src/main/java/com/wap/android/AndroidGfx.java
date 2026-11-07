@@ -69,6 +69,7 @@ final class AndroidGfx implements Gfx {
         Bitmap b = tiles.get(id);
         if (b == null) { b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888); tiles.put(id, b); changed = true; }
         if (changed) b.setPixels(px, 0, size, 0, 0, size, size);
-        c.drawBitmap(b, x, y, null);
+        tilePaint.setFilterBitmap(!pix); c.drawBitmap(b, x, y, tilePaint); // fuera del pixel art, el mapa se amplía suavizado
     }
+    private final Paint tilePaint = new Paint();
 }
