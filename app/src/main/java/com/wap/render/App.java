@@ -6,7 +6,9 @@ import java.util.ArrayList; import java.util.List;
 public final class App {
     public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6;
     /** Servicios del teléfono para jugar en red. */
-    public interface Device { String name(); void listen(boolean on); }
+    public interface Device { String name(); void listen(boolean on);
+        /** Pide un texto con el teclado del teléfono; done recibe el texto o null si se cancela. */
+        default void askText(String title, String current, int max, java.util.function.Consumer<String> done) {} }
     static final int[] SWATCH = {0xFF5E5650, 0xFFFF0000, 0xFFFF7A00, 0xFFFFD200, 0xFF19C24A, 0xFF00B8D4, 0xFF1266FF, 0xFF8214FF, 0xFFFF2FA8, 0xFF2A2A2A};
     static final int RED = 0xFFE8323C, INK = RobotArt.INK, WHITE = 0xFFFFFFFF, MUTE = 0xFF9AA6D6, LINE = 0xFFCBD2DC;
     /** Paleta de la interfaz en pixel art. */
@@ -18,6 +20,7 @@ public final class App {
     static final int SLOTS = Robot.SLOTS;
     static String key(int i) { return "arma" + (i == 3 ? 4 : i); } // conserva lo elegido en versiones anteriores
     public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey; public Updater up; public Device dev;
+    String myName = ""; final String[] names = {"PLAYER 1", "PLAYER 2"};
     int myColor = 0xFF5E5650, me; boolean online, hosting; Lockstep ls; Link link; Lan.Browser browser; Lan.Beacon beacon; java.net.ServerSocket server;
     volatile Link pending; volatile Link.Hello pendHost, pendGuest; volatile String netMsg = ""; String toast = ""; int toastT; volatile boolean busy;
     final Store st; final Audio au; public final TouchPad pad = new TouchPad(); public final Renderer ren = new Renderer();
@@ -30,6 +33,7 @@ public final class App {
         this.st = st; this.au = au;
         for (int i = 0; i < SLOTS; i++) { slots[i] = Wpn.index(st.get(key(i), DEF[i])); }
         try { myColor = 0xFF000000 | Integer.parseInt(st.get("traje", "5E5650"), 16); } catch (Exception e) { }
+        myName = clean(st.get("nombre", ""));
         try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
     }
     public void seed(int s) { seed = s; }
@@ -39,8 +43,14 @@ public final class App {
         for (int i = 0; i < SLOTS; i++) { a[i] = Wpn.ALL[slots[i]]; b[i] = Wpn.ALL[r.i(Wpn.ALL.length)]; }
         RobotArt.COLOR[0] = myColor; RobotArt.COLOR[1] = near(myColor, 0xFF1266FF) ? 0xFFFF0000 : 0xFF1266FF; me = 0; online = false;
         w = new World(seed, LIVES[livesIx] , a, b); bot = new Bot(seed + 1, 1, SKILL[level]); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
+        setNames(or(myName, "PLAYER 1"), "PLAYER 2", false);
         pad.clear();
     }
+    static final int NAME_MAX = 12;
+    /** Nombre en mayúsculas, sin saltos de línea y con largo máximo. */
+    static String clean(String n) { if (n == null) return ""; n = n.replaceAll("[\\r\\n\\t|]", " ").trim().toUpperCase(); return n.length() > NAME_MAX ? n.substring(0, NAME_MAX) : n; }
+    static String or(String n, String d) { n = clean(n); return n.isEmpty() ? d : n; }
+    void setNames(String a, String b, boolean show) { names[0] = a; names[1] = b; ren.names = names; ren.showNames = show; ren.feedClear(); }
     static boolean near(int a, int b) {
         int r = (a >> 16 & 255) - (b >> 16 & 255), g = (a >> 8 & 255) - (b >> 8 & 255), l = (a & 255) - (b & 255);
         return r * r + g * g + l * l < 14000;
@@ -48,7 +58,7 @@ public final class App {
     // ---------- Partida en red local
     Link.Hello hello(int seedV, int lives) {
         Link.Hello h = new Link.Hello(); h.rules = World.RULES; h.seed = seedV; h.lives = lives; h.color = myColor; h.slots = slots.clone();
-        h.name = dev != null ? dev.name() : "Sala WAP"; return h;
+        h.name = myName; return h;
     }
     void openLobby() {
         go(LOBBY); netMsg = "Busca una sala o crea la tuya. Ambos teléfonos deben estar en la misma red Wi-Fi."; if (dev != null) dev.listen(true);
@@ -63,7 +73,7 @@ public final class App {
     }
     void hostRoom() {
         if (busy) return; busy = true; hosting = true; if (browser != null) { browser.close(); browser = null; }
-        final String name = dev != null ? dev.name() : "Sala WAP";
+        final String name = !myName.isEmpty() ? "Sala de " + myName : dev != null ? dev.name() : "Sala WAP";
         new Thread(() -> {
             try {
                 java.net.ServerSocket ss; try { ss = new java.net.ServerSocket(Link.PORT); } catch (Exception e) { ss = new java.net.ServerSocket(0); }
@@ -97,6 +107,8 @@ public final class App {
         RobotArt.COLOR[me] = myColor; RobotArt.COLOR[1 - me] = peer;
         w = new World(h.seed, h.lives, a, b); bot = null; link = l; l.startReader(); ls = new Lockstep(l, me); online = true;
         ren.reset(w); cd = 90; screen = PLAY; overT = 0; pad.clear();
+        String hn = or(h.name, "PLAYER 1"), cn = or(c.name, "PLAYER 2"); if (hn.equals(cn)) cn = cn.length() < NAME_MAX - 1 ? cn + " 2" : "PLAYER 2";
+        setNames(hn, cn, true); // en línea se ve el nombre de cada uno sobre su personaje
     }
     void endOnline(String msg) {
         if (link != null) link.close(); link = null; ls = null; online = false;
@@ -112,7 +124,7 @@ public final class App {
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); go(TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
+    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
     void go(int s) { screen = s; focus = 0; pad.clear(); }
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
     public void pointer(int id, float x, float y, boolean down) { pad.pointer(id, x / uiScale, y / uiScale, down); }
@@ -164,7 +176,10 @@ public final class App {
             case Fx.JUMP: if (f.a == 0) au.play(Audio.JUMP); break;
             case Fx.HOOK: au.play(Audio.HOOK); break;
             case Fx.PICK: au.play(Audio.PICK); break;
-            case Fx.DEATH: au.play(Audio.DEATH); break;
+            case Fx.DEATH: { au.play(Audio.DEATH); int d = (int) f.a, k = (int) f.b; // aviso arriba de la pantalla
+                ren.feed(k == d || k < 0 ? names[d] + " SE BANEÓ DE LA VIDA" : names[d] + " FUE ELIMINADO POR " + names[k], RobotArt.COLOR[d]); break; }
+            case Fx.LASSO: au.play(f.a > 0 ? Audio.HOOK : Audio.JUMP); break;
+            case Fx.TRAP: au.play(f.a > 0 ? Audio.BIG : Audio.PICK); break;
             default:
         }
     }
@@ -177,9 +192,14 @@ public final class App {
     }
     void channel(int ch, int v) { int s = (2 - ch) * 8, c = myColor; myColor = c & ~(255 << s) | Math.max(0, Math.min(255, v)) << s; }
     int channel(int ch) { return myColor >> (2 - ch) * 8 & 255; }
+    void askName() {
+        if (dev == null) return;
+        dev.askText("Tu nombre", myName, NAME_MAX, n -> { if (n != null) { myName = clean(n); save(); } });
+    }
     void navPaint(int p, int held) {
-        if ((p & Input.DOWN) != 0) paintRow = (paintRow + 1) % 3;
-        if ((p & Input.UP) != 0) paintRow = (paintRow + 2) % 3;
+        if ((p & Input.DOWN) != 0) paintRow = (paintRow + 1) % 4;
+        if ((p & Input.UP) != 0) paintRow = (paintRow + 3) % 4;
+        if (paintRow == 3) { if ((p & Input.A) != 0) askName(); else if ((p & Input.B) != 0) back(); return; }
         if ((held & Input.LEFT) != 0) channel(paintRow, channel(paintRow) - 3);
         if ((held & Input.RIGHT) != 0) channel(paintRow, channel(paintRow) + 3);
         if ((p & (Input.A | Input.B)) != 0) back();
@@ -230,7 +250,7 @@ public final class App {
         sky(g); floor(g, 0, H * .93f, W * .48f);
         RobotArt.View v = new RobotArt.View();
         hero(g, v, W * .24f, H * .93f);
-        txtS(g, "COLOR DEL ROBOT", sliderX(), 28 * u, 20 * u, GOLD, -1);
+        txtS(g, "PERSONALIZAR", sliderX(), 28 * u, 20 * u, GOLD, -1);
         String[] n = {"ROJO", "VERDE", "AZUL"}; int[] tone = {0xFFE8323C, 0xFF3DDC97, 0xFF5FA8FF};
         for (int i = 0; i < 3; i++) {
             float y = sliderY(i), x = sliderX(), w = sliderW(), k = channel(i) / 255f;
@@ -247,6 +267,12 @@ public final class App {
             box(g, x, y, sz - 5 * u, 28 * u, c, RobotArt.mixLight(c), RobotArt.mixDark(c));
             btn(x, y, sz - 5 * u, 28 * u, () -> { myColor = c; save(); });
         }
+        float ny = y + 40 * u, nh = 30 * u; boolean sel = paintRow == 3 && padSeen; // nombre: se ve sobre el personaje al jugar en línea
+        txt(g, "NOMBRE", sliderX(), ny + nh / 2 + 5 * u, 14 * u, CREAM, -1);
+        float lbl = PixelFont.width("NOMBRE", 14 * u) + 8 * u, nx = sliderX() + lbl, nw = sliderW() - lbl;
+        box(g, nx, ny, nw, nh, sel ? 0xFF2E4BA8 : DEEP, NAVY, DEEP);
+        txt(g, myName.isEmpty() ? "TOCA PARA ESCRIBIR" : myName + (frames / 30 % 2 == 0 && sel ? "_" : ""), nx + 6 * u, ny + nh / 2 + 5 * u, myName.isEmpty() ? 10 * u : 14 * u, myName.isEmpty() ? MUTE : GOLD, -1);
+        btn(nx, ny, nw, nh, this::askName);
         float by = H - 46 * u;
         box(g, sliderX(), by, sliderW(), 36 * u, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", sliderX() + sliderW() / 2, by + 24 * u, 16 * u, CREAM, 0);
         btn(sliderX(), by, sliderW(), 36 * u, this::back);
@@ -338,7 +364,7 @@ public final class App {
         hero(g, hero, W * .25f, H * .92f);
         float x = W * .5f, wd = W * .44f;
         txtS(g, "WAP", x, H * .17f, 48 * u, GOLD, -1);
-        String[] l = {"JUGAR", "EN LÍNEA (RED LOCAL)", "ELEGIR 4 ARMAS", "COLOR DEL ROBOT", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
+        String[] l = {"JUGAR", "EN LÍNEA (RED LOCAL)", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + LIVES[livesIx], "RIVAL  " + LEVELS[level]};
         Runnable[] a = {this::start, this::openLobby, () -> go(ARMS), () -> go(PAINT), () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }, () -> { level = (level + 1) % 3; save(); }};
         if (up != null) { l = new String[]{l[0], l[1], l[2], l[3], l[4], l[5], up.label()}; a = new Runnable[]{a[0], a[1], a[2], a[3], a[4], a[5], () -> up.act()}; txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
         menu(g, x, H * .21f, wd, l, a);

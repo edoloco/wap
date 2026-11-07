@@ -7,6 +7,7 @@ public final class Robot {
     /** Margen en ticks para que dirección + botón cuente como habilidad y no como correr + acción. */
     public static final int SMASH_WINDOW = 9, BUFFER = 3;
     public static final float HOOK_SHOT = 15, HOOK_PULL = 7.5f, HOOK_RANGE = 400;
+    public static final int LASSO_T = 300; public static final float LASSO_RANGE = 320, LASSO_DMG = 1.5f;
     public static final float RUN_FAST = 1.55f, AIR_JUMP = 8.4f, STOMP_DMG = 6, THROW_VX = 8.5f, THROW_VY = 6.5f;
     public static final int STUN = 18, STOMP_COOLDOWN = 60;
     public static final float AIM_SPEED = 2.5f, AIM_MIN = -40, AIM_MAX = 90, GRAB_RANGE = 60;
@@ -19,7 +20,7 @@ public final class Robot {
     public int slideT, airT, fireT, fireSlot = 3; boolean jumping;
     public int rope; public float rx, ry, rvx, rvy, rlen; // 0 sin gancho, 1 volando, 2 enganchado
     public final Wpn[] loadout = new Wpn[SLOTS]; public final int[] ammo = new int[SLOTS], reload = new int[SLOTS], delay = new int[SLOTS], charge = new int[SLOTS];
-    public int flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot other; boolean ghost, stompHit;
+    public int killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot other; boolean ghost, stompHit;
     public int wallDir, windT; int windSlot, lastWall, wallT, wallLock;
     /** Preparación breve antes del primer disparo: 6 ticks, una décima de segundo. */
     public static final int WIND = 6;
@@ -103,9 +104,9 @@ public final class Robot {
             Fx f = g.lastFx; f.c = (hx < px ? 1.5f : -1.5f) + kx; f.d = -3;
         }
         if (hp <= 0) {
-            hp = 0; rope = 0; deadT = 150; stunT = 0; thrownT = 0; windT = 0; java.util.Arrays.fill(charge, 0); lives--; deaths++;
+            hp = 0; rope = 0; deadT = 150; stunT = 0; thrownT = 0; windT = 0; lassoT = 0; killedBy = by; java.util.Arrays.fill(charge, 0); lives--; deaths++;
             if (by != id) g.robots[by].kills++;
-            g.fx(Fx.DEATH, px, py - 27, id, 0);
+            g.fx(Fx.DEATH, px, py - 27, id, 0).b = by; // b: quién lo eliminó (él mismo si se mató solo)
             if (lives < 0) { lives = 0; g.over(by == id ? 1 - id : by, id); deadT = 9999; lives = -1; }
         }
     }
@@ -133,6 +134,11 @@ public final class Robot {
         if (!w.infinite) ammo[slot]--; delay[slot] = w.delay;
         if (ammo[slot] <= 0) reload[slot] = w.reload;
         return true;
+    }
+    /** Proton Ray: queda atado al rayo del rival. */
+    public void lasso(World g, int by) {
+        if (!alive() || invuln > 0) return;
+        lassoT = LASSO_T; lassoBy = by; rope = 0; slideT = 0; windT = 0; g.fx(Fx.LASSO, px, py - 30, 1, id);
     }
     /** Cannon Punch: sale lanzado en el sentido del golpe, girando. Al chocar pierde un porcentaje de vida. */
     public void launch(World g, int dir, int by, float dmg) {
@@ -179,7 +185,7 @@ public final class Robot {
         for (int i = 0; i < SLOTS; i++) {
             if (delay[i] > 0) delay[i]--;
             if (reload[i] > 0 && --reload[i] == 0) ammo[i] = loadout[i].clip;
-            if (charge[i] > 0 && charge[i] < loadout[i].charge && ++charge[i] == loadout[i].charge) g.fx(Fx.CHARGE, px, py - 30, 1, id);
+            if (charge[i] > 0 && charge[i] < loadout[i].charge && ++charge[i] == loadout[i].charge) g.fx(Fx.CHARGE, px, py - 30, 1, id).b = Wpn.index(loadout[i].name);
         }
         if (lives < 0) return;
         if (deadT > 0) { if (--deadT == 0) spawnAt(g); prev = in; return; }
@@ -189,6 +195,15 @@ public final class Robot {
         if (stunT > 0) stunT--; if (stompCd > 0) stompCd--;
         if (stunT > 0 || thrownT > 0) in = 0;
         if (flinchT > 0) { flinchT--; in &= ~(Input.LEFT | Input.RIGHT); } // breve tirón al recibir un impacto
+        if (lassoT > 0) { // Proton Ray: atrapado, baja lento y pierde energía; solo se suelta saltando
+            Robot o = g.robots[lassoBy]; lassoT--;
+            if (!o.alive() || StrictMath.hypot(o.px - px, o.py - py) > LASSO_RANGE) lassoT = 0;
+            else if ((in & Input.B) != 0 && (prev & Input.B) == 0) { lassoT = 0; g.fx(Fx.LASSO, px, py - 30, 0, id); }
+            else {
+                in &= Input.B; vx *= .6f; if (vy < -1) vy = -1; rope = 0; slideT = 0;
+                if (lassoT % 10 == 0) damage(g, LASSO_DMG, 0, 0, lassoBy, px, py - 30);
+            }
+        }
         if (rollT > 0) rollT--;
         aiming = (in & Input.X) != 0;
         if (aiming && (in & Input.UP) != 0) aim = Math.min(AIM_MAX, aim + AIM_SPEED);
@@ -249,7 +264,7 @@ public final class Robot {
                 if (d > 24) { vx = dx / d * HOOK_PULL; vy = dy / d * HOOK_PULL; } else { vx = 0; vy = 0; }
             }
         }
-        if (rope != 2) vy = Math.min(10, vy + GRAV);
+        if (rope != 2) vy = Math.min(lassoT > 0 ? .7f : 10, vy + GRAV); // atrapado: cae despacio
         if (wallDir != 0) vy = Math.min(vy, WALL_SLIDE);
         if (vy > 0 && rope != 2 && Math.abs(vx) > 6) vx *= .97f;
         boolean wasGround = grounded; float preVx = vx, preVy = vy;

@@ -41,6 +41,12 @@ Los personajes no se atraviesan: uno puede pararse sobre el otro. Caer encima es
 Una barrida lanza al rival. Si te golpean mientras te deslizas, sales lanzado y pierdes la mitad del daño.
 CANNON PUNCH lanza un guante de box del color del traje; si golpea al rival lo despide en el sentido del golpe y al chocar pierde entre 12 % y 25 % de vida. DEATH RAY dispara cinco cargas celestes que forman un rayo; BOUNCY LASER rebota en diagonal hasta 10 veces; FAN no hace daño, desvía balas y nunca se acaba. Las cajas y objetos se empujan con los golpes, caen si pierden apoyo y se rompen al agotar su resistencia.
 
+PROTON RAY (reemplaza a Larpa) lanza un rayo naranja con chispas eléctricas; si toca al rival lo atrapa en un lazo: queda quieto, cae despacio y pierde energía de a poco hasta que salta para soltarse. ROBOT TRAP (reemplaza a Blowtorch) se carga como el Plasma Cannon; al terminar dice "TRAMPA LISTA" y el segundo comando la lanza. Cae, se pega al suelo, se abre con un haz de luz y atrae al rival: si llega al centro pierde toda la energía. Después la luz pasa de rojo a verde y explota pequeña.
+
+PERSONALIZAR (antes "Color del robot") cambia el color y el nombre. En línea, el nombre aparece sobre cada personaje. Cuando alguien muere, arriba se avisa "X SE BANEÓ DE LA VIDA" (se mató solo) o "X FUE ELIMINADO POR Y".
+
+El personaje usa el dibujo del usuario (`arte/dibujos/de_pie_1.svg`): cada capa se pega a su hueso y se mueve en todas las poses. Para actualizarlo: `tools/arte.sh`.
+
 ## En línea (red local)
 Ambos teléfonos en la misma red Wi-Fi. Uno elige "Crear sala" y el otro la ve en la lista y se une.
 Cada teléfono simula la misma partida con las entradas de los dos; deben tener la misma versión del juego.

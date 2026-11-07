@@ -21,6 +21,19 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
         app.dev = new App.Device() {
             @Override public String name() { return "Sala de " + Build.MODEL; }
             @Override public void listen(boolean on) { if (lock == null) return; try { if (on) lock.acquire(); else if (lock.isHeld()) lock.release(); } catch (RuntimeException e) { } }
+            @Override public void askText(String title, String current, int max, java.util.function.Consumer<String> done) {
+                runOnUiThread(() -> {
+                    final android.widget.EditText ed = new android.widget.EditText(MainActivity.this);
+                    ed.setSingleLine(true); ed.setText(current); ed.setSelection(ed.getText().length());
+                    ed.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(max), new android.text.InputFilter.AllCaps()});
+                    android.app.AlertDialog d = new android.app.AlertDialog.Builder(MainActivity.this).setTitle(title).setView(ed)
+                        .setPositiveButton("Listo", (x, y) -> { synchronized (app) { done.accept(ed.getText().toString()); } })
+                        .setNegativeButton("Cancelar", null).create();
+                    d.setOnDismissListener(x -> { immersive(); view.requestFocus(); });
+                    d.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+                    d.show(); ed.requestFocus();
+                });
+            }
         };
         app.up = new AppUpdater(this); ((AppUpdater) app.up).check();
         view = new GameView(this, app); setContentView(view); view.requestFocus();

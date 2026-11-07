@@ -16,6 +16,7 @@ public final class Shot {
             if (w.trigger > 0 && age > 40) for (Robot r : g.robots) if (r.alive() && near(r, w.trigger)) { explode(g); return; }
             if (w.burn) for (Robot r : g.robots) if (r.alive() && age % 6 == 0 && near(r, 14)) r.damage(g, w.dmg * 3, 0, -.2f, owner, x, y);
         }
+        if (w.trap && stuck) { trap(g); return; }
         if (life > 0 && --life == 0) { explode(g); return; }
         if (stuck) { if (!g.t.solid((int) x, (int) y + 2) && !g.t.solid((int) x, (int) y - 2) && !g.t.solid((int) x - 2, (int) y) && !g.t.solid((int) x + 2, (int) y)) stuck = false; return; }
         float sp = Math.abs(vx) + Math.abs(vy); int n = Math.max(1, (int) (sp / 3) + 1);
@@ -50,11 +51,33 @@ public final class Shot {
     }
     private boolean near(Robot r, int d) { return Math.abs(r.px - x) < d && y > r.py - r.h - d && y < r.py + d; }
     private boolean hitRobot(World g, Robot r) {
+        if (w.lasso) { r.lasso(g, owner); dead = true; return true; }
         if (w.punch) { r.launch(g, vx > 0 ? 1 : -1, owner, w.dmg); dead = true; return true; } // Cannon Punch: lo lanza en el sentido del golpe
         if (w.radius > 0) { explode(g); return true; }
         float s = Math.max(1, (float) StrictMath.hypot(vx, vy)), k = Math.max(w.knock, s * .05f); // lo rápido empuja un poco
         r.damage(g, w.dmg, vx / s * k, vy / s * k - .15f, owner, x, y);
         return false;
+    }
+    /** Robot Trap: se abre, sale un haz de luz y atrae todo hacia el centro; quien llega al centro pierde toda la energía. */
+    public static final int TRAP_OPEN = 24, TRAP_END = 240, TRAP_BOOM = 330; public static final float TRAP_R = 100;
+    private void trap(World g) {
+        int t = ++hops;
+        if (t == TRAP_OPEN) g.fx(Fx.TRAP, x, y, 0, owner);
+        if (t > TRAP_OPEN && t < TRAP_END) {
+            for (Robot r : g.robots) {
+                if (r.id == owner || !r.alive() || r.invuln > 0) continue;
+                float dx = x - r.px, dy = y - (r.py - 20), d = (float) StrictMath.hypot(dx, dy);
+                if (d > TRAP_R) continue;
+                float p = .4f + 3 * (1 - d / TRAP_R);
+                r.vx += Math.signum(dx) * Math.min(p, Math.abs(dx) * .5f + .1f); if (dy < -10) r.vy = Math.min(r.vy, 0) - .2f; // hacia el centro
+                if (Math.abs(dx) < 9 && r.py > y - 70 && r.py < y + 12) { g.fx(Fx.TRAP, x, y, 1, r.id); r.damage(g, 999, 0, -3, owner, r.px, r.py - 30); }
+            }
+            for (Shot o : g.shots) if (o != this && !o.w.trap && o.wait == 0) {
+                float dx = x - o.x, dy = y - 10 - o.y, d = (float) StrictMath.hypot(dx, dy);
+                if (d < TRAP_R && d > 1) { o.vx += dx / d * .5f; o.vy += dy / d * .5f; o.stuck = false; }
+            }
+        }
+        if (t >= TRAP_BOOM) { dead = true; g.explode(x, y - 3, 12, 6, 6, .8f, owner); }
     }
     public void explode(World g) {
         dead = true;

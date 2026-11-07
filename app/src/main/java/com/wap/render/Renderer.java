@@ -90,7 +90,14 @@ public final class Renderer {
                 booms.add(new float[]{f.x, f.y, 14 + f.a * 14, 0, 0}); if (!reduceMotion) shake = Math.min(14, shake + 3 + f.a * 6);
                 for (int i = 0; i < 12; i++) { P p = part(SPARK, f.x, f.y, (r.nextFloat() - .5f) * 7, -r.nextFloat() * 5, 16, 1, 0xFFFFFFFF); p.g = .15f; }
                 break; }
-            case Fx.CHARGE: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "CARGADO" : Wpn.ALL[(int) f.b].name; v.labelT = LABEL; break; }
+            case Fx.CHARGE: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? (Wpn.ALL[(int) f.b].trap ? "TRAMPA LISTA" : "CARGADO") : Wpn.ALL[(int) f.b].name; v.labelT = LABEL; break; }
+            case Fx.LASSO: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "¡ATRAPADO!" : "¡LIBRE!"; v.labelT = LABEL;
+                for (int i = 0; i < 10; i++) { float a = i * .628f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3, (float) Math.sin(a) * 3, 12, 1, f.a > 0 ? 0xFF7FE8FF : 0xFFFFFFFF); p.g = 0; }
+                break; }
+            case Fx.TRAP: {
+                if (f.a == 0) booms.add(new float[]{f.x, f.y - 6, 22, 0, 0, 3});
+                else { RobotArt.View v = views[f.who]; v.label = "¡ATRAPADO!"; v.labelT = LABEL; booms.add(new float[]{f.x, f.y - 30, 46, 0, 0, 1}); if (!reduceMotion) shake = Math.min(14, shake + 6); }
+                break; }
             case Fx.WALL: { P p = part(DUST, f.x, f.y, 0, -.3f, 14, 2, 0x88E2E7EE); p.g = 0; break; }
             case Fx.HOOK: if (f.a == 0) { RobotArt.View v = views[f.who]; v.label = "GANCHO"; v.labelT = LABEL; } break;
             case Fx.HIT: for (int i = 0; i < 7; i++) { float a = r.nextFloat() * 6.28f, v = 2 + r.nextFloat() * 3; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v, 10 + r.nextInt(6), 1, 0xFFFFE9A0); p.g = .1f; } break;
@@ -140,6 +147,12 @@ public final class Renderer {
                 if (w.tick % 2 == 0) { P q = part(DUST, s.x, s.y, s.vx * .3f, s.vy * .3f, 14, 2.5f, 0x40FFFFFF); q.g = 0; }
                 continue;
             }
+            if (s.w.trap && s.stuck && s.hops > Shot.TRAP_OPEN && s.hops < Shot.TRAP_END) { // viento inverso hacia la trampa
+                float cx = s.x, cy = s.y - 10;
+                for (P p : ps) { float dx = cx - p.x, dy = cy - p.y, d = (float) Math.hypot(dx, dy); if (d < Shot.TRAP_R && d > 2 && p.kind != ARMOR && p.kind != BONE) { p.vx += dx / d * .35f; p.vy += dy / d * .35f; p.ground = false; } }
+                for (int i = 0; i < 2; i++) { float a = r.nextFloat() * 6.28f, d = Shot.TRAP_R * (.6f + r.nextFloat() * .4f); P q = part(TRAIL, cx + (float) Math.cos(a) * d, cy + (float) Math.sin(a) * d * .7f, -(float) Math.cos(a) * 2.6f, -(float) Math.sin(a) * 1.8f, 30, 2.2f, 0xFFBFF4FF); q.g = 0; }
+                continue;
+            }
             if (s.w.look == Wpn.GAS) { // chispas como gas
                 for (int i = 0; i < 3; i++) { P q = part(TRAIL, s.x + (r.nextFloat() - .5f) * 10, s.y + (r.nextFloat() - .5f) * 10, (r.nextFloat() - .5f) * .8f, (r.nextFloat() - .5f) * .8f - .1f, 22 + r.nextInt(14), 3 + r.nextFloat() * 4, i == 0 ? 0xFFFFE07A : 0xFFFF8A2A); q.g = 0; }
                 continue;
@@ -159,7 +172,7 @@ public final class Renderer {
         }
     }
     public void tick(World w) {
-        trails(w);
+        feedStep(); trails(w);
         stepFx(w);
         for (int i = 0; i < 2; i++) {
             Robot o = w.robots[i]; RobotArt.update(views[i], o, w);
@@ -227,16 +240,39 @@ public final class Renderer {
             g.glow(b[2], b[3], gs ? 14 : 7, alpha(c, k));
         }
         for (float[] b : booms) boom(g, b);
+        world = w;
         for (Shot sh : w.shots) shotLight(g, sh);
+        for (Robot o : w.robots) if (o.alive() && o.lassoT > 0) { // atrapado por el Proton Ray: rayo y lazo
+            Robot b = w.robots[o.lassoBy]; float cy = o.py - 28;
+            proton(g, b.px + b.facing * 16, b.py - 31, o.px, cy);
+            for (int i = 0; i < 2; i++) { float rr = 11 + i * 4 + (float) Math.sin((w.tick + i * 9) * .3f) * 1.5f; g.save(); g.translate(o.px, cy + (i == 0 ? -6 : 8)); g.scale(1, .35f); g.circle(0, 0, rr, 0, 0xCCFF8A1A, 2.2f); g.circle(0, 0, rr, 0, 0xEEFFE6B0, .8f); g.restore(); }
+        }
         g.additive(false);
         g.restore();
         lastW = w; lastWho = who;
     }
-    World lastW; int lastWho;
+    World lastW; int lastWho, uw = 320, uh = 190;
     /** Nombres y flecha del rival, dibujados en la capa de interfaz (pixel art) de escala s. */
     public void overlay(Gfx g, int s) {
         if (lastW == null) return;
-        labels(g, lastW, s); pointer(g, lastW, lastWho, s);
+        uw = (g.w() + s - 1) / s; uh = (g.h() + s - 1) / s; // tamaño de la capa de interfaz
+        labels(g, lastW, s); pointer(g, lastW, lastWho, s); feedDraw(g);
+    }
+    /** Nombres de los jugadores (en línea se dibujan sobre cada personaje). */
+    public String[] names = {"PLAYER 1", "PLAYER 2"}; public boolean showNames;
+    /** Avisos de bajas arriba de la pantalla. */
+    public final ArrayList<String> feedMsg = new ArrayList<>(); final ArrayList<int[]> feedInfo = new ArrayList<>(); static final int FEED_T = 300;
+    public void feed(String msg, int color) { feedMsg.add(0, msg); feedInfo.add(0, new int[]{FEED_T, color}); while (feedMsg.size() > 3) { feedMsg.remove(3); feedInfo.remove(3); } }
+    public void feedClear() { feedMsg.clear(); feedInfo.clear(); }
+    void feedStep() { for (int i = feedInfo.size() - 1; i >= 0; i--) if (--feedInfo.get(i)[0] <= 0) { feedMsg.remove(i); feedInfo.remove(i); } }
+    void feedDraw(Gfx g) {
+        float cx = uw / 2f;
+        for (int i = 0; i < feedMsg.size(); i++) {
+            int[] f = feedInfo.get(i); if (f[0] < 20 && f[0] % 4 < 2) continue;
+            String m = feedMsg.get(i); float tw = PixelFont.width(m, 8); int x = Math.round(cx - tw / 2 - 5), y = 40 + i * 15, w = Math.round(tw + 10);
+            g.rect(x, y, w, 13, 0xE6101330); g.rect(x, y, 2, 13, f[1]); g.rect(x + w - 2, y, 2, 13, f[1]); g.rect(x, y + 12, w, 1, INK);
+            PixelFont.draw(g, m, cx, y + 10, 8, 0xFFFFF4D6, 0, 0xFF101330);
+        }
     }
     static final int OUT = INK; static final float OW = 1.1f;
     /** Objetos del escenario dibujados en vector, encima del mapa. */
@@ -296,23 +332,30 @@ public final class Renderer {
     /** Nombres sobre los personajes, en la pantalla para que se lean nítidos. */
     /** Nombres sobre los personajes, con la fuente de pixel art, en la capa de interfaz de escala s. */
     void labels(Gfx g, World w, int s) {
-        float lw = g.w(), k = zoom / s;
+        float lw = uw, k = zoom / s;
         for (int i = 0; i < 2; i++) {
             Robot o = w.robots[i]; RobotArt.View v = views[i];
-            if (!o.alive() || v.labelT <= 0 || v.labelT < 8 && v.labelT % 2 == 0) continue;
-            float tw = PixelFont.width(v.label, 8); int ly = Math.round((o.py - o.h - 10 - (LABEL - v.labelT) / 6f - vy0) * k), lx = Math.round(Math.max(tw / 2 + 3, Math.min(lw - tw / 2 - 3, (o.px - vx0) * k)));
+            if (!o.alive()) continue;
+            if (showNames) { // nombre sobre el personaje
+                String n = names[i]; float nw = PixelFont.width(n, 8); int ny = Math.round((o.py - o.h - 2 - vy0) * k), nx = Math.round(Math.max(nw / 2 + 3, Math.min(lw - nw / 2 - 3, (o.px - vx0) * k)));
+                g.rect(nx - nw / 2 - 2, ny - 8, nw + 4, 1, RobotArt.COLOR[i]);
+                PixelFont.draw(g, n, nx, ny, 8, RobotArt.COLOR[i] == 0xFF2A2A2A ? 0xFFFFF4D6 : RobotArt.mixLight(RobotArt.COLOR[i]), 0, INK);
+            }
+            if (v.labelT <= 0 || v.labelT < 8 && v.labelT % 2 == 0) continue;
+            float tw = PixelFont.width(v.label, 8); int ly = Math.round((o.py - o.h - 10 - (showNames ? 12 / k : 0) - (LABEL - v.labelT) / 6f - vy0) * k), lx = Math.round(Math.max(tw / 2 + 3, Math.min(lw - tw / 2 - 3, (o.px - vx0) * k)));
             g.rect(lx - tw / 2 - 2, ly - 9, tw + 4, 11, INK); g.rect(lx - tw / 2 - 2, ly + 2, tw + 4, 1, RobotArt.COLOR[i]);
             PixelFont.draw(g, v.label, lx, ly, 8, 0xFFFFF4D6, 0, 0);
         }
     }
     void pointer(Gfx g, World w, int who, int s) {
         Robot e = w.robots[1 - who]; if (!e.alive()) return;
-        float k = zoom / s, lw = g.w(), lh = g.h(), sx = (e.px - vx0) * k, sy = (e.py - 30 - vy0) * k, m = 14;
+        float k = zoom / s, lw = uw, lh = uh, sx = (e.px - vx0) * k, sy = (e.py - 30 - vy0) * k, m = 14;
         if (sx > 0 && sx < lw && sy > 0 && sy < lh) return;
         float cx = lw / 2f, cy = lh / 2f, dx = sx - cx, dy = sy - cy, q = Math.min((lw / 2f - m) / Math.max(1, Math.abs(dx)), (lh / 2f - m) / Math.max(1, Math.abs(dy)));
         g.save(); g.translate(Math.round(cx + dx * q), Math.round(cy + dy * q)); g.rotate((float) Math.atan2(dy, dx));
         g.poly(new float[]{7,0, -5,-6, -2,0, -5,6}, RobotArt.COLOR[1 - who], INK, 1); g.restore();
     }
+    World world;
     static int alpha(int c, float k) { return (int) (Math.max(0, Math.min(1, k)) * (c >>> 24)) << 24 | c & 0xFFFFFF; }
     /** Explosión de luz: fogonazo blanco, bola de fuego, núcleo amarillo y onda roja que se abre. */
     void boom(Gfx g, float[] b) {
@@ -350,6 +393,16 @@ public final class Renderer {
             case Wpn.RAY: g.glow(s.x, s.y, 16, 0xEE6FDDFF); g.glow(s.x, s.y, 7, 0xFFFFFFFF); break;
             case Wpn.GAS: g.glow(s.x, s.y, 7, 0xAAFF9A2A); break;
             case Wpn.WIND: break;
+            case Wpn.PROTON: { Robot o = world.robots[s.owner]; proton(g, o.px + o.facing * 16, o.py - 31, s.x, s.y); break; }
+            case Wpn.TRAP: {
+                int t = s.stuck ? s.hops : 0; g.glow(s.x, s.y - 6.5f, 8, trapLight(s) & 0xFFFFFF | 0xCC000000);
+                if (t > Shot.TRAP_OPEN && t < Shot.TRAP_END) { // haz de luz hacia arriba
+                    float k = Math.min(1, (t - Shot.TRAP_OPEN) / 10f) * Math.min(1, (Shot.TRAP_END - t) / 10f), pulse = 1 + .15f * (float) Math.sin(t * .4f);
+                    for (int i = 0; i < 12; i++) g.glow(s.x, s.y - 16 - i * 11, (11 + i * .5f) * pulse, alpha(0xFFBFF4FF, k * .38f * (1 - i / 13f)));
+                    g.line(s.x, s.y - 14, s.x, s.y - 150, alpha(0xFFE8FBFF, .7f * k), 7 * k); g.line(s.x, s.y - 14, s.x, s.y - 150, alpha(0xFFFFFFFF, k), 1.6f);
+                    g.glow(s.x, s.y - 6, 22 * pulse, alpha(0xFF7FE8FF, .5f * k));
+                }
+                break; }
             case Wpn.ORB: g.glow(s.x, s.y, 9, 0xEE3FD8FF); g.circle(s.x, s.y, 2, 0xFFFFFFFF, 0, 0); break;
             case Wpn.SPIKE: g.glow(s.x, s.y, 6, 0x66FFFFFF); break;
             case Wpn.NUKE: g.glow(s.x, s.y, 14 + s.age / 4 % 2 * 3, 0xAAFFD040); break;
@@ -372,6 +425,27 @@ public final class Renderer {
         g.rrect(-7, -3, 14, 6, 3, INK, 0, 0); g.rrect(-6, -2, 6, 4, 2, a, 0, 0); g.rrect(0, -2, 6, 4, 2, b, 0, 0);
         g.rect(-5, -2, 3, 1, 0xFFFFFFFF); g.restore();
     }
+    /** Luz de la trampa: roja parpadeante; al terminar pasa de rojo a verde, cada vez más rápido. */
+    static int trapLight(Shot s) {
+        int t = s.stuck ? s.hops : 0;
+        if (t < Shot.TRAP_END) return s.age / 8 % 2 == 0 ? 0xFFFF2A2A : 0xFF5A1010;
+        float k = (t - Shot.TRAP_END) / (float) (Shot.TRAP_BOOM - Shot.TRAP_END); int rate = k < .5f ? 8 : k < .8f ? 4 : 2;
+        if (s.age / rate % 2 != 0) return 0xFF102010;
+        return 0xFF000000 | (int) (255 * (1 - k)) << 16 | (int) (42 + 213 * k) << 8 | 42;
+    }
+    /** Rayo de protones: núcleo naranja con chispas eléctricas celestes alrededor. */
+    void proton(Gfx g, float x0, float y0, float x1, float y1) {
+        g.line(x0, y0, x1, y1, 0x55FF6A10, 9); g.line(x0, y0, x1, y1, 0xCCFF8A1A, 4.2f); g.line(x0, y0, x1, y1, 0xFFFFE6B0, 1.6f);
+        float dx = x1 - x0, dy = y1 - y0, L = Math.max(1, (float) Math.hypot(dx, dy)), nx = -dy / L, ny = dx / L; int n = Math.max(2, (int) (L / 9));
+        for (int k = 0; k < 2; k++) {
+            float px = x0, py = y0;
+            for (int i = 1; i <= n; i++) {
+                float t = i / (float) n, o = i == n ? 0 : (r.nextFloat() - .5f) * 9, qx = x0 + dx * t + nx * o, qy = y0 + dy * t + ny * o;
+                g.line(px, py, qx, qy, k == 0 ? 0xDD7FE8FF : 0x99D8FAFF, k == 0 ? 1.1f : .7f); px = qx; py = qy;
+            }
+        }
+        g.glow(x0, y0, 9, 0xCCFF9A2A); g.glow(x1, y1, 7, 0xAAFFB040);
+    }
     /** Guante de box del color del traje de quien lo lanza. */
     static void glove(Gfx g, float x, float y, int dir, int c) {
         int lite = RobotArt.mixLight(c), dark = RobotArt.mixDark(c);
@@ -393,6 +467,11 @@ public final class Renderer {
             case Wpn.CRATE: crate(g, s.x, s.y + 4, 0); break;
             case Wpn.FLAME: break;
             case Wpn.SPIKE: { for (int i = 0; i < 4; i++) { float c = i * .785f + s.age * .2f; g.line(s.x - (float) Math.cos(c) * 4.5f, s.y - (float) Math.sin(c) * 4.5f, s.x + (float) Math.cos(c) * 4.5f, s.y + (float) Math.sin(c) * 4.5f, 0xFFB8C0CC, 1.1f); } g.circle(s.x, s.y, 1.8f, 0xFFE0E6EE, 0, 0); break; }
+            case Wpn.TRAP: {
+                int t = s.stuck ? s.hops : 0; float k = t <= Shot.TRAP_OPEN ? 0 : t < Shot.TRAP_END ? Math.min(1, (t - Shot.TRAP_OPEN) / 10f) : Math.max(0, 1 - (t - Shot.TRAP_END) / 10f);
+                g.rrect(s.x - 7, s.y - 13, 14, 13, 2, 0xFF1A1A20, 0, 0); g.rect(s.x - 6, s.y - 12, 12, 1.2f, 0xFF3C3C48); g.rect(s.x - 6, s.y - 2, 12, 1, 0xFF0C0C10);
+                g.rect(s.x - 7 - k * 6, s.y - 15, 7, 2.2f, 0xFF2A2A32); g.rect(s.x + k * 6, s.y - 15, 7, 2.2f, 0xFF2A2A32); // tapa que se abre
+                g.circle(s.x, s.y - 6.5f, 2.2f, trapLight(s), 0, 0); break; }
             case Wpn.GLOVE: glove(g, s.x, s.y, s.vx > 0 ? 1 : -1, RobotArt.COLOR[s.owner]); break;
             case Wpn.DIRT: case Wpn.LEMON: case Wpn.PLASMA: case Wpn.ORB: break; // son pura luz
             case Wpn.NUKE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 9,0, 5,3.4f, -8,3.4f}, 0xFFFFD020, 0, 0); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 7,-1.6f, -8,-1.6f}, 0xFFFFF09A, 0, 0); g.circle(-1, .8f, 1.8f, 0xFF8A5A10, 0, 0); g.restore(); break;

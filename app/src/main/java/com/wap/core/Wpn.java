@@ -1,12 +1,12 @@
 package com.wap.core;
 /** Definición de un arma: cargador, tiempo de recarga y comportamiento del proyectil, al estilo de la tabla de armas de Liero. */
 public final class Wpn {
-    public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12, GREEN = 13, BLASER = 14, LIGHT = 15, RAY = 16, GAS = 17, WIND = 18, GLOVE = 19;
+    public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12, GREEN = 13, BLASER = 14, LIGHT = 15, RAY = 16, GAS = 17, WIND = 18, GLOVE = 19, PROTON = 20, TRAP = 21;
     public String name, desc = "";
     public int charge, clip = 1, delay = 20, reload = 100, parts = 1, fuse = 0, look = BULLET;
     public float spread, speed = 10, grav, bounce, drag = 1, accel, dmg, knock = 1, recoil, lob, jitter;
     public int radius, dig;          // radio de explosión (0 = sin explosión) y radio de excavación
-    public boolean punch, infinite, beam, pierce, sticky, burn, impact = true, smoke, fan;
+    public boolean punch, infinite, lasso, trap, beam, pierce, sticky, burn, impact = true, smoke, fan;
     public Wpn splinter; public int nSplinter, dropEvery, hops, addDirt, trigger, maxBounce, stagger, boomStyle; public float angle;
     Wpn(String n, String d) { name = n; desc = d; }
     Wpn mag(int c, int dl, int rl) { clip = c; delay = dl; reload = rl; return this; }
@@ -43,7 +43,7 @@ public final class Wpn {
             new Wpn("WINCHESTER", "Seis tiros de precisión").mag(6, 28, 150).shot(1, 1, 26).hit(20, 5, 2).rec(.8f),
             new Wpn("BAZOOKA", "Cohete que acelera").mag(3, 42, 130).shot(1, 1, 4).boom(36, 30, 32, 3.4f).look(ROCKET).rec(1.5f),
             new Wpn("DOOMSDAY", "Cinco cohetes de una vez").mag(1, 40, 240).shot(5, 13, 4.5f).boom(28, 18, 25, 2.4f).look(ROCKET).rec(3),
-            new Wpn("LARPA", "Cohete que suelta bombas").mag(3, 50, 170).shot(1, 0, 3.6f).boom(26, 14, 22, 2.4f).look(ROCKET),
+            new Wpn("PROTON RAY", "Rayo que atrapa al rival; se suelta saltando").mag(1, 20, 240).shot(1, 0, 13).hit(0, 0, 0).fuse(18).look(PROTON),
             new Wpn("GRENADE", "Rebota y estalla").mag(3, 40, 160).shot(1, 2, 6.8f).phys(.17f, .5f, 1).boom(38, 34, 34, 3.4f).fuse(110).look(GRENADE).lob(22),
             new Wpn("CLUSTER BOMB", "Se parte en diez").mag(2, 40, 210).shot(1, 2, 6.5f).phys(.17f, .35f, 1).boom(22, 12, 20, 2).fuse(70).look(GRENADE).lob(25).split(frag, 10),
             new Wpn("MINI BOMB", "Se parte y se vuelve a partir").mag(1, 40, 280).shot(1, 2, 6).phys(.17f, .35f, 1).boom(26, 14, 22, 2).fuse(75).look(GRENADE).lob(25).split(chiq, 5),
@@ -53,7 +53,7 @@ public final class Wpn {
             new Wpn("FLAK CANNON", "Revienta en el aire").mag(3, 34, 150).shot(1, 2, 9).boom(14, 8, 12, 1).fuse(34).look(GRENADE).split(shrap, 28),
             new Wpn("NAPALM", "Deja el suelo ardiendo").mag(1, 40, 230).shot(1, 2, 6.5f).phys(.14f, 0, 1).boom(24, 12, 20, 2).look(GRENADE).lob(18).split(fire, 32),
             new Wpn("FLAMER", "Lanzallamas de largo alcance").mag(70, 1, 200).shot(2, 9, 8.5f).phys(-.02f, 0, .97f).hit(1.2f, 3, .06f).fuse(44).look(FLAME),
-            new Wpn("BLOWTORCH", "Soplete: cava rápido").mag(90, 1, 150).shot(1, 5, 8).phys(0, 0, .94f).hit(1.3f, 6, .05f).fuse(26).look(FLAME),
+            new Wpn("ROBOT TRAP", "Cárgala y lánzala: atrae y elimina al instante").mag(1, 30, 420).shot(1, 2, 5.5f).phys(.2f, 0, 1).fuse(0).look(TRAP).lob(22),
             new Wpn("LASER", "Rayo continuo").mag(40, 1, 220).hit(1.6f, 2, .05f).look(ORB),
             new Wpn("BOUNCY LASER", "Láser que rebota en diagonal").mag(1, 20, 160).shot(1, 0, 5.5f).phys(0, 1, 1).boom(14, 14, 12, 1.6f).fuse(600).look(BLASER),
             new Wpn("ZIMM", "Rebota en todo y no pierde fuerza").mag(1, 20, 120).shot(1, 0, 9).phys(0, 1, 1).hit(30, 0, 2.4f).fuse(320).look(ORB),
@@ -66,7 +66,7 @@ public final class Wpn {
             new Wpn("FAN", "Desvía balas y empuja; nunca se acaba").mag(1, 1, 0).shot(1, 12, 8).phys(0, 0, .96f).hit(0, 0, .35f).fuse(36).look(WIND),
         };
         for (Wpn w : ALL) {
-            if (w.name.equals("BAZOOKA") || w.name.equals("DOOMSDAY") || w.name.equals("LARPA")) { w.accel = .24f; w.smoke = true; }
+            if (w.name.equals("BAZOOKA") || w.name.equals("DOOMSDAY")) { w.accel = .24f; w.smoke = true; }
             if (w.name.equals("MINE") || w.name.equals("TRAP")) { w.sticky = true; w.trigger = 28; }
             if (w.name.equals("PLASMA CANNON")) w.charge = 75;
             if (w.name.equals("CANNON PUNCH")) { w.punch = true; w.impact = true; }
@@ -74,7 +74,8 @@ public final class Wpn {
             if (w.name.equals("BOUNCY LASER")) { w.maxBounce = 10; w.angle = 40; w.impact = true; w.boomStyle = 2; }
             if (w.name.equals("FAN")) w.infinite = true;
             if (w.name.equals("LASER")) w.beam = true;
-            if (w.name.equals("LARPA")) { w.splinter = drop; w.dropEvery = 16; }
+            if (w.name.equals("PROTON RAY")) { w.lasso = true; w.impact = true; }
+            if (w.name.equals("ROBOT TRAP")) { w.trap = true; w.sticky = true; w.charge = 150; }
             if (w.name.equals("GRASSHOPPER")) w.hops = 5;
             if (w.name.equals("CRACKLER")) w.jitter = .55f;
             if (w.name.equals("HELLRAIDER")) w.jitter = .2f;
@@ -85,7 +86,7 @@ public final class Wpn {
     }
     /** Nombres antiguos guardados en el teléfono. */
     static String rename(String n) {
-        switch (n) { case "DROP": return "CANNON PUNCH"; case "CHIQUITA BOMB": return "MINI BOMB"; case "BOOBY TRAP": return "TRAP"; case "GAUSS GUN": return "BOUNCY LASER"; default: return n; }
+        switch (n) { case "DROP": return "CANNON PUNCH"; case "CHIQUITA BOMB": return "MINI BOMB"; case "BOOBY TRAP": return "TRAP"; case "GAUSS GUN": return "BOUNCY LASER"; case "LARPA": return "PROTON RAY"; case "BLOWTORCH": return "ROBOT TRAP"; default: return n; }
     }
     public static int index(String n) { n = rename(n); for (int i = 0; i < ALL.length; i++) if (ALL[i].name.equals(n)) return i; return 0; }
 }
