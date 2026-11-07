@@ -4,6 +4,10 @@ public interface Gfx {
     int w(); int h();
     void save(); void restore(); void translate(float x, float y); void rotate(float rad); void scale(float x, float y);
     void clear(int c);
+    /** Luz: círculo con degradado radial que se desvanece hacia el borde. */
+    void glow(float x, float y, float r, int argb);
+    /** Mezcla aditiva para luces (los colores se suman al fondo). */
+    void additive(boolean on);
     /** Desde aquí se dibuja en una capa de baja resolución, sin suavizado: pixel art. */
     void beginPixels(int w, int h);
     /** Termina la capa y la amplía por un factor entero, sin filtrar. */

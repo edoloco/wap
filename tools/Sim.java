@@ -9,6 +9,8 @@ public class Sim {
         ArrayDeque<Graphics2D> gs=new ArrayDeque<>();ArrayDeque<BufferedImage> ims=new ArrayDeque<>();
         public void beginPixels(int w,int h){BufferedImage im=new BufferedImage(Math.max(1,w),Math.max(1,h),BufferedImage.TYPE_INT_ARGB);gs.push(c);ims.push(im);c=im.createGraphics();pix=true;}
         public void endPixels(float x,float y,int s){BufferedImage im=ims.pop();c.dispose();c=gs.pop();pix=!ims.isEmpty();AffineTransform t=c.getTransform();c.translate(x,y);c.scale(s,s);c.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);c.drawImage(im,0,0,null);c.setTransform(t);}
+        public void additive(boolean on){c.setComposite(on?AlphaComposite.getInstance(AlphaComposite.SRC_OVER,.9f):AlphaComposite.SrcOver);}
+        public void glow(float x,float y,float r,int k){int a=k>>>24;if(r<=.2f||a==0)return;Color c0=new Color(k&0xFFFFFF|a<<24,true),c1=new Color(k&0xFFFFFF|(a*2/5)<<24,true),c2=new Color(k&0xFFFFFF,true);c.setPaint(new RadialGradientPaint(x,y,r,new float[]{0,.35f,1},new Color[]{c0,c1,c2}));c.fill(new Ellipse2D.Float(x-r,y-r,r*2,r*2));}
         public int w(){return W;} public int h(){return H;}
         public void save(){st.push(c.getTransform());} public void restore(){c.setTransform(st.pop());}
         public void translate(float x,float y){c.translate(x,y);} public void rotate(float r){c.rotate(r);} public void scale(float x,float y){c.scale(x,y);}
@@ -104,6 +106,16 @@ public class Sim {
         for(int i=0;i<L.size();i++){g.save();g.translate(80+(i%8)*215,(i/8)*380+350);g.scale(S,S);RobotArt.drawPose(g,(RobotArt.View)L.get(i)[0],(int)L.get(i)[1],RobotArt.COLOR[0],0);g.restore();}
         ImageIO.write(b,"png",new File(out,"poses.png"));}
 
+    static void fx(String out)throws Exception{
+        int W=1560,H=720;BufferedImage b=new BufferedImage(W*2,H,BufferedImage.TYPE_INT_RGB);
+        for(int shot=0;shot<2;shot++){World w=flat();Renderer ren=new Renderer();ren.reset(w);Robot a=w.robots[0];a.px=600;w.robots[1].px=760;
+            Wpn[] ws={Wpn.ALL[Wpn.index("BAZOOKA")],Wpn.ALL[Wpn.index("PLASMA GUN")],Wpn.ALL[Wpn.index("ZIMM")],Wpn.ALL[Wpn.index("DIRTBALL")]};
+            for(int t=0;t<26;t++){
+                if(t==0){w.spawn(ws[0],0,560,520,6,0);w.spawn(ws[1],0,620,560,9.5f,0);w.spawn(ws[2],0,520,540,6,-2);w.spawn(ws[3],0,540,500,7,-1);w.spawn(Wpn.ALL[Wpn.index("PLASMA CANNON")],0,500,480,6,0);}
+                if(t==(shot==0?18:12))w.explode(700,560,36,0,0,0,1);if(t==(shot==0?20:14))w.beam(Wpn.ALL[Wpn.index("LASER")],0,520,575,1,0);
+                w.step(new int[]{0,0});ren.tick(w);ren.consume(w,false);}
+            BufferedImage im=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);J g=new J(im);ren.drawWorld(g,w,0);b.createGraphics().drawImage(im,shot*W,0,null);}
+        ImageIO.write(b,"png",new File(out,"efectos.png"));}
     static void update()throws Exception{
         com.sun.net.httpserver.HttpServer h=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);byte[] apk=new byte[70000];new Random(1).nextBytes(apk);boolean[] ua={false};
         h.createContext("/api",x->{ua[0]="WAP-app".equals(x.getRequestHeaders().getFirst("User-Agent"));byte[] b="{\"name\":\"WAP 12\",\"assets\":[{\"name\":\"wap.apk\"}]}".getBytes();x.sendResponseHeaders(200,b.length);x.getResponseBody().write(b);x.close();});
@@ -132,5 +144,5 @@ public class Sim {
             if(i%160==20)m=Input.UP;if(i%160>20&&i%160<50)m=Input.UP|Input.B;if(i%300==80)m=Input.UP;if(i%300==81)m=Input.UP|Input.A;if(i%211==5)m=Input.DOWN;if(i%211==6)m=Input.DOWN|Input.B;app.keys=m;app.tick();
             if(app.screen!=App.PLAY)break;if(i==700){for(int q=0;q<14;q++){app.keys=Input.X|Input.UP;app.tick();}app.draw(g);ImageIO.write(b,"png",new File(out,"3b_mira.png"));}if(i>120&&i%(190)==0&&app.w.robots[0].alive()){app.draw(g);ImageIO.write(b,"png",new File(out,"j_"+(s++)+".png"));}}
     }
-    public static void main(String[] a)throws Exception{mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    public static void main(String[] a)throws Exception{fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

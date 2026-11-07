@@ -7,8 +7,17 @@ public final class RobotArt {
     /** Color del traje: el jugador lo cambia en el editor; el rival usa otro. */
     public static final int[] COLOR = {0xFF5E5650, 0xFF1266FF};
     static final float TH = 10, SH = 10, UA = 6, FA = 6.5f, ANK = 4, SW = .75f, TORSO_LEN = 15, SHOULDER = 11;
-    static final float[] HEAD = new float[32];
-    static { for (int i = 0; i < 16; i++) { double a = i * Math.PI / 8; HEAD[i * 2] = .6f + (float) Math.cos(a) * 7; HEAD[i * 2 + 1] = -7.8f + (float) Math.sin(a) * (a > 0 && a < Math.PI ? 6.2f : 7); } }
+    /** Cabeza irregular como en la referencia (no un círculo), suavizada con curvas Catmull-Rom. */
+    static final float[] HEAD;
+    static {
+        float[][] k = {{-4.5f,-14.6f},{.5f,-15.4f},{5,-14.2f},{7.3f,-11},{7.4f,-7},{6.2f,-3.6f},{3.6f,-1.4f},{0,-.9f},{-3.2f,-1.8f},{-5.4f,-4},{-6.6f,-7.6f},{-6.6f,-11.2f}};
+        int n = k.length, sub = 4; HEAD = new float[n * sub * 2];
+        for (int i = 0; i < n; i++) for (int j = 0; j < sub; j++) {
+            float t = j / (float) sub, t2 = t * t, t3 = t2 * t; float[] p0 = k[(i - 1 + n) % n], p1 = k[i], p2 = k[(i + 1) % n], p3 = k[(i + 2) % n];
+            for (int d = 0; d < 2; d++) HEAD[(i * sub + j) * 2 + d] = .5f * (2 * p1[d] + (-p0[d] + p2[d]) * t + (2 * p0[d] - 5 * p1[d] + 4 * p2[d] - p3[d]) * t2 + (-p0[d] + 3 * p1[d] - 3 * p2[d] + p3[d]) * t3);
+        }
+    }
+    static final float[] NECK = {-2.4f,-2.2f, .6f,-1.6f, -.4f,2.4f, -3.2f,1.8f};
     static final float[] CHEST = {-5.2f,1, 5.2f,1, 5.6f,5.8f, 3.8f,8.6f, -3.8f,8.6f, -5.6f,5.8f};
     static final float[] BELLY = {-3.4f,8.8f, 3.4f,8.8f, 2.8f,10.6f, -2.8f,10.6f};
     static final float[] HIPS = {-3.6f,-5, 3.6f,-5, 3.8f,1.6f, 2.6f,3, -2.6f,3, -3.8f,1.6f};
@@ -162,7 +171,7 @@ public final class RobotArt {
                 int h = (f * 73 + i * 151 + r.id * 977) * 2654435 >>> 7; float a = (h & 1023) / 1023f * 6.283f, d = 13 + (h >> 10 & 15);
                 int x = Math.round(r.px + (float) Math.cos(a) * d), y = Math.round(r.py - 26 + (float) Math.sin(a) * d * 1.15f), sz = (h >> 14 & 3) == 0 ? 2 : 1;
                 int spark = full ? ((h >> 16 & 1) == 0 ? 0xFFFFFFFF : 0xFF7FE3FF) : ((h >> 16 & 1) == 0 ? 0xFFFFE23A : 0xFFFFF7B0);
-                g.rect(x, y, sz, sz, spark);
+                g.additive(true); g.glow(x + sz / 2f, y + sz / 2f, sz * 3, spark & 0xFFFFFF | 0xAA000000); g.additive(false); g.rect(x, y, sz, sz, spark);
                 if (full && sz == 2) { g.rect(x - 1, y, 1, 1, spark); g.rect(x + 2, y + 1, 1, 1, spark); }
             }
         }
@@ -190,7 +199,7 @@ public final class RobotArt {
         leg(g, px + 2, py + 1, v.fx, v.fy - 1 + v.gFront, (ar >> Robot.TH_F & 1) != 0 && on, (ar >> Robot.SN_F & 1) != 0 && on, c);
         g.save(); g.translate(px, py); g.rotate(lr); g.translate(0, -TORSO_LEN);
         g.rrect(-1.2f, 8, 2.4f, 7, .6f, INK, 0, 0); g.poly(TORSO, INK, 0, 0); g.poly(PELVIS, INK, 0, 0);
-        g.rrect(-1, -2, 2, 3, .5f, INK, 0, 0);
+        g.poly(NECK, INK, 0, 0); // cuello inclinado
         if ((ar >> Robot.BELLY & 1) != 0) { g.save(); g.translate(0, sp * .3f); limb(g, BELLY, c); g.restore(); }
         boolean lit = v.shotT > 6; // el destello aclara el cuerpo en los primeros cuadros
         if ((ar >> Robot.CHEST & 1) != 0) { g.save(); g.translate(0, -sp * .3f); if (lit) g.grad(CHEST, c, 0xFFE8E2DC, -6, 6, INK, SW); else limb(g, CHEST, c); g.restore(); }
@@ -216,14 +225,13 @@ public final class RobotArt {
         g.restore();
     }
     static final float[] FLAME = {0,-2.5f, 5,-4.5f, 7,-2, 11,-3.5f, 10,-1, 17,0, 10,1.2f, 11,3.4f, 6,2, 3,4, 0,2.5f};
-    /** Destello por cuadros frente a la mano: anillo amarillo, anillo estirado y llama naranja. */
+    /** Destello de luz frente a la mano: fogonazo, luz estirada y llama naranja que se apaga. */
     private static void muzzle(Gfx g, float x, float y, int frame) {
-        final int Y = 0xFFFFF23A, LIGHT = 0xFFFFFDE0, ORANGE = 0xFFFFB31A;
-        g.save(); g.translate(x, y);
-        if (frame <= 0) g.circle(3, 0, 4.2f, LIGHT, Y, 1.4f);
-        else if (frame == 1) { g.save(); g.translate(8, 0); g.scale(2.6f, 1); g.circle(0, 0, 3.4f, 0x66FFFDE0, Y, .7f); g.restore(); }
-        else g.poly(FLAME, ORANGE, 0xFFFF8A00, .4f);
-        g.restore();
+        g.save(); g.translate(x, y); g.additive(true);
+        if (frame <= 0) { g.glow(3, 0, 13, 0xEEFFF2A0); g.glow(3, 0, 5, 0xFFFFFFFF); }
+        else if (frame == 1) { g.save(); g.translate(8, 0); g.scale(2.6f, 1); g.glow(0, 0, 6, 0xEEFFF06A); g.glow(0, 0, 2.6f, 0xFFFFFFFF); g.restore(); }
+        else { g.glow(6, 0, 8, 0xCCFF9A1A); g.poly(FLAME, 0xCCFFB31A, 0, 0); }
+        g.additive(false); g.restore();
     }
     public static View poster() { View v = new View(); pose(v, STANCE_F); v.open = true; return v; }
     public static void assemble(View v) { v.assemble = 30; }

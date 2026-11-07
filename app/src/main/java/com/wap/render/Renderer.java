@@ -49,17 +49,20 @@ public final class Renderer {
         P p = new P(); p.kind = kind; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.life = p.max = life; p.size = size; p.color = color;
         p.rot = r.nextFloat() * 6.28f; p.vr = (r.nextFloat() - .5f) * .5f; ps.add(p); return p;
     }
-    static final int LABEL = 48, SQUARE = 0, SMOKE = 1, ARMOR = 2, BONE = 3, FIRE = 4, CHUNK = 5;
+    static final int LABEL = 48, SQUARE = 0, SMOKE = 1, ARMOR = 2, BONE = 3, FIRE = 4, CHUNK = 5, SPARK = 6, EMBER = 7, TRAIL = 8, DUST = 9;
     public void consume(World w, boolean reduceMotion) {
         for (Fx f : w.fx) switch (f.type) {
-            case Fx.EXPLODE: {
+            case Fx.EXPLODE: { // fogonazo, bola de fuego, onda roja, chispas, brasas y humo oscuro
                 booms.add(new float[]{f.x, f.y, f.a, 0, r.nextFloat() * 6});
                 if (!reduceMotion) shake = Math.min(14, shake + f.a * .14f);
-                int n = (int) Math.min(40, f.a * .7f);
-                for (int i = 0; i < n; i++) { float a = r.nextFloat() * 6.28f, v = r.nextFloat() * 5 + 1; part(SQUARE, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 1, 30 + r.nextInt(30), 1.5f + r.nextFloat() * 2, r.nextBoolean() ? DIRT : DIRT2); }
+                int n = (int) Math.min(34, 6 + f.a * .6f);
+                for (int i = 0; i < n; i++) { float a = r.nextFloat() * 6.28f, v = 2 + r.nextFloat() * (3 + f.a * .12f); P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 1, 14 + r.nextInt(16), 1, i % 3 == 0 ? 0xFFFFF4B0 : 0xFFFFA22E); p.g = .12f; }
+                for (int i = 0; i < n / 3; i++) { float a = r.nextFloat() * 6.28f, v = r.nextFloat() * 2.5f; P p = part(EMBER, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 1.5f, 40 + r.nextInt(40), 1.5f + r.nextFloat() * 2, 0xFFFF6A1A); p.g = .05f; }
+                for (int i = 0; i < 3 + n / 5; i++) { float a = r.nextFloat() * 6.28f, d = r.nextFloat() * f.a * .5f; P p = part(SMOKE, f.x + (float) Math.cos(a) * d, f.y + (float) Math.sin(a) * d, (float) Math.cos(a) * .4f, -.25f, 50 + r.nextInt(40), f.a * (.2f + r.nextFloat() * .2f), 0x7A1A1C24); p.g = 0; }
+                for (int i = 0; i < n / 4; i++) { float a = r.nextFloat() * 6.28f, v = r.nextFloat() * 4 + 1; part(SQUARE, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 1, 30 + r.nextInt(30), 1.5f + r.nextFloat() * 2, r.nextBoolean() ? DIRT : DIRT2); }
                 break; }
             case Fx.CHIPS: for (int i = 0; i < f.a; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 4, -r.nextFloat() * 3, 24, 1.6f, DIRT2); break;
-            case Fx.SMOKE: { P p = part(f.a > 0 ? FIRE : SMOKE, f.x, f.y, 0, -.2f, f.a > 0 ? 14 : 24, f.a > 0 ? 3 : 3.5f, 0xFF9098A8); p.g = 0; break; }
+            case Fx.SMOKE: { P p = part(f.a > 0 ? FIRE : SMOKE, f.x, f.y, 0, -.2f, f.a > 0 ? 14 : 30, f.a > 0 ? 3 : 2.5f, f.a > 0 ? 0xFFFF8A1A : 0x5A3A3E48); p.g = 0; break; }
             case Fx.FLASH: { RobotArt.View v = views[f.who]; v.label = Wpn.ALL[(int) f.b].name; v.labelT = LABEL; if (v.shotT <= 0) v.shotT = 12; break; }
             case Fx.PROP: {
                 int kind = (int) f.c, n = (int) (f.a * f.b / 110) + 6;
@@ -71,17 +74,17 @@ public final class Renderer {
                 if (kind == Terrain.COMPUTER) for (int i = 0; i < 14; i++) part(SQUARE, f.x + 32, f.y + 30, (r.nextFloat() - .5f) * 7, -r.nextFloat() * 5, 26, 1.5f, 0xFFFFE23A);
                 break; }
             case Fx.STOMP: {
-                for (int i = 0; i < 8; i++) { float a = i * .785f; P p = part(SQUARE, f.x, f.y, (float) Math.cos(a) * 2.5f, (float) Math.sin(a) * 1.5f - 1, 14, 2, 0xFFFFFFFF); p.g = 0; }
+                for (int i = 0; i < 10; i++) { float a = i * .628f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3, (float) Math.sin(a) * 1.6f - 1, 12, 1, 0xFFFFFFFF); p.g = 0; }
                 RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "¡BARRIDA!" : "¡PISADO!"; v.labelT = LABEL; break; }
             case Fx.GRAB: { RobotArt.View v = views[1 - f.who]; v.label = "¡DROP!"; v.labelT = LABEL; break; }
             case Fx.SLAM: {
                 booms.add(new float[]{f.x, f.y, 14 + f.a * 14, 0, 0}); if (!reduceMotion) shake = Math.min(14, shake + 3 + f.a * 6);
-                for (int i = 0; i < 10; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 6, -r.nextFloat() * 4, 20, 2, 0xFFFFFFFF);
+                for (int i = 0; i < 12; i++) { P p = part(SPARK, f.x, f.y, (r.nextFloat() - .5f) * 7, -r.nextFloat() * 5, 16, 1, 0xFFFFFFFF); p.g = .15f; }
                 break; }
             case Fx.CHARGE: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "CARGADO" : Wpn.ALL[(int) f.b].name; v.labelT = LABEL; break; }
-            case Fx.WALL: { P p = part(SMOKE, f.x, f.y, 0, -.3f, 14, 2, 0xFFBFC6D2); p.g = 0; break; }
+            case Fx.WALL: { P p = part(DUST, f.x, f.y, 0, -.3f, 14, 2, 0x88E2E7EE); p.g = 0; break; }
             case Fx.HOOK: if (f.a == 0) { RobotArt.View v = views[f.who]; v.label = "GANCHO"; v.labelT = LABEL; } break;
-            case Fx.HIT: for (int i = 0; i < 5; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 5, (r.nextFloat() - .5f) * 5, 14, 1.3f, 0xFFFFC020); break;
+            case Fx.HIT: for (int i = 0; i < 7; i++) { float a = r.nextFloat() * 6.28f, v = 2 + r.nextFloat() * 3; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v, 10 + r.nextInt(6), 1, 0xFFFFE9A0); p.g = .1f; } break;
             case Fx.ARMOR: { P p = part(ARMOR, f.x, f.y, f.c, f.d, 170, 1, RobotArt.COLOR[f.who]); p.slot = (int) f.a; p.g = .22f; break; }
             case Fx.DEATH: {
                 for (int k : new int[]{0, 0, 0, 0, 1, 1, 1, 1, 2, 3, 3, 4, 4}) {
@@ -90,8 +93,8 @@ public final class Renderer {
                 }
                 booms.add(new float[]{f.x, f.y, 36, 0, 0}); break; }
             case Fx.BEAM: beams.add(new float[]{f.x, f.y, f.c, f.d, f.b == 1 ? 12 : 3, f.b}); break;
-            case Fx.JUMP: for (int i = 0; i < 6; i++) { P p = part(SMOKE, f.x + r.nextFloat() * 14 - 7, f.y - 1, (r.nextFloat() - .5f) * 2, -.2f, 16, 2.2f, 0xFFBFC6D2); p.g = 0; } break;
-            case Fx.SLIDE: { P p = part(SMOKE, f.x, f.y - 2, -f.a * .6f, -.3f, 14, 2.4f, 0xFFBFC6D2); p.g = 0; break; }
+            case Fx.JUMP: for (int i = 0; i < 6; i++) { P p = part(DUST, f.x + r.nextFloat() * 14 - 7, f.y - 1, (r.nextFloat() - .5f) * 2, -.2f, 16, 2.2f, 0x88E2E7EE); p.g = 0; } break;
+            case Fx.SLIDE: { P p = part(DUST, f.x, f.y - 2, -f.a * .6f, -.3f, 14, 2.4f, 0x88E2E7EE); p.g = 0; break; }
             case Fx.SPAWN: RobotArt.assemble(views[(int) f.a]); break;
             default:
         }
@@ -103,7 +106,8 @@ public final class Renderer {
             if (--p.life <= 0) { ps.remove(i); continue; }
             if (p.ground) continue;
             p.vy += p.g; float nx = p.x + p.vx, ny = p.y + p.vy;
-            if (p.kind == SMOKE || p.kind == FIRE) { p.x = nx; p.y = ny; continue; }
+            if (p.kind == SMOKE || p.kind == FIRE || p.kind == DUST || p.kind == TRAIL) { p.x = nx; p.y = ny; p.vx *= .96f; p.vy *= .96f; continue; }
+            if (p.kind == SPARK || p.kind == EMBER) { if (w.t.solid((int) nx, (int) ny)) { p.vx *= -.3f; p.vy *= -.3f; } else { p.x = nx; p.y = ny; } p.vx *= .97f; continue; }
             if (w.t.solid((int) nx, (int) ny)) {
                 if (p.kind == ARMOR || p.kind == BONE || p.kind == CHUNK) { if (w.t.solid((int) p.x, (int) ny)) { p.vy *= -.35f; p.vx *= .6f; if (Math.abs(p.vy) < 1) p.ground = true; } else p.vx *= -.5f; }
                 else ps.remove(i);
@@ -111,11 +115,30 @@ public final class Renderer {
             }
             p.x = nx; p.y = ny; p.rot += p.vr;
         }
-        for (int i = booms.size() - 1; i >= 0; i--) { float[] b = booms.get(i); if (++b[3] > 14) booms.remove(i); }
+        for (int i = booms.size() - 1; i >= 0; i--) { float[] b = booms.get(i); if (++b[3] > BOOM_T) booms.remove(i); }
         for (int i = beams.size() - 1; i >= 0; i--) if (--beams.get(i)[4] <= 0) beams.remove(i);
         shake *= .86f;
     }
+    static final int BOOM_T = 24;
+    /** Estelas de luz detrás de los proyectiles. */
+    void trails(World w) {
+        for (Shot s : w.shots) {
+            int c; float z;
+            switch (s.w.look) {
+                case Wpn.ROCKET: c = 0xFFFF8A2A; z = 4; if (w.tick % 2 == 0) { P q = part(SMOKE, s.x, s.y, 0, -.1f, 40, 2.2f, 0x50404650); q.g = 0; } break;
+                case Wpn.NUKE: c = 0xFFFFD040; z = 6; break;
+                case Wpn.ORB: c = 0xFF3FD8FF; z = 3; break;
+                case Wpn.LEMON: c = 0xFFFFE23A; z = 2.5f; break;
+                case Wpn.PLASMA: c = 0xFFFFC23A; z = 8; break;
+                case Wpn.SPARK: c = 0xFFFF9A2A; z = 2; break;
+                case Wpn.DIRT: c = 0xFFB98CFF; z = 4; break;
+                default: continue;
+            }
+            P p = part(TRAIL, s.x, s.y, (r.nextFloat() - .5f) * .4f, (r.nextFloat() - .5f) * .4f, 18, z, c); p.g = 0;
+        }
+    }
     public void tick(World w) {
+        trails(w);
         stepFx(w);
         for (int i = 0; i < 2; i++) {
             Robot o = w.robots[i]; RobotArt.update(views[i], o, w);
@@ -160,14 +183,31 @@ public final class Renderer {
             if (o.rope != 0) { float hx = o.px + o.facing * 12, hy = o.py - 33; g.line(hx, hy, o.rx, o.ry, INK, 1.1f); g.circle(o.rx, o.ry, 2.4f, 0xFFFFFFFF, INK, .7f); }
             RobotArt.draw(g, views[i], o, RobotArt.COLOR[i]);
         }
-        for (P p : ps) switch (p.kind) {
-            case SQUARE: g.rect(p.x, p.y, p.size, p.size, p.color); break;
-            case SMOKE: { float k = p.life / p.max; g.circle(p.x, p.y, p.size * (2 - k), 0, p.color, .7f); break; }
-            case FIRE: g.circle(p.x, p.y, p.size * p.life / p.max, 0xFFFFA010, 0, 0); break;
-            default:
+        for (P p : ps) {
+            float k = p.life / p.max;
+            if (p.kind == SQUARE) g.rect(p.x, p.y, p.size, p.size, p.color);
+            else if (p.kind == SMOKE) g.circle(p.x, p.y, p.size * (1.6f - .8f * k), (int) ((p.color >>> 24) * Math.min(1, k * 1.6f)) << 24 | p.color & 0xFFFFFF, 0, 0);
+            else if (p.kind == DUST) g.circle(p.x, p.y, p.size * (2 - k), (int) ((p.color >>> 24) * k) << 24 | p.color & 0xFFFFFF, 0, 0);
         }
-        for (float[] b : beams) { boolean gs = b[5] == 1; g.line(b[0], b[1], b[2], b[3], gs ? 0xFF1266FF : 0xFFFF2040, gs ? b[4] * .35f : 1.6f); g.line(b[0], b[1], b[2], b[3], 0xFFFFFFFF, gs ? b[4] * .12f : .6f); }
+        g.additive(true); // de aquí en adelante, luces
+        for (P p : ps) {
+            float k = p.life / p.max;
+            switch (p.kind) {
+                case FIRE: g.glow(p.x, p.y, p.size * 2.2f * k + 1, alpha(p.color, k)); break;
+                case TRAIL: g.glow(p.x, p.y, p.size * (.4f + .8f * k), alpha(p.color, k * .9f)); break;
+                case EMBER: g.glow(p.x, p.y, p.size * 2, alpha(p.color, k)); g.rect(p.x - .5f, p.y - .5f, 1, 1, alpha(0xFFFFE0A0, k)); break;
+                case SPARK: g.line(p.x, p.y, p.x - p.vx * 1.8f, p.y - p.vy * 1.8f, alpha(p.color, k), .9f); g.glow(p.x, p.y, 3, alpha(p.color, k * .6f)); break;
+                default:
+            }
+        }
+        for (float[] b : beams) {
+            boolean gs = b[5] == 1; float k = gs ? b[4] / 12 : b[4] / 3; int c = gs ? 0xFF3F8BFF : 0xFFFF2A4A;
+            g.line(b[0], b[1], b[2], b[3], alpha(c, .3f * k), gs ? 9 * k : 5); g.line(b[0], b[1], b[2], b[3], alpha(c, .8f * k), gs ? 4 * k : 2); g.line(b[0], b[1], b[2], b[3], alpha(0xFFFFFFFF, k), gs ? 1.6f * k : .8f);
+            g.glow(b[2], b[3], gs ? 14 : 7, alpha(c, k));
+        }
         for (float[] b : booms) boom(g, b);
+        for (Shot sh : w.shots) shotLight(g, sh);
+        g.additive(false);
         g.restore();
         lastW = w; lastWho = who;
     }
@@ -252,14 +292,34 @@ public final class Renderer {
         g.save(); g.translate(Math.round(cx + dx * q), Math.round(cy + dy * q)); g.rotate((float) Math.atan2(dy, dx));
         g.poly(new float[]{7,0, -5,-6, -2,0, -5,6}, RobotArt.COLOR[1 - who], INK, 1); g.restore();
     }
+    static int alpha(int c, float k) { return (int) (Math.max(0, Math.min(1, k)) * (c >>> 24)) << 24 | c & 0xFFFFFF; }
+    /** Explosión de luz: fogonazo blanco, bola de fuego, núcleo amarillo y onda roja que se abre. */
     void boom(Gfx g, float[] b) {
-        float k = b[3] / 15, R = b[2] * (.45f + .75f * (float) Math.sqrt(k)); int n = 11; float[] q = new float[n * 4];
-        for (int i = 0; i < n * 2; i++) {
-            float a = b[4] + i * 3.14159f / n, d = i % 2 == 0 ? R : R * .62f;
-            q[i * 2] = b[0] + (float) Math.cos(a) * d; q[i * 2 + 1] = b[1] + (float) Math.sin(a) * d;
+        float t = b[3], k = t / BOOM_T, R = b[2], x = b[0], y = b[1];
+        if (t < 5) g.glow(x, y, R * 1.9f, alpha(0xFFFFFFFF, 1 - t / 5));
+        g.glow(x, y, R * (.75f + .55f * k), alpha(0xFFFF6A1A, (float) Math.pow(1 - k, 1.3)));
+        g.glow(x, y, R * (.45f + .25f * k), alpha(0xFFFFE27A, (1 - k) * (1 - k)));
+        float rr = R * (.35f + 1.05f * (float) Math.sqrt(k)), wd = Math.max(.5f, R * .32f * (1 - k));
+        g.circle(x, y, rr, 0, alpha(0xFFFF2A2A, (1 - k) * .55f), wd * 2.2f);
+        g.circle(x, y, rr, 0, alpha(0xFFFF6A4A, (1 - k) * .9f), wd);
+    }
+    /** Luz propia de cada proyectil. */
+    void shotLight(Gfx g, Shot s) {
+        float sp = (float) Math.hypot(s.vx, s.vy);
+        switch (s.w.look) {
+            case Wpn.BULLET: g.line(s.x, s.y, s.x - s.vx * 1.6f, s.y - s.vy * 1.6f, 0x99FFC24A, 2.2f); g.line(s.x, s.y, s.x - s.vx * .9f, s.y - s.vy * .9f, 0xFFFFFFFF, .8f); g.glow(s.x, s.y, 4, 0x99FFD27A); break;
+            case Wpn.ROCKET: { float nx = s.vx / Math.max(1, sp), ny = s.vy / Math.max(1, sp); g.glow(s.x - nx * 9, s.y - ny * 9, 7 + (s.age % 3), 0xEEFF8A2A); g.glow(s.x - nx * 8, s.y - ny * 8, 3, 0xFFFFF0C0); break; }
+            case Wpn.FLAME: { float k = s.life > 0 && s.w.fuse > 0 ? s.life / (float) s.w.fuse : 1; g.glow(s.x, s.y, 3 + 6 * k, alpha(k > .5f ? 0xFFFFD040 : 0xFFFF6A10, .9f)); break; }
+            case Wpn.LEMON: g.glow(s.x, s.y, 8, 0xCCFFE23A); g.save(); g.translate(s.x, s.y); g.rotate((float) Math.atan2(s.vy, s.vx)); g.scale(1.5f, 1); g.circle(0, 0, 2.2f, 0xFFFFFDE0, 0, 0); g.restore(); break;
+            case Wpn.PLASMA: g.glow(s.x, s.y, 20 + s.age / 3 % 2 * 2, 0xEEFFC23A); g.glow(s.x, s.y, 9, 0xFFFFF6C0); g.circle(s.x, s.y, 4, 0xFFFFFFFF, 0, 0); break;
+            case Wpn.ORB: g.glow(s.x, s.y, 9, 0xEE3FD8FF); g.circle(s.x, s.y, 2, 0xFFFFFFFF, 0, 0); break;
+            case Wpn.NUKE: g.glow(s.x, s.y, 14 + s.age / 4 % 2 * 3, 0xAAFFD040); break;
+            case Wpn.SPARK: g.glow(s.x, s.y, 5, 0xEEFF9A2A); g.circle(s.x, s.y, 1, 0xFFFFF0C0, 0, 0); break;
+            case Wpn.DIRT: g.glow(s.x, s.y, 12, 0xEEB98CFF); g.glow(s.x, s.y, 5, 0xFFFFFFFF); break;
+            case Wpn.MINE: if (s.age / 12 % 2 == 0) g.glow(s.x, s.y - 1, 6, 0xEEFF2A2A); break;
+            case Wpn.GRENADE: if (s.age % 8 < 4) g.glow(s.x, s.y - 4, 3, 0xCCFFB02A); break;
+            default:
         }
-        int a = (int) (255 * (1 - k * k)) << 24;
-        g.poly(q, a | (k < .35f ? 0xFFFFFF : k < .7f ? 0xFFC61A : 0xFF3A10), a | 0x141414, 1.1f);
     }
     /** Bonus: píldoras de colores para curar, caja de balas para recargar. */
     void crate(Gfx g, float x, float y, int kind) {
@@ -280,18 +340,12 @@ public final class Renderer {
             case Wpn.GRENADE: g.circle(s.x, s.y, 3.1f, 0xFF2F7A3B, INK, .8f); g.rect(s.x - 1, s.y - 4.6f, 2, 2, INK); break;
             case Wpn.MINE: g.circle(s.x, s.y, 4, 0xFF333333, INK, .8f); if (s.age / 12 % 2 == 0) g.circle(s.x, s.y - 1, 1.3f, 0xFFFF2020, 0, 0); break;
             case Wpn.CRATE: crate(g, s.x, s.y + 4, 0); break;
-            case Wpn.FLAME: { float k = s.life > 0 && s.w.fuse > 0 ? s.life / (float) s.w.fuse : 1; g.circle(s.x, s.y, 1.5f + 3.2f * k, k > .5f ? 0xFFFFD040 : 0xFFFF7010, 0, 0); break; }
+            case Wpn.FLAME: break;
             case Wpn.SPIKE: { for (int i = 0; i < 4; i++) { float c = i * .785f + s.age * .2f; g.line(s.x - (float) Math.cos(c) * 4.5f, s.y - (float) Math.sin(c) * 4.5f, s.x + (float) Math.cos(c) * 4.5f, s.y + (float) Math.sin(c) * 4.5f, INK, 1); } break; }
-            case Wpn.DIRT: g.circle(s.x, s.y, 5, DIRT2, INK, .8f); break;
-            case Wpn.LEMON: g.save(); g.translate(s.x, s.y); g.rotate(a); g.scale(1.45f, 1); g.circle(0, 0, 2.6f, 0xFFFFE23A, INK, .7f); g.restore(); break;
-            case Wpn.PLASMA: {
-                float d = (float) Math.hypot(s.vx, s.vy), nx = s.vx / Math.max(1, d), ny = s.vy / Math.max(1, d), p = s.age / 3 % 2 * 1.2f;
-                g.circle(s.x - nx * 20, s.y - ny * 20, 3.4f, 0xFFFFA010, INK, .7f); g.circle(s.x - nx * 12, s.y - ny * 12, 5.4f, 0xFFFFC71E, INK, .7f);
-                g.circle(s.x, s.y, 9.5f + p, 0xFFFFE23A, INK, 1); g.circle(s.x + nx * 1.5f, s.y + ny * 1.5f, 5.5f, 0xFFFFFFFF, 0, 0); break; }
-            case Wpn.ORB: g.circle(s.x, s.y, 3, 0xFFFFFFFF, 0xFF1266FF, 1.3f); break;
+            case Wpn.DIRT: case Wpn.LEMON: case Wpn.PLASMA: case Wpn.ORB: break; // son pura luz
             case Wpn.NUKE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 9,0, 5,3.4f, -8,3.4f}, 0xFFFFD020, INK, .8f); g.circle(-1, 0, 1.8f, INK, 0, 0); g.restore(); break;
-            case Wpn.SPARK: g.circle(s.x, s.y, 1.6f, 0xFFFFC020, INK, .4f); break;
-            default: g.line(s.x, s.y, s.x - s.vx * .8f, s.y - s.vy * .8f, INK, 1.4f);
+            case Wpn.SPARK: break;
+            default:
         }
     }
 }

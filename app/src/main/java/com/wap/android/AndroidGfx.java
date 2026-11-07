@@ -1,5 +1,5 @@
 package com.wap.android;
-import android.graphics.Bitmap; import android.graphics.Canvas; import android.graphics.LinearGradient; import android.graphics.Shader; import android.graphics.Paint; import android.graphics.Path; import android.graphics.RectF; import android.graphics.Typeface;
+import android.graphics.Bitmap; import android.graphics.Canvas; import android.graphics.LinearGradient; import android.graphics.Shader; import android.graphics.RadialGradient; import android.graphics.PorterDuff; import android.graphics.PorterDuffXfermode; import android.graphics.Paint; import android.graphics.Path; import android.graphics.RectF; import android.graphics.Typeface;
 import com.wap.render.Gfx;
 import java.util.HashMap;
 /** Implementación de Gfx sobre el Canvas de Android. */
@@ -25,6 +25,19 @@ final class AndroidGfx implements Gfx {
     @Override public void endPixels(float x, float y, int s) {
         Bitmap b = open.pop(); c = stack.pop(); pix = !open.isEmpty(); fill.setAntiAlias(!pix); stroke.setAntiAlias(!pix); blit.setFilterBitmap(false);
         c.save(); c.translate(x, y); c.scale(s, s); c.drawBitmap(b, 0, 0, blit); c.restore();
+    }
+    private final HashMap<Integer, Paint> glows = new HashMap<>(); private boolean add; private final PorterDuffXfermode ADD = new PorterDuffXfermode(PorterDuff.Mode.ADD);
+    @Override public void additive(boolean on) { add = on; PorterDuffXfermode x = on ? ADD : null; fill.setXfermode(x); stroke.setXfermode(x); }
+    @Override public void glow(float x, float y, float r, int col) {
+        int a = col >>> 24; if (r <= .2f || a == 0) return;
+        int rgb = col | 0xFF000000; Paint p = glows.get(rgb);
+        if (p == null) { // un degradado por color, reutilizado y escalado al radio
+            p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setShader(new RadialGradient(0, 0, 1, new int[]{rgb, rgb & 0xFFFFFF | 0x66000000, rgb & 0xFFFFFF}, new float[]{0, .35f, 1}, Shader.TileMode.CLAMP));
+            glows.put(rgb, p);
+        }
+        p.setAlpha(a); p.setXfermode(add ? ADD : null);
+        c.save(); c.translate(x, y); c.scale(r, r); c.drawCircle(0, 0, 1, p); c.restore();
     }
     @Override public int w() { return W; }
     @Override public int h() { return H; }
