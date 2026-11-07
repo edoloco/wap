@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- WAP · cuadro "correr_4". Dibuja encima de cada capa y conserva sus nombres. Pies en (0,0), mirando a la derecha. -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="640" height="720" viewBox="-32 -64 64 72">
+  <g id="guia" inkscape:groupmode="layer" inkscape:label="guia" sodipodi:insensitive="true" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" opacity="0.5">
+    <line x1="-32" y1="0" x2="32" y2="0" stroke="#3DDC97" stroke-width="0.3"/>
+    <line x1="0" y1="-64" x2="0" y2="8" stroke="#3DDC97" stroke-width="0.2" stroke-dasharray="1 1"/>
+    <rect x="-7" y="-54" width="14" height="54" fill="none" stroke="#FF6FA0" stroke-width="0.2" stroke-dasharray="1 1"/>
+  </g>
+  <g id="hueso_brazo_lejano" inkscape:groupmode="layer" inkscape:label="hueso_brazo_lejano">
+    <rect transform="matrix(0.574 0.819 -0.819 0.574 7.125 -27.56)" x="0" y="-1.2" width="6" height="2.4" rx="1.2" fill="#141414"/>
+    <circle transform="matrix(0.574 0.819 -0.819 0.574 7.125 -27.56)" cx="0" cy="0" r="1.6" fill="#141414"/>
+    <circle transform="matrix(0.574 0.819 -0.819 0.574 7.125 -27.56)" cx="6" cy="0" r="1.5" fill="#141414"/>
+    <rect transform="matrix(0.906 -0.423 0.423 0.906 10.566 -22.646)" x="0" y="-1.1" width="6.5" height="2.2" rx="1.1" fill="#141414"/>
+  </g>
+  <g id="mano_lejana" inkscape:groupmode="layer" inkscape:label="mano_lejana">
+    <path transform="matrix(0.906 -0.423 0.423 0.906 16.457 -25.393)" d="M0 -2.4 L3.6 -2.6 L5 -1.2 L5 1.2 L3.6 2.6 L0 2.4 Z" fill="#141414" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+    <rect transform="matrix(0.906 -0.423 0.423 0.906 16.457 -25.393)" x="2.6" y="-2.2" width="2.6" height="1.2" rx="0.5" fill="#FFFFFF" stroke="#141414" stroke-width="0.375" stroke-linejoin="round" stroke-linecap="round"/>
+    <rect transform="matrix(0.906 -0.423 0.423 0.906 16.457 -25.393)" x="2.6" y="-0.7" width="2.6" height="1.2" rx="0.5" fill="#FFFFFF" stroke="#141414" stroke-width="0.375" stroke-linejoin="round" stroke-linecap="round"/>
+    <rect transform="matrix(0.906 -0.423 0.423 0.906 16.457 -25.393)" x="2.6" y="0.8" width="2.6" height="1.2" rx="0.5" fill="#FFFFFF" stroke="#141414" stroke-width="0.375" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="guantelete_lejano" inkscape:groupmode="layer" inkscape:label="guantelete_lejano">
+    <path transform="matrix(0.906 -0.423 0.423 0.906 10.566 -22.646)" d="M-0.5 -3.6 L1.8 -4.4 L6.6 -4.4 L8 -3 L8 3 L6.6 4.4 L1.8 4.4 L-0.5 3.6 Z" fill="#C2C3C7" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="hombro_lejano" inkscape:groupmode="layer" inkscape:label="hombro_lejano">
+    <circle transform="matrix(1 0 0 1 0 0)" cx="7.125" cy="-27.56" r="3" fill="#FFFFFF" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="bota_lejana" inkscape:groupmode="layer" inkscape:label="bota_lejana">
+    <path transform="matrix(0.985 -0.174 0.174 0.985 5 -10)" d="M-3 -1.6 L2 -2 L6 0 L7.6 1.6 L7.6 4 L-3 4 Z" fill="#141414" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+    <line transform="matrix(0.985 -0.174 0.174 0.985 5 -10)" x1="-3" y1="3.6" x2="7.4" y2="3.6" fill="none" stroke="#FFFFFF" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="hueso_canilla_lejana" inkscape:groupmode="layer" inkscape:label="hueso_canilla_lejana">
+    <path transform="matrix(-0.697 0.717 -0.717 -0.697 11.966 -17.175)" d="M0 -1.8 L10 -1.1 L10 1.1 L0 1.8 Z" fill="#141414"/>
+  </g>
+  <g id="canilla_lejana" inkscape:groupmode="layer" inkscape:label="canilla_lejana">
+    <path transform="matrix(-0.697 0.717 -0.717 -0.697 11.966 -17.175)" d="M0.5 -2.2 L3 -2.6 L7 -2.4 L9.6 -2.8 L9.6 2.8 L5 2.6 L1 2.6 Z" fill="#5E5650" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="hueso_muslo_lejano" inkscape:groupmode="layer" inkscape:label="hueso_muslo_lejano">
+    <path transform="matrix(0.997 0.083 -0.083 0.997 2 -18)" d="M0 -2 L10 -1.2 L10 1.2 L0 2 Z" fill="#141414"/>
+  </g>
+  <g id="muslo_lejano" inkscape:groupmode="layer" inkscape:label="muslo_lejano">
+    <path transform="matrix(0.997 0.083 -0.083 0.997 2 -18)" d="M-1 -2.8 L2 -3.4 L7 -3 L10.4 -2.4 L10.2 2.4 L6 3.2 L1 3.4 L-1 2.4 Z" fill="#5E5650" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="rodilla_lejana" inkscape:groupmode="layer" inkscape:label="rodilla_lejana">
+    <path transform="matrix(-0.697 0.717 -0.717 -0.697 11.966 -17.175)" d="M-1.6 -2.4 L1.6 -2.6 L2.2 0 L1.6 2.4 L-1.6 2.4 Z" fill="#141414" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="hueso_torso" inkscape:groupmode="layer" inkscape:label="hueso_torso">
+    <rect transform="matrix(0.97 0.242 -0.242 0.97 3.629 -33.554)" x="-1.2" y="8" width="2.4" height="7" rx="0.6" fill="#141414"/>
+    <path transform="matrix(0.97 0.242 -0.242 0.97 3.629 -33.554)" d="M-3.4 0 L3.4 0 L2.4 9 L-2.4 9 Z" fill="#141414"/>
+    <path transform="matrix(0.97 0.242 -0.242 0.97 3.629 -33.554)" d="M-4.2 11.4 L4.2 11.4 L3.6 15.2 L1 16.6 L-1 16.6 L-3.6 15.2 Z" fill="#141414"/>
+    <path transform="matrix(0.97 0.242 -0.242 0.97 3.629 -33.554)" d="M-2.4 -2.2 L0.6 -1.6 L-0.4 2.4 L-3.2 1.8 Z" fill="#141414"/>
+  </g>
+  <g id="abdomen" inkscape:groupmode="layer" inkscape:label="abdomen">
+    <path transform="matrix(0.97 0.242 -0.242 0.97 3.629 -33.554)" d="M-3.4 8.8 L3.4 8.8 L2.8 10.6 L-2.8 10.6 Z" fill="#5E5650" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="pecho" inkscape:groupmode="layer" inkscape:label="pecho">
+    <path transform="matrix(0.97 0.242 -0.242 0.97 3.629 -33.554)" d="M-5.2 1 L5.2 1 L5.6 5.8 L3.8 8.6 L-3.8 8.6 L-5.6 5.8 Z" fill="#5E5650" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="craneo" inkscape:groupmode="layer" inkscape:label="craneo">
+    <circle transform="matrix(0.97 0.242 -0.242 0.97 3.629 -33.554)" cx="0" cy="-5.5" r="3.4" fill="#141414"/>
+  </g>
+  <g id="cabeza" inkscape:groupmode="layer" inkscape:label="cabeza">
+    <path transform="matrix(0.999 0.049 -0.049 0.999 3.629 -33.554)" d="M-4.5 -14.6 L-3.442 -15.03 L-2.15 -15.288 L-0.783 -15.402 L0.5 -15.4 L1.712 -15.287 L2.919 -15.05 L4.041 -14.687 L5 -14.2 L5.781 -13.559 L6.425 -12.775 L6.931 -11.903 L7.3 -11 L7.51 -10.042 L7.569 -9.012 L7.518 -7.977 L7.4 -7 L7.224 -6.08 L6.969 -5.188 L6.629 -4.352 L6.2 -3.6 L5.672 -2.926 L5.05 -2.319 L4.353 -1.802 L3.6 -1.4 L2.761 -1.123 L1.837 -0.956 L0.895 -0.887 L0 -0.9 L-0.852 -0.996 L-1.688 -1.181 L-2.48 -1.451 L-3.2 -1.8 L-3.844 -2.226 L-4.425 -2.731 L-4.944 -3.321 L-5.4 -4 L-5.798 -4.802 L-6.138 -5.712 L-6.408 -6.667 L-6.6 -7.6 L-6.734 -8.505 L-6.806 -9.412 L-6.776 -10.314 L-6.6 -11.2 L-6.291 -12.125 L-5.862 -13.075 L-5.278 -13.937 Z" fill="#9E9E9E" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="bota_cercana" inkscape:groupmode="layer" inkscape:label="bota_cercana">
+    <path transform="matrix(1 0 0 1 3 -4)" d="M-3 -1.6 L2 -2 L6 0 L7.6 1.6 L7.6 4 L-3 4 Z" fill="#141414" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+    <line transform="matrix(1 0 0 1 3 -4)" x1="-3" y1="3.6" x2="7.4" y2="3.6" fill="none" stroke="#FFFFFF" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="hueso_canilla_cercana" inkscape:groupmode="layer" inkscape:label="hueso_canilla_cercana">
+    <path transform="matrix(-0.38 0.925 -0.925 -0.38 6.8 -13.25)" d="M0 -1.8 L10 -1.1 L10 1.1 L0 1.8 Z" fill="#141414"/>
+  </g>
+  <g id="canilla_cercana" inkscape:groupmode="layer" inkscape:label="canilla_cercana">
+    <path transform="matrix(-0.38 0.925 -0.925 -0.38 6.8 -13.25)" d="M0.5 -2.2 L3 -2.6 L7 -2.4 L9.6 -2.8 L9.6 2.8 L5 2.6 L1 2.6 Z" fill="#5E5650" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="hueso_muslo_cercano" inkscape:groupmode="layer" inkscape:label="hueso_muslo_cercano">
+    <path transform="matrix(0.88 0.475 -0.475 0.88 -2 -18)" d="M0 -2 L10 -1.2 L10 1.2 L0 2 Z" fill="#141414"/>
+  </g>
+  <g id="muslo_cercano" inkscape:groupmode="layer" inkscape:label="muslo_cercano">
+    <path transform="matrix(0.88 0.475 -0.475 0.88 -2 -18)" d="M-1 -2.8 L2 -3.4 L7 -3 L10.4 -2.4 L10.2 2.4 L6 3.2 L1 3.4 L-1 2.4 Z" fill="#5E5650" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="rodilla_cercana" inkscape:groupmode="layer" inkscape:label="rodilla_cercana">
+    <path transform="matrix(-0.38 0.925 -0.925 -0.38 6.8 -13.25)" d="M-1.6 -2.4 L1.6 -2.6 L2.2 0 L1.6 2.4 L-1.6 2.4 Z" fill="#141414" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="pelvis" inkscape:groupmode="layer" inkscape:label="pelvis">
+    <path transform="matrix(0.97 0.242 -0.242 0.97 0 -19)" d="M-3.6 -5 L3.6 -5 L3.8 1.6 L2.6 3 L-2.6 3 L-3.8 1.6 Z" fill="#C2C3C7" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="hueso_brazo_cercano" inkscape:groupmode="layer" inkscape:label="hueso_brazo_cercano">
+    <rect transform="matrix(0.707 0.707 -0.707 0.707 -1.802 -29.786)" x="0" y="-1.2" width="6" height="2.4" rx="1.2" fill="#141414"/>
+    <circle transform="matrix(0.707 0.707 -0.707 0.707 -1.802 -29.786)" cx="0" cy="0" r="1.6" fill="#141414"/>
+    <circle transform="matrix(0.707 0.707 -0.707 0.707 -1.802 -29.786)" cx="6" cy="0" r="1.5" fill="#141414"/>
+    <rect transform="matrix(0.643 -0.766 0.766 0.643 2.44 -25.543)" x="0" y="-1.1" width="6.5" height="2.2" rx="1.1" fill="#141414"/>
+  </g>
+  <g id="mano_cercana" inkscape:groupmode="layer" inkscape:label="mano_cercana">
+    <path transform="matrix(0.643 -0.766 0.766 0.643 6.619 -30.523)" d="M0 -2.4 L3.6 -2.6 L5 -1.2 L5 1.2 L3.6 2.6 L0 2.4 Z" fill="#141414" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+    <rect transform="matrix(0.643 -0.766 0.766 0.643 6.619 -30.523)" x="2.6" y="-2.2" width="2.6" height="1.2" rx="0.5" fill="#FFFFFF" stroke="#141414" stroke-width="0.375" stroke-linejoin="round" stroke-linecap="round"/>
+    <rect transform="matrix(0.643 -0.766 0.766 0.643 6.619 -30.523)" x="2.6" y="-0.7" width="2.6" height="1.2" rx="0.5" fill="#FFFFFF" stroke="#141414" stroke-width="0.375" stroke-linejoin="round" stroke-linecap="round"/>
+    <rect transform="matrix(0.643 -0.766 0.766 0.643 6.619 -30.523)" x="2.6" y="0.8" width="2.6" height="1.2" rx="0.5" fill="#FFFFFF" stroke="#141414" stroke-width="0.375" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="guantelete_cercano" inkscape:groupmode="layer" inkscape:label="guantelete_cercano">
+    <path transform="matrix(0.643 -0.766 0.766 0.643 2.44 -25.543)" d="M-0.5 -3.6 L1.8 -4.4 L6.6 -4.4 L8 -3 L8 3 L6.6 4.4 L1.8 4.4 L-0.5 3.6 Z" fill="#C2C3C7" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+  <g id="hombro_cercano" inkscape:groupmode="layer" inkscape:label="hombro_cercano">
+    <circle transform="matrix(1 0 0 1 0 0)" cx="-1.802" cy="-29.786" r="3.6" fill="#FFFFFF" stroke="#141414" stroke-width="0.75" stroke-linejoin="round" stroke-linecap="round"/>
+  </g>
+</svg>

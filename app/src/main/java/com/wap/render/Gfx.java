@@ -4,6 +4,9 @@ public interface Gfx {
     int w(); int h();
     void save(); void restore(); void translate(float x, float y); void rotate(float rad); void scale(float x, float y);
     void clear(int c);
+    /** Capas con nombre: solo las usa el exportador de plantillas SVG; en el juego no hacen nada. */
+    default void layer(String name) {}
+    default void endLayer() {}
     /** Luz: círculo con degradado radial que se desvanece hacia el borde. */
     void glow(float x, float y, float r, int argb);
     /** Mezcla aditiva para luces (los colores se suman al fondo). */
