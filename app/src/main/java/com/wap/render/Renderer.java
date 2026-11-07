@@ -53,9 +53,16 @@ public final class Renderer {
     public void consume(World w, boolean reduceMotion) {
         for (Fx f : w.fx) switch (f.type) {
             case Fx.EXPLODE: { // fogonazo, bola de fuego, onda roja, chispas, brasas y humo oscuro
-                booms.add(new float[]{f.x, f.y, f.a, 0, r.nextFloat() * 6});
+                int st = (int) f.b;
+                booms.add(new float[]{f.x, f.y, f.a, 0, r.nextFloat() * 6, st});
                 if (!reduceMotion) shake = Math.min(14, shake + f.a * .14f);
                 int n = (int) Math.min(34, 6 + f.a * .6f);
+                if (st > 0) { // halo de luz celeste o verde, sin humo ni fuego
+                    int c1 = st == 1 ? 0xFF7FE8FF : 0xFF8CFF6A, c2 = 0xFFFFFFFF;
+                    for (int i = 0; i < n; i++) { float a = r.nextFloat() * 6.28f, v = 1.5f + r.nextFloat() * 3.5f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v, 12 + r.nextInt(12), 1, i % 3 == 0 ? c2 : c1); p.g = 0; }
+                    for (int i = 0; i < n / 4; i++) { float a = r.nextFloat() * 6.28f, v = r.nextFloat() * 3 + 1; part(SQUARE, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 1, 30 + r.nextInt(30), 1.5f + r.nextFloat() * 2, r.nextBoolean() ? DIRT : DIRT2); }
+                    break;
+                }
                 for (int i = 0; i < n; i++) { float a = r.nextFloat() * 6.28f, v = 2 + r.nextFloat() * (3 + f.a * .12f); P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 1, 14 + r.nextInt(16), 1, i % 3 == 0 ? 0xFFFFF4B0 : 0xFFFFA22E); p.g = .12f; }
                 for (int i = 0; i < n / 3; i++) { float a = r.nextFloat() * 6.28f, v = r.nextFloat() * 2.5f; P p = part(EMBER, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 1.5f, 40 + r.nextInt(40), 1.5f + r.nextFloat() * 2, 0xFFFF6A1A); p.g = .05f; }
                 for (int i = 0; i < 3 + n / 5; i++) { float a = r.nextFloat() * 6.28f, d = r.nextFloat() * f.a * .5f; P p = part(SMOKE, f.x + (float) Math.cos(a) * d, f.y + (float) Math.sin(a) * d, (float) Math.cos(a) * .4f, -.25f, 50 + r.nextInt(40), f.a * (.2f + r.nextFloat() * .2f), 0x7A1A1C24); p.g = 0; }
@@ -76,7 +83,9 @@ public final class Renderer {
             case Fx.STOMP: {
                 for (int i = 0; i < 10; i++) { float a = i * .628f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3, (float) Math.sin(a) * 1.6f - 1, 12, 1, 0xFFFFFFFF); p.g = 0; }
                 RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "¡BARRIDA!" : "¡PISADO!"; v.labelT = LABEL; break; }
-            case Fx.GRAB: { RobotArt.View v = views[1 - f.who]; v.label = "¡DROP!"; v.labelT = LABEL; break; }
+            case Fx.GRAB: { RobotArt.View v = views[1 - f.who]; v.label = "¡PUNCH!"; v.labelT = LABEL;
+                for (int i = 0; i < 12; i++) { float a = i * .52f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3.5f, (float) Math.sin(a) * 3.5f, 12, 1, 0xFFFFFFFF); p.g = 0; }
+                booms.add(new float[]{f.x, f.y, 20, 0, 0, 3}); break; }
             case Fx.SLAM: {
                 booms.add(new float[]{f.x, f.y, 14 + f.a * 14, 0, 0}); if (!reduceMotion) shake = Math.min(14, shake + 3 + f.a * 6);
                 for (int i = 0; i < 12; i++) { P p = part(SPARK, f.x, f.y, (r.nextFloat() - .5f) * 7, -r.nextFloat() * 5, 16, 1, 0xFFFFFFFF); p.g = .15f; }
@@ -121,17 +130,29 @@ public final class Renderer {
     }
     static final int BOOM_T = 24;
     /** Estelas de luz detrás de los proyectiles. */
+    /** Las estelas solo van detrás de lo lento: en lo rápido se veían como puntitos. */
     void trails(World w) {
         for (Shot s : w.shots) {
+            if (s.wait > 0) continue;
+            float sp = (float) Math.hypot(s.vx, s.vy);
+            if (s.w.fan) { // el viento arrastra partículas sueltas
+                for (P p : ps) if (p.kind != ARMOR && p.kind != BONE && Math.abs(p.x - s.x) < 16 && Math.abs(p.y - s.y) < 16) { p.vx += s.vx * .12f; p.vy += s.vy * .12f; p.ground = false; }
+                if (w.tick % 2 == 0) { P q = part(DUST, s.x, s.y, s.vx * .3f, s.vy * .3f, 14, 2.5f, 0x40FFFFFF); q.g = 0; }
+                continue;
+            }
+            if (s.w.look == Wpn.GAS) { // chispas como gas
+                for (int i = 0; i < 3; i++) { P q = part(TRAIL, s.x + (r.nextFloat() - .5f) * 10, s.y + (r.nextFloat() - .5f) * 10, (r.nextFloat() - .5f) * .8f, (r.nextFloat() - .5f) * .8f - .1f, 22 + r.nextInt(14), 3 + r.nextFloat() * 4, i == 0 ? 0xFFFFE07A : 0xFFFF8A2A); q.g = 0; }
+                continue;
+            }
+            if (s.w.look == Wpn.RAY) { P q = part(TRAIL, s.x, s.y, 0, 0, 26, 21, 0xFF6FDDFF); q.g = 0; P q2 = part(TRAIL, s.x, s.y, 0, 0, 16, 9, 0xFFFFFFFF); q2.g = 0; continue; } // Kamehameha
+            if (sp > 5) continue;
             int c; float z;
             switch (s.w.look) {
                 case Wpn.ROCKET: c = 0xFFFF8A2A; z = 4; if (w.tick % 2 == 0) { P q = part(SMOKE, s.x, s.y, 0, -.1f, 40, 2.2f, 0x50404650); q.g = 0; } break;
                 case Wpn.NUKE: c = 0xFFFFD040; z = 6; break;
                 case Wpn.ORB: c = 0xFF3FD8FF; z = 3; break;
-                case Wpn.LEMON: c = 0xFFFFE23A; z = 2.5f; break;
                 case Wpn.PLASMA: c = 0xFFFFC23A; z = 8; break;
                 case Wpn.SPARK: c = 0xFFFF9A2A; z = 2; break;
-                case Wpn.DIRT: c = 0xFFB98CFF; z = 4; break;
                 default: continue;
             }
             P p = part(TRAIL, s.x, s.y, (r.nextFloat() - .5f) * .4f, (r.nextFloat() - .5f) * .4f, 18, z, c); p.g = 0;
@@ -296,6 +317,16 @@ public final class Renderer {
     /** Explosión de luz: fogonazo blanco, bola de fuego, núcleo amarillo y onda roja que se abre. */
     void boom(Gfx g, float[] b) {
         float t = b[3], k = t / BOOM_T, R = b[2], x = b[0], y = b[1];
+        int st = b.length > 5 ? (int) b[5] : 0;
+        if (st > 0) { // halo circular de luz
+            int c = st == 1 ? 0xFF6FDDFF : st == 2 ? 0xFF8CFF6A : 0xFFFFFFFF;
+            if (t < 5) g.glow(x, y, R * 1.7f, alpha(0xFFFFFFFF, 1 - t / 5));
+            g.glow(x, y, R * (.6f + .5f * k), alpha(c, (1 - k) * (1 - k)));
+            float rr = R * (.3f + 1.1f * (float) Math.sqrt(k));
+            g.circle(x, y, rr, 0, alpha(c, (1 - k) * .5f), Math.max(.5f, R * .5f * (1 - k)));
+            g.circle(x, y, rr, 0, alpha(0xFFFFFFFF, (1 - k) * .9f), Math.max(.4f, R * .14f * (1 - k)));
+            return;
+        }
         if (t < 5) g.glow(x, y, R * 1.9f, alpha(0xFFFFFFFF, 1 - t / 5));
         g.glow(x, y, R * (.75f + .55f * k), alpha(0xFFFF6A1A, (float) Math.pow(1 - k, 1.3)));
         g.glow(x, y, R * (.45f + .25f * k), alpha(0xFFFFE27A, (1 - k) * (1 - k)));
@@ -305,14 +336,22 @@ public final class Renderer {
     }
     /** Luz propia de cada proyectil. */
     void shotLight(Gfx g, Shot s) {
+        if (s.wait > 0) return;
         float sp = (float) Math.hypot(s.vx, s.vy);
         switch (s.w.look) {
             case Wpn.BULLET: g.line(s.x, s.y, s.x - s.vx * 1.6f, s.y - s.vy * 1.6f, 0x99FFC24A, 2.2f); g.line(s.x, s.y, s.x - s.vx * .9f, s.y - s.vy * .9f, 0xFFFFFFFF, .8f); g.glow(s.x, s.y, 4, 0x99FFD27A); break;
             case Wpn.ROCKET: { float nx = s.vx / Math.max(1, sp), ny = s.vy / Math.max(1, sp); g.glow(s.x - nx * 9, s.y - ny * 9, 7 + (s.age % 3), 0xEEFF8A2A); g.glow(s.x - nx * 8, s.y - ny * 8, 3, 0xFFFFF0C0); break; }
-            case Wpn.FLAME: { float k = s.life > 0 && s.w.fuse > 0 ? s.life / (float) s.w.fuse : 1; g.glow(s.x, s.y, 3 + 6 * k, alpha(k > .5f ? 0xFFFFD040 : 0xFFFF6A10, .9f)); break; }
+            case Wpn.FLAME: { float k = s.life > 0 && s.w.fuse > 0 ? s.life / (float) s.w.fuse : 1; g.glow(s.x, s.y, 4 + 9 * (1 - k * .5f), alpha(k > .6f ? 0xFFFFD040 : 0xFFFF6A10, .9f * Math.min(1, k * 2.5f))); break; }
             case Wpn.LEMON: g.glow(s.x, s.y, 8, 0xCCFFE23A); g.save(); g.translate(s.x, s.y); g.rotate((float) Math.atan2(s.vy, s.vx)); g.scale(1.5f, 1); g.circle(0, 0, 2.2f, 0xFFFFFDE0, 0, 0); g.restore(); break;
             case Wpn.PLASMA: g.glow(s.x, s.y, 20 + s.age / 3 % 2 * 2, 0xEEFFC23A); g.glow(s.x, s.y, 9, 0xFFFFF6C0); g.circle(s.x, s.y, 4, 0xFFFFFFFF, 0, 0); break;
+            case Wpn.LIGHT: g.glow(s.x, s.y, 11, 0xEE58D2FF); g.glow(s.x, s.y, 5, 0xFFE8FBFF); g.circle(s.x, s.y, 2.2f, 0xFFFFFFFF, 0, 0); break;
+            case Wpn.GREEN: g.glow(s.x, s.y, 13, 0xCC5CFF3A); g.circle(s.x, s.y, 5, 0xFF46D62A, 0, 0); g.circle(s.x - 1.5f, s.y - 1.5f, 2, 0xFFD8FFC0, 0, 0); break;
+            case Wpn.BLASER: { float n = Math.max(1, sp), ux = s.vx / n, uy = s.vy / n; g.glow(s.x, s.y, 9, 0xCC6AFF4A); g.line(s.x - ux * 9, s.y - uy * 9, s.x + ux * 3, s.y + uy * 3, 0xFF7CFF5A, 3); g.line(s.x - ux * 8, s.y - uy * 8, s.x + ux * 2, s.y + uy * 2, 0xFFF0FFE8, 1.2f); break; }
+            case Wpn.RAY: g.glow(s.x, s.y, 16, 0xEE6FDDFF); g.glow(s.x, s.y, 7, 0xFFFFFFFF); break;
+            case Wpn.GAS: g.glow(s.x, s.y, 7, 0xAAFF9A2A); break;
+            case Wpn.WIND: break;
             case Wpn.ORB: g.glow(s.x, s.y, 9, 0xEE3FD8FF); g.circle(s.x, s.y, 2, 0xFFFFFFFF, 0, 0); break;
+            case Wpn.SPIKE: g.glow(s.x, s.y, 6, 0x66FFFFFF); break;
             case Wpn.NUKE: g.glow(s.x, s.y, 14 + s.age / 4 % 2 * 3, 0xAAFFD040); break;
             case Wpn.SPARK: g.glow(s.x, s.y, 5, 0xEEFF9A2A); g.circle(s.x, s.y, 1, 0xFFFFF0C0, 0, 0); break;
             case Wpn.DIRT: g.glow(s.x, s.y, 12, 0xEEB98CFF); g.glow(s.x, s.y, 5, 0xFFFFFFFF); break;
@@ -333,17 +372,30 @@ public final class Renderer {
         g.rrect(-7, -3, 14, 6, 3, INK, 0, 0); g.rrect(-6, -2, 6, 4, 2, a, 0, 0); g.rrect(0, -2, 6, 4, 2, b, 0, 0);
         g.rect(-5, -2, 3, 1, 0xFFFFFFFF); g.restore();
     }
+    /** Guante de box del color del traje de quien lo lanza. */
+    static void glove(Gfx g, float x, float y, int dir, int c) {
+        int lite = RobotArt.mixLight(c), dark = RobotArt.mixDark(c);
+        g.save(); g.translate(x, y); g.scale(dir, 1);
+        g.rrect(-9, -3.4f, 5, 6.8f, 1.5f, 0xFFF2F2F2, 0, 0); // puño elástico
+        g.rrect(-5, -6, 11, 12, 5.5f, c, 0, 0);
+        g.rrect(-2, -6.6f, 6, 4.4f, 2.2f, c, 0, 0); // pulgar arriba
+        g.rrect(-3.5f, -4.8f, 7, 3, 1.5f, lite, 0, 0);
+        g.line(-4, 3, 4, 3, dark, 1);
+        g.restore();
+    }
     void shot(Gfx g, Shot s) {
+        if (s.wait > 0) return;
         Wpn w = s.w; float a = (float) Math.atan2(s.vy, s.vx);
         switch (w.look) {
-            case Wpn.ROCKET: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-6,-2, 3,-2, 7,0, 3,2, -6,2}, 0xFFFF0000, INK, .7f); g.poly(new float[]{-6,-1.4f, -11,0, -6,1.4f}, 0xFFFFB020, 0, 0); g.restore(); break;
-            case Wpn.GRENADE: g.circle(s.x, s.y, 3.1f, 0xFF2F7A3B, INK, .8f); g.rect(s.x - 1, s.y - 4.6f, 2, 2, INK); break;
-            case Wpn.MINE: g.circle(s.x, s.y, 4, 0xFF333333, INK, .8f); if (s.age / 12 % 2 == 0) g.circle(s.x, s.y - 1, 1.3f, 0xFFFF2020, 0, 0); break;
+            case Wpn.ROCKET: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-6,-2, 3,-2, 7,0, 3,2, -6,2}, 0xFFFF2A1A, 0, 0); g.poly(new float[]{-6,-2, 3,-2, 5,-1, -6,-1}, 0xFFFF8A6A, 0, 0); g.poly(new float[]{-6,-1.4f, -11,0, -6,1.4f}, 0xFFFFB020, 0, 0); g.restore(); break;
+            case Wpn.GRENADE: g.circle(s.x, s.y, 3.1f, 0xFF2F7A3B, 0, 0); g.circle(s.x - 1, s.y - 1, 1.2f, 0xFF6BBF6E, 0, 0); g.rect(s.x - 1, s.y - 4.6f, 2, 2, 0xFF5A5A5A); break;
+            case Wpn.MINE: g.circle(s.x, s.y, 4, 0xFF4A4A4A, 0, 0); g.circle(s.x - 1.2f, s.y - 1.2f, 1.4f, 0xFF7A7A7A, 0, 0); if (s.age / 12 % 2 == 0) g.circle(s.x, s.y - 1, 1.3f, 0xFFFF2020, 0, 0); break;
             case Wpn.CRATE: crate(g, s.x, s.y + 4, 0); break;
             case Wpn.FLAME: break;
-            case Wpn.SPIKE: { for (int i = 0; i < 4; i++) { float c = i * .785f + s.age * .2f; g.line(s.x - (float) Math.cos(c) * 4.5f, s.y - (float) Math.sin(c) * 4.5f, s.x + (float) Math.cos(c) * 4.5f, s.y + (float) Math.sin(c) * 4.5f, INK, 1); } break; }
+            case Wpn.SPIKE: { for (int i = 0; i < 4; i++) { float c = i * .785f + s.age * .2f; g.line(s.x - (float) Math.cos(c) * 4.5f, s.y - (float) Math.sin(c) * 4.5f, s.x + (float) Math.cos(c) * 4.5f, s.y + (float) Math.sin(c) * 4.5f, 0xFFB8C0CC, 1.1f); } g.circle(s.x, s.y, 1.8f, 0xFFE0E6EE, 0, 0); break; }
+            case Wpn.GLOVE: glove(g, s.x, s.y, s.vx > 0 ? 1 : -1, RobotArt.COLOR[s.owner]); break;
             case Wpn.DIRT: case Wpn.LEMON: case Wpn.PLASMA: case Wpn.ORB: break; // son pura luz
-            case Wpn.NUKE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 9,0, 5,3.4f, -8,3.4f}, 0xFFFFD020, INK, .8f); g.circle(-1, 0, 1.8f, INK, 0, 0); g.restore(); break;
+            case Wpn.NUKE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 9,0, 5,3.4f, -8,3.4f}, 0xFFFFD020, 0, 0); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 7,-1.6f, -8,-1.6f}, 0xFFFFF09A, 0, 0); g.circle(-1, .8f, 1.8f, 0xFF8A5A10, 0, 0); g.restore(); break;
             case Wpn.SPARK: break;
             default:
         }

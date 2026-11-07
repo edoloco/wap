@@ -19,7 +19,7 @@ public final class Robot {
     public int slideT, airT, fireT, fireSlot = 3; boolean jumping;
     public int rope; public float rx, ry, rvx, rvy, rlen; // 0 sin gancho, 1 volando, 2 enganchado
     public final Wpn[] loadout = new Wpn[SLOTS]; public final int[] ammo = new int[SLOTS], reload = new int[SLOTS], delay = new int[SLOTS], charge = new int[SLOTS];
-    public int stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot other; boolean ghost, stompHit;
+    public int flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot other; boolean ghost, stompHit;
     public int wallDir, windT; int windSlot, lastWall, wallT, wallLock;
     /** Preparación breve antes del primer disparo: 6 ticks, una décima de segundo. */
     public static final int WIND = 6;
@@ -90,7 +90,7 @@ public final class Robot {
         float mul = 1 + (12 - armorCount()) * .08f;
         vx += kx * mul; vy += ky * mul; hurtT = 12;
         if (d <= 0) return;
-        hp -= d; g.fx(Fx.HIT, hx, hy, d, id);
+        hp -= d; g.fx(Fx.HIT, hx, hy, d, id); flinchT = Math.max(flinchT, (int) Math.min(8, 2 + d / 4));
         int want = hp <= BONE_HP ? 0 : (int) Math.ceil((hp - BONE_HP) / (MAX_HP - BONE_HP) * PIECES);
         while (armorCount() > want) {
             int best = -1; float bd = 1e9f;
@@ -117,31 +117,30 @@ public final class Robot {
     private boolean fire(World g, int slot) {
         Wpn w = loadout[slot];
         if (reload[slot] > 0 || delay[slot] > 0) return false;
-        float deg = 0, base = 0; // todas las armas salen rectas, hacia donde mira el robot
+        float deg = -w.angle, base = (float) StrictMath.toRadians(deg); // rectas, salvo las que rebotan en diagonal
         boolean planted = grounded && Math.abs(vx) < .4f && slideT == 0;
         float my = py - (h != STAND_H ? 13 : planted ? 30 : 33), mx = px + facing * 10; // sale de la mano extendida
         for (int d = 12; d <= 22 && !g.t.solid((int) (px + facing * d), (int) my); d += 2) mx = px + facing * d;
-        if (w.grab) grab(g, w);
-        else for (int i = 0; i < w.parts; i++) {
+        for (int i = 0; i < w.parts; i++) {
             float a = base + (float) StrictMath.toRadians(g.rng.r(-w.spread, w.spread));
-            float v = w.speed * (w.parts > 1 ? g.rng.r(.82f, 1.1f) : 1);
+            float v = w.speed * (w.parts > 1 && w.stagger == 0 ? g.rng.r(.82f, 1.1f) : 1);
             float dx = (float) StrictMath.cos(a) * facing, dy = (float) StrictMath.sin(a);
-            if (w.beam) g.beam(w, id, mx, my, dx, dy); else g.spawn(w, id, mx, my, dx * v + (w.grav > .1f ? vx * .4f : 0), dy * v);
+            if (w.beam) g.beam(w, id, mx, my, dx, dy);
+            else { Shot sh = g.spawn(w, id, mx, my, dx * v + (w.grav > .1f ? vx * .4f : 0), dy * v); if (sh != null) sh.wait = i * w.stagger; }
         }
         g.fx(Fx.FLASH, mx, my, deg * facing, id).b = Wpn.index(w.name);
         vx -= facing * w.recoil; fireT = 22; fireSlot = slot;
-        ammo[slot]--; delay[slot] = w.delay;
+        if (!w.infinite) ammo[slot]--; delay[slot] = w.delay;
         if (ammo[slot] <= 0) reload[slot] = w.reload;
         return true;
     }
-    /** Drop: agarra al rival que está al frente y lo lanza hacia atrás. Al chocar pierde un porcentaje de vida. */
-    private void grab(World g, Wpn w) {
-        Robot o = g.robots[1 - id]; float dx = (o.px - px) * facing;
-        if (!o.alive() || o.invuln > 0 || o.thrownT > 0 || dx < -6 || dx > GRAB_RANGE || Math.abs(o.py - py) > 44) return;
-        o.damage(g, w.dmg, 0, 0, id, o.px, o.py - 30);
-        o.rope = 0; o.slideT = 0; o.windT = 0; o.stunT = 0; o.thrownT = 80; o.thrownBy = id;
-        o.vx = -facing * THROW_VX; o.vy = -THROW_VY; o.facing = facing;
-        g.fx(Fx.GRAB, o.px, o.py - 30, 0, id);
+    /** Cannon Punch: sale lanzado en el sentido del golpe, girando. Al chocar pierde un porcentaje de vida. */
+    public void launch(World g, int dir, int by, float dmg) {
+        if (!alive() || invuln > 0 || thrownT > 0) return;
+        damage(g, dmg, 0, 0, by, px, py - 30);
+        rope = 0; slideT = 0; windT = 0; stunT = 0; thrownT = 80; thrownBy = by;
+        vx = dir * THROW_VX; vy = -THROW_VY;
+        g.fx(Fx.GRAB, px, py - 30, 0, by);
     }
     private void action(World g, int btn, int in, boolean freshDir) {
         boolean up = (in & Input.UP) != 0, down = (in & Input.DOWN) != 0;
@@ -189,6 +188,7 @@ public final class Robot {
         if (ghost) vx += (px != other.px ? Math.signum(px - other.px) : id == 0 ? -1 : 1) * .4f;
         if (stunT > 0) stunT--; if (stompCd > 0) stompCd--;
         if (stunT > 0 || thrownT > 0) in = 0;
+        if (flinchT > 0) { flinchT--; in &= ~(Input.LEFT | Input.RIGHT); } // breve tirón al recibir un impacto
         if (rollT > 0) rollT--;
         aiming = (in & Input.X) != 0;
         if (aiming && (in & Input.UP) != 0) aim = Math.min(AIM_MAX, aim + AIM_SPEED);

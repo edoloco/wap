@@ -156,7 +156,7 @@ public final class App {
     void sounds() {
         for (Fx f : w.fx) switch (f.type) {
             case Fx.EXPLODE: au.play(f.a > 50 ? Audio.BIG : Audio.BOOM); break;
-            case Fx.FLASH: au.play(Audio.SHOT); break;
+            case Fx.FLASH: { String n = Wpn.ALL[(int) f.b].name; au.play(n.endsWith("SHOTGUN") ? Audio.BLAST : Audio.SHOT); break; }
             case Fx.ARMOR: au.play(Audio.ARMOR); break;
             case Fx.HIT: au.play(Audio.HURT); break;
             case Fx.STOMP: case Fx.SLAM: au.play(Audio.BOOM); break;

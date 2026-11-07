@@ -89,6 +89,16 @@ public final class Terrain {
         for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) if (at(i, j) != STEEL) { if (i >= 0 && j >= 0 && i < W && j < H) m[j * W + i] = 0; }
         mark(x, y, x + w, y + h);
     }
+    /** Quita un objeto del mapa para moverlo (solo sus propias celdas). */
+    void lift(int x, int y, int w, int h, int kind) {
+        for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) if (at(i, j) == kind) m[j * W + i] = 0;
+        mark(x, y, x + w, y + h);
+    }
+    /** Pone un objeto en el mapa en su nueva posición. */
+    void stamp(int x, int y, int w, int h, int kind) {
+        for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) if (i >= 0 && j >= 0 && i < W && j < H) { int k = m[j * W + i]; if (k == 0 || k == DEBRIS || k == DECOR) m[j * W + i] = (byte) kind; }
+        mark(x, y, x + w, y + h);
+    }
     public void addDirt(int cx, int cy, int r) { disc(cx, cy, r, r, 0, 1); }
 
     private void put(int x, int y, int mat, int c) { if (x >= 0 && y >= 0 && x < W && y < H) { m[y * W + x] = (byte) mat; tex[y * W + x] = c; } }
