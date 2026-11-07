@@ -18,6 +18,7 @@ public class Sim {
         public void clear(int k){AffineTransform t=c.getTransform();c.setTransform(new AffineTransform());c.setColor(col(k));c.fillRect(0,0,W,H);c.setTransform(t);}
         public void grad(float[] p,int a,int b,float x0,float x1,int s,float sw){Path2D.Float q=new Path2D.Float();q.moveTo(p[0],p[1]);for(int i=2;i<p.length;i+=2)q.lineTo(p[i],p[i+1]);q.closePath();c.setPaint(new GradientPaint(x0,0,col(a),x1,0,col(b)));c.fill(q);c.setPaint(col(s));c.setStroke(new BasicStroke(sw(sw),1,1));c.draw(q);}
         public void poly(float[] p,int f,int s,float sw){Path2D.Float q=new Path2D.Float();q.moveTo(p[0],p[1]);for(int i=2;i<p.length;i+=2)q.lineTo(p[i],p[i+1]);q.closePath();if(f!=0){c.setColor(col(f));c.fill(q);}if(s!=0){c.setColor(col(s));c.setStroke(new BasicStroke(sw(sw),1,1));c.draw(q);}}
+        public void shape(float[][] ps,int f,boolean eo,int s,float sw){Path2D.Float q=new Path2D.Float(eo?Path2D.WIND_EVEN_ODD:Path2D.WIND_NON_ZERO);for(float[] p:ps){q.moveTo(p[0],p[1]);for(int i=2;i<p.length;i+=2)q.lineTo(p[i],p[i+1]);q.closePath();}if(f!=0){c.setColor(col(f));c.fill(q);}if(s!=0){c.setColor(col(s));c.setStroke(new BasicStroke(sw(sw),1,1));c.draw(q);}}
         public void circle(float x,float y,float r,int f,int s,float sw){Ellipse2D.Float e=new Ellipse2D.Float(x-r,y-r,r*2,r*2);if(f!=0){c.setColor(col(f));c.fill(e);}if(s!=0){c.setColor(col(s));c.setStroke(new BasicStroke(sw(sw)));c.draw(e);}}
         public void line(float a,float b,float d,float e,int k,float w){c.setColor(col(k));c.setStroke(new BasicStroke(sw(w),1,1));c.draw(new Line2D.Float(a,b,d,e));}
         public void rect(float x,float y,float w,float h,int k){c.setColor(col(k));c.fill(new Rectangle2D.Float(x,y,w,h));}
@@ -98,6 +99,11 @@ public class Sim {
             int before=count(w);float hp=e.hp;for(int t=0;t<3;t++){run(w,0,1);run(w,Input.A,1);run(w,Input.A,40);r.delay[3]=0;r.reload[3]=0;if(r.ammo[3]<=0)r.ammo[3]=1;run(w,0,240);}
             System.out.printf("  %-14s tierra %6d  daño %5.1f  disparos vivos %d%n",p.name,before-count(w),hp-e.hp+100*e.deaths,w.shots.size());}
     }
+    /** Todos los cuadros de la plantilla con el arte importado, para comparar con la guía. */
+    static void cuadros(String out)throws Exception{int n=RobotArt.FRAMES.length,C=7,W=C*230,H=((n+C-1)/C)*360;BufferedImage b=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);J g=new J(b);g.clear(0xFFFFFFFF);
+        for(int i=0;i<n;i++){g.save();g.translate(115+(i%C)*230,(i/C)*360+320);g.text(RobotArt.FRAMES[i],0,28,16,0xFF000000,0);g.scale(4.6f,4.6f);RobotArt.drawPose(g,RobotArt.frame(RobotArt.FRAMES[i]),(1<<Robot.PIECES)-1,RobotArt.COLOR[0],0);g.restore();}
+        ImageIO.write(b,"png",new File(out,"cuadros.png"));
+        BufferedImage c=new BufferedImage(640,720,BufferedImage.TYPE_INT_RGB);J h=new J(c);h.clear(0xFFFFFFFF);h.save();h.translate(320,640);h.scale(10,10);RobotArt.drawPose(h,RobotArt.frame("de_pie_1"),(1<<Robot.PIECES)-1,0xFF5F574E,0);h.restore();ImageIO.write(c,"png",new File(out,"de_pie_juego.png"));}
     static void sheet(String out)throws Exception{int W=1800,H=760;BufferedImage b=new BufferedImage(W,H,BufferedImage.TYPE_INT_RGB);J g=new J(b);g.clear(0xFFFFFFFF);float S=5.2f;
         java.util.List<Object[]> L=new java.util.ArrayList<>();
         World q=flat();Robot o=q.robots[0];RobotArt.View v=new RobotArt.View();RobotArt.update(v,o,q);L.add(new Object[]{v,o.armor});
@@ -147,5 +153,5 @@ public class Sim {
             if(i%160==20)m=Input.UP;if(i%160>20&&i%160<50)m=Input.UP|Input.B;if(i%300==80)m=Input.UP;if(i%300==81)m=Input.UP|Input.A;if(i%211==5)m=Input.DOWN;if(i%211==6)m=Input.DOWN|Input.B;app.keys=m;app.tick();
             if(app.screen!=App.PLAY)break;if(i==700){for(int q=0;q<14;q++){app.keys=Input.X|Input.UP;app.tick();}app.draw(g);ImageIO.write(b,"png",new File(out,"3b_mira.png"));}if(i>120&&i%(190)==0&&app.w.robots[0].alive()){app.draw(g);ImageIO.write(b,"png",new File(out,"j_"+(s++)+".png"));}}
     }
-    public static void main(String[] a)throws Exception{fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    public static void main(String[] a)throws Exception{fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

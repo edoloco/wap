@@ -16,6 +16,8 @@ public interface Gfx {
     /** Termina la capa y la amplía por un factor entero, sin filtrar. */
     void endPixels(float x, float y, int scale);
     void poly(float[] p, int fill, int stroke, float sw);
+    /** Forma de varios contornos (arte importado). evenOdd: los contornos interiores hacen agujeros. */
+    default void shape(float[][] polys, int fill, boolean evenOdd, int stroke, float sw) { for (float[] p : polys) poly(p, fill, stroke, sw); }
     /** Polígono con degradado horizontal entre x0 y x1. */
     void grad(float[] p, int c0, int c1, float x0, float x1, int stroke, float sw);
     void circle(float x, float y, float r, int fill, int stroke, float sw);

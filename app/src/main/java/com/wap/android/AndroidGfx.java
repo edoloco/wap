@@ -54,6 +54,18 @@ final class AndroidGfx implements Gfx {
         if (f != 0) { fill.setColor(f); c.drawPath(path, fill); }
         if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw(sw)); c.drawPath(path, stroke); }
     }
+    /** Arte importado: el Path de cada forma se arma una vez y se reutiliza. */
+    private final java.util.IdentityHashMap<float[][], Path> shapes = new java.util.IdentityHashMap<>();
+    @Override public void shape(float[][] ps, int f, boolean eo, int s, float sw) {
+        Path q = shapes.get(ps);
+        if (q == null) {
+            q = new Path(); q.setFillType(eo ? Path.FillType.EVEN_ODD : Path.FillType.WINDING);
+            for (float[] p : ps) { q.moveTo(p[0], p[1]); for (int i = 2; i < p.length; i += 2) q.lineTo(p[i], p[i + 1]); q.close(); }
+            shapes.put(ps, q);
+        }
+        if (f != 0) { fill.setColor(f); c.drawPath(q, fill); }
+        if (s != 0) { stroke.setColor(s); stroke.setStrokeWidth(sw(sw)); c.drawPath(q, stroke); }
+    }
     @Override public void grad(float[] p, int c0, int c1, float x0, float x1, int s, float sw) {
         path.rewind(); path.moveTo(p[0], p[1]);
         for (int i = 2; i < p.length; i += 2) path.lineTo(p[i], p[i + 1]);
