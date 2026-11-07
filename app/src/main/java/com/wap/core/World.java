@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 11;
+    public static final int RULES = 12;
     public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
     public final Robot[] robots = new Robot[2];
     public final ArrayList<Shot> shots = new ArrayList<>(); public final ArrayList<Bonus> bonus = new ArrayList<>(); public final ArrayList<Prop> props = new ArrayList<>();
@@ -114,6 +114,19 @@ public final class World {
             for (int x = p.x + 3; x < p.x + p.w && !held; x += 6) held = t.solid(x, p.y + p.h + 1);
             if (!held) { p.moving = true; } // sin apoyo: cae
         }
+    }
+    /** Proton Ray: rayo continuo hacia adelante; si alcanza al rival lo atrapa con el lazo. */
+    public static final int PROTON_RANGE = 230;
+    public void proton(Robot r, float x, float y) {
+        float cx = x, cy = y;
+        for (int i = 0; i < PROTON_RANGE / 3; i++) {
+            float nx = cx + r.facing * 3;
+            if (t.solid((int) nx, (int) cy)) break;
+            cx = nx; boolean hit = false;
+            for (Robot o : robots) if (o != r && o.alive() && o.hits(cx, cy)) { o.lasso(this, r.id); hit = true; }
+            if (hit) break;
+        }
+        r.beamT = 3; r.beamX = cx; r.beamY = cy;
     }
     public void beam(Wpn w, int owner, float x, float y, float dx, float dy) {
         float cx = x, cy = y; int n = w.pierce ? 300 : 240; boolean hit = false;

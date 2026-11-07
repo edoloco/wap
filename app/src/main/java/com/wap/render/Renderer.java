@@ -139,6 +139,7 @@ public final class Renderer {
     /** Estelas de luz detrás de los proyectiles. */
     /** Las estelas solo van detrás de lo lento: en lo rápido se veían como puntitos. */
     void trails(World w) {
+        for (Robot o : w.robots) if (o.alive() && o.beamT > 0 && w.tick % 2 == 0) { float a = r.nextFloat() * 6.28f, v = 1 + r.nextFloat() * 2.5f; P p = part(SPARK, o.beamX, o.beamY, (float) Math.cos(a) * v, (float) Math.sin(a) * v, 10, 1, r.nextBoolean() ? 0xFFFFB040 : 0xFF8FE9FF); p.g = 0; }
         for (Shot s : w.shots) {
             if (s.wait > 0) continue;
             float sp = (float) Math.hypot(s.vx, s.vy);
@@ -242,9 +243,9 @@ public final class Renderer {
         for (float[] b : booms) boom(g, b);
         world = w;
         for (Shot sh : w.shots) shotLight(g, sh);
-        for (Robot o : w.robots) if (o.alive() && o.lassoT > 0) { // atrapado por el Proton Ray: rayo y lazo
-            Robot b = w.robots[o.lassoBy]; float cy = o.py - 28;
-            proton(g, b.px + b.facing * 16, b.py - 31, o.px, cy);
+        for (Robot o : w.robots) if (o.alive() && o.beamT > 0) proton(g, o.px + o.facing * 16, o.py - 31, o.beamX, o.beamY, w.tick); // rayo continuo
+        for (Robot o : w.robots) if (o.alive() && o.lassoT > 0) { // atrapado por el Proton Ray: lazo
+            float cy = o.py - 28;
             for (int i = 0; i < 2; i++) { float rr = 11 + i * 4 + (float) Math.sin((w.tick + i * 9) * .3f) * 1.5f; g.save(); g.translate(o.px, cy + (i == 0 ? -6 : 8)); g.scale(1, .35f); g.circle(0, 0, rr, 0, 0xCCFF8A1A, 2.2f); g.circle(0, 0, rr, 0, 0xEEFFE6B0, .8f); g.restore(); }
         }
         g.additive(false);
@@ -393,18 +394,22 @@ public final class Renderer {
             case Wpn.RAY: g.glow(s.x, s.y, 16, 0xEE6FDDFF); g.glow(s.x, s.y, 7, 0xFFFFFFFF); break;
             case Wpn.GAS: g.glow(s.x, s.y, 7, 0xAAFF9A2A); break;
             case Wpn.WIND: break;
-            case Wpn.PROTON: { Robot o = world.robots[s.owner]; proton(g, o.px + o.facing * 16, o.py - 31, s.x, s.y); break; }
             case Wpn.TRAP: {
                 int t = s.stuck ? s.hops : 0; g.glow(s.x, s.y - 6.5f, 8, trapLight(s) & 0xFFFFFF | 0xCC000000);
-                if (t > Shot.TRAP_OPEN && t < Shot.TRAP_END) { // haz de luz hacia arriba
-                    float k = Math.min(1, (t - Shot.TRAP_OPEN) / 10f) * Math.min(1, (Shot.TRAP_END - t) / 10f), pulse = 1 + .15f * (float) Math.sin(t * .4f);
-                    for (int i = 0; i < 12; i++) g.glow(s.x, s.y - 16 - i * 11, (11 + i * .5f) * pulse, alpha(0xFFBFF4FF, k * .38f * (1 - i / 13f)));
-                    g.line(s.x, s.y - 14, s.x, s.y - 150, alpha(0xFFE8FBFF, .7f * k), 7 * k); g.line(s.x, s.y - 14, s.x, s.y - 150, alpha(0xFFFFFFFF, k), 1.6f);
-                    g.glow(s.x, s.y - 6, 22 * pulse, alpha(0xFF7FE8FF, .5f * k));
+                if (t > Shot.TRAP_OPEN && t < Shot.TRAP_END) { // haz de luz en triángulo: punta en la trampa, base ancha y brillante arriba
+                    float k = Math.min(1, (t - Shot.TRAP_OPEN) / 12f) * Math.min(1, (Shot.TRAP_END - t) / 12f), pulse = 1 + .08f * (float) Math.sin(t * .35f);
+                    float ty = s.y - 15, H = 150 * k, W = 46 * pulse; int N = 10;
+                    for (int q = 0; q < N; q++) {
+                        float a0 = q / (float) N, a1 = (q + 1) / (float) N, y0 = ty - H * a0, y1 = ty - H * a1, w0 = W * a0, w1 = W * a1;
+                        g.poly(new float[]{s.x - w0, y0, s.x + w0, y0, s.x + w1, y1, s.x - w1, y1}, alpha(0xFFBFF4FF, k * (.10f + .45f * a1)), 0, 0);
+                        g.poly(new float[]{s.x - w0 * .45f, y0, s.x + w0 * .45f, y0, s.x + w1 * .45f, y1, s.x - w1 * .45f, y1}, alpha(0xFFFFFFFF, k * (.08f + .4f * a1)), 0, 0);
+                    }
+                    g.save(); g.translate(s.x, ty - H); g.scale(1, .3f); g.glow(0, 0, W * 1.25f, alpha(0xFFE8FBFF, k)); g.restore(); // base brillante arriba
+                    g.line(s.x - W, ty - H, s.x + W, ty - H, alpha(0xFFFFFFFF, k), 2.2f);
+                    g.glow(s.x, s.y - 8, 14 * pulse, alpha(0xFF7FE8FF, .6f * k));
                 }
                 break; }
             case Wpn.ORB: g.glow(s.x, s.y, 9, 0xEE3FD8FF); g.circle(s.x, s.y, 2, 0xFFFFFFFF, 0, 0); break;
-            case Wpn.SPIKE: g.glow(s.x, s.y, 6, 0x66FFFFFF); break;
             case Wpn.NUKE: g.glow(s.x, s.y, 14 + s.age / 4 % 2 * 3, 0xAAFFD040); break;
             case Wpn.SPARK: g.glow(s.x, s.y, 5, 0xEEFF9A2A); g.circle(s.x, s.y, 1, 0xFFFFF0C0, 0, 0); break;
             case Wpn.DIRT: g.glow(s.x, s.y, 12, 0xEEB98CFF); g.glow(s.x, s.y, 5, 0xFFFFFFFF); break;
@@ -433,18 +438,32 @@ public final class Renderer {
         if (s.age / rate % 2 != 0) return 0xFF102010;
         return 0xFF000000 | (int) (255 * (1 - k)) << 16 | (int) (42 + 213 * k) << 8 | 42;
     }
-    /** Rayo de protones: núcleo naranja con chispas eléctricas celestes alrededor. */
-    void proton(Gfx g, float x0, float y0, float x1, float y1) {
-        g.line(x0, y0, x1, y1, 0x55FF6A10, 9); g.line(x0, y0, x1, y1, 0xCCFF8A1A, 4.2f); g.line(x0, y0, x1, y1, 0xFFFFE6B0, 1.6f);
-        float dx = x1 - x0, dy = y1 - y0, L = Math.max(1, (float) Math.hypot(dx, dy)), nx = -dy / L, ny = dx / L; int n = Math.max(2, (int) (L / 9));
-        for (int k = 0; k < 2; k++) {
-            float px = x0, py = y0;
-            for (int i = 1; i <= n; i++) {
-                float t = i / (float) n, o = i == n ? 0 : (r.nextFloat() - .5f) * 9, qx = x0 + dx * t + nx * o, qy = y0 + dy * t + ny * o;
-                g.line(px, py, qx, qy, k == 0 ? 0xDD7FE8FF : 0x99D8FAFF, k == 0 ? 1.1f : .7f); px = qx; py = qy;
+    /** Rayo de protones como el de los cazafantasmas: dos hebras naranja y roja que se retuercen, con arcos eléctricos celestes. */
+    void proton(Gfx g, float x0, float y0, float x1, float y1, int tick) {
+        float dx = x1 - x0, dy = y1 - y0, L = Math.max(1, (float) Math.hypot(dx, dy)), nx = -dy / L, ny = dx / L; int n = Math.max(6, (int) (L / 5));
+        for (int strand = 0; strand < 2; strand++) {
+            float[] q = new float[(n + 1) * 2];
+            for (int i = 0; i <= n; i++) {
+                float t = i / (float) n, env = (float) Math.sin(Math.PI * Math.min(1, t * 1.15f)) * (2.5f + 3.5f * t); // se abre hacia la punta
+                float o = env * (float) Math.sin(t * L / 13f - tick * .55f + strand * Math.PI) + (strand == 0 ? 0 : env * .3f * (float) Math.sin(t * L / 5f + tick));
+                q[i * 2] = x0 + dx * t + nx * o; q[i * 2 + 1] = y0 + dy * t + ny * o;
+            }
+            int c = strand == 0 ? 0xFFFF7A14 : 0xFFFF3A1A;
+            for (int i = 0; i < n; i++) {
+                float ax = q[i * 2], ay = q[i * 2 + 1], bx = q[i * 2 + 2], by = q[i * 2 + 3];
+                g.line(ax, ay, bx, by, alpha(c, .28f), strand == 0 ? 8 : 6);
+                g.line(ax, ay, bx, by, alpha(c, .9f), strand == 0 ? 3.2f : 2.2f);
+                if (strand == 0) g.line(ax, ay, bx, by, 0xFFFFE9B8, 1.1f);
             }
         }
-        g.glow(x0, y0, 9, 0xCCFF9A2A); g.glow(x1, y1, 7, 0xAAFFB040);
+        for (int k = 0; k < 3; k++) { // arcos eléctricos que saltan alrededor
+            float a = r.nextFloat() * .7f, b = Math.min(1, a + .15f + r.nextFloat() * .3f), px = x0 + dx * a, py = y0 + dy * a; int m = 5;
+            for (int i = 1; i <= m; i++) {
+                float t = a + (b - a) * i / m, o = (r.nextFloat() - .5f) * 16, qx = x0 + dx * t + nx * o, qy = y0 + dy * t + ny * o;
+                g.line(px, py, qx, qy, k == 0 ? 0xEE8FE9FF : 0xAAD8FAFF, k == 0 ? 1.1f : .7f); px = qx; py = qy;
+            }
+        }
+        g.glow(x0, y0, 10, 0xDDFF9A2A); g.glow(x0, y0, 4, 0xFFFFF0C8); g.glow(x1, y1, 12 + r.nextFloat() * 4, 0xBBFF8A2A);
     }
     /** Guante de box del color del traje de quien lo lanza. */
     static void glove(Gfx g, float x, float y, int dir, int c) {
@@ -466,7 +485,7 @@ public final class Renderer {
             case Wpn.MINE: g.circle(s.x, s.y, 4, 0xFF4A4A4A, 0, 0); g.circle(s.x - 1.2f, s.y - 1.2f, 1.4f, 0xFF7A7A7A, 0, 0); if (s.age / 12 % 2 == 0) g.circle(s.x, s.y - 1, 1.3f, 0xFFFF2020, 0, 0); break;
             case Wpn.CRATE: crate(g, s.x, s.y + 4, 0); break;
             case Wpn.FLAME: break;
-            case Wpn.SPIKE: { for (int i = 0; i < 4; i++) { float c = i * .785f + s.age * .2f; g.line(s.x - (float) Math.cos(c) * 4.5f, s.y - (float) Math.sin(c) * 4.5f, s.x + (float) Math.cos(c) * 4.5f, s.y + (float) Math.sin(c) * 4.5f, 0xFFB8C0CC, 1.1f); } g.circle(s.x, s.y, 1.8f, 0xFFE0E6EE, 0, 0); break; }
+            case Wpn.SPIKE: { for (int i = 0; i < 4; i++) { float c = i * .785f + s.age * .2f; g.line(s.x - (float) Math.cos(c) * 4.5f, s.y - (float) Math.sin(c) * 4.5f, s.x + (float) Math.cos(c) * 4.5f, s.y + (float) Math.sin(c) * 4.5f, INK, 1); } break; }
             case Wpn.TRAP: {
                 int t = s.stuck ? s.hops : 0; float k = t <= Shot.TRAP_OPEN ? 0 : t < Shot.TRAP_END ? Math.min(1, (t - Shot.TRAP_OPEN) / 10f) : Math.max(0, 1 - (t - Shot.TRAP_END) / 10f);
                 g.rrect(s.x - 7, s.y - 13, 14, 13, 2, 0xFF1A1A20, 0, 0); g.rect(s.x - 6, s.y - 12, 12, 1.2f, 0xFF3C3C48); g.rect(s.x - 6, s.y - 2, 12, 1, 0xFF0C0C10);

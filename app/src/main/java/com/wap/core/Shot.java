@@ -5,6 +5,7 @@ public final class Shot {
     public void step(World g) {
         if (wait > 0) { wait--; return; } // cargas del Death Ray que salen después
         age++;
+        if (w.trap) { trapMove(g); return; }
         if (w.fan) for (Shot o : g.shots) if (o != this && !o.w.fan && o.wait == 0 && Math.abs(o.x - x) < 12 && Math.abs(o.y - y) < 12) { o.vx += vx * .14f; o.vy += vy * .14f; o.stuck = false; } // el ventilador desvía balas
         if (w.accel != 0) { float s = (float) StrictMath.hypot(vx, vy); if (s > .01f && s < 14) { vx += vx / s * w.accel; vy += vy / s * w.accel; } }
         if (w.jitter != 0 && age % 6 == 0) { float a = g.rng.r(-w.jitter, w.jitter), c = (float) StrictMath.cos(a), n = (float) StrictMath.sin(a), t = vx * c - vy * n; vy = vx * n + vy * c; vx = t; }
@@ -16,7 +17,6 @@ public final class Shot {
             if (w.trigger > 0 && age > 40) for (Robot r : g.robots) if (r.alive() && near(r, w.trigger)) { explode(g); return; }
             if (w.burn) for (Robot r : g.robots) if (r.alive() && age % 6 == 0 && near(r, 14)) r.damage(g, w.dmg * 3, 0, -.2f, owner, x, y);
         }
-        if (w.trap && stuck) { trap(g); return; }
         if (life > 0 && --life == 0) { explode(g); return; }
         if (stuck) { if (!g.t.solid((int) x, (int) y + 2) && !g.t.solid((int) x, (int) y - 2) && !g.t.solid((int) x - 2, (int) y) && !g.t.solid((int) x + 2, (int) y)) stuck = false; return; }
         float sp = Math.abs(vx) + Math.abs(vy); int n = Math.max(1, (int) (sp / 3) + 1);
@@ -59,13 +59,26 @@ public final class Shot {
         return false;
     }
     /** Robot Trap: se abre, sale un haz de luz y atrae todo hacia el centro; quien llega al centro pierde toda la energía. */
-    public static final int TRAP_OPEN = 24, TRAP_END = 240, TRAP_BOOM = 330; public static final float TRAP_R = 100;
+    public static final int TRAP_OPEN = 45, TRAP_END = 260, TRAP_BOOM = 350; public static final float TRAP_R = 100;
+    /** La trampa no se pega: rebota en paredes y techos y siempre termina en el suelo. */
+    private void trapMove(World g) {
+        if (stuck) { if (g.t.solid((int) x, (int) y + 2)) { trap(g); return; } stuck = false; } // si le quitan el suelo, vuelve a caer
+        vy = Math.min(9, vy + w.grav);
+        float sp = Math.abs(vx) + Math.abs(vy); int n = Math.max(1, (int) (sp / 2) + 1);
+        for (int i = 0; i < n; i++) {
+            float ox = x; x += vx / n;
+            if (g.t.solid((int) x, (int) y - 4)) { x = ox; vx = 0; }
+            float oy = y; y += vy / n;
+            if (g.t.solid((int) x, (int) y)) { y = oy; if (vy > 0) { stuck = true; vx = vy = 0; return; } vy = 0; }
+        }
+        if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
+    }
     private void trap(World g) {
         int t = ++hops;
         if (t == TRAP_OPEN) g.fx(Fx.TRAP, x, y, 0, owner);
         if (t > TRAP_OPEN && t < TRAP_END) {
             for (Robot r : g.robots) {
-                if (r.id == owner || !r.alive() || r.invuln > 0) continue;
+                if (!r.alive() || r.invuln > 0) continue; // atrae a todos, también a quien la puso
                 float dx = x - r.px, dy = y - (r.py - 20), d = (float) StrictMath.hypot(dx, dy);
                 if (d > TRAP_R) continue;
                 float p = .4f + 3 * (1 - d / TRAP_R);
@@ -75,6 +88,10 @@ public final class Shot {
             for (Shot o : g.shots) if (o != this && !o.w.trap && o.wait == 0) {
                 float dx = x - o.x, dy = y - 10 - o.y, d = (float) StrictMath.hypot(dx, dy);
                 if (d < TRAP_R && d > 1) { o.vx += dx / d * .5f; o.vy += dy / d * .5f; o.stuck = false; }
+            }
+            for (Prop p : g.props) if (!p.gone) { // y también las cajas
+                float dx = x - (p.x + p.w / 2f), dy = y - (p.y + p.h / 2f), d = (float) StrictMath.hypot(dx, dy);
+                if (d < TRAP_R + p.w / 2f && d > 8 && hops % 4 == 0) g.push(p, dx / d * 1.2f, dy / d * 1.2f - .3f);
             }
         }
         if (t >= TRAP_BOOM) { dead = true; g.explode(x, y - 3, 12, 6, 6, .8f, owner); }

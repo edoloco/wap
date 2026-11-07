@@ -7,6 +7,10 @@ public final class Robot {
     /** Margen en ticks para que dirección + botón cuente como habilidad y no como correr + acción. */
     public static final int SMASH_WINDOW = 9, BUFFER = 3;
     public static final float HOOK_SHOT = 15, HOOK_PULL = 7.5f, HOOK_RANGE = 400;
+    /** Robot Trap: velocidad de lanzamiento según la cruceta (abajo: a los pies, adelante, arriba: lejos). */
+    static final float[][] TRAP_V = {{1.2f, -2}, {5.2f, -3.2f}, {4.6f, -7.6f}};
+    /** Punta del rayo de protones (para dibujarlo). */
+    public float beamX, beamY;
     public static final int LASSO_T = 300; public static final float LASSO_RANGE = 320, LASSO_DMG = 1.5f;
     public static final float RUN_FAST = 1.55f, AIR_JUMP = 8.4f, STOMP_DMG = 6, THROW_VX = 8.5f, THROW_VY = 6.5f;
     public static final int STUN = 18, STOMP_COOLDOWN = 60;
@@ -20,7 +24,7 @@ public final class Robot {
     public int slideT, airT, fireT, fireSlot = 3; boolean jumping;
     public int rope; public float rx, ry, rvx, rvy, rlen; // 0 sin gancho, 1 volando, 2 enganchado
     public final Wpn[] loadout = new Wpn[SLOTS]; public final int[] ammo = new int[SLOTS], reload = new int[SLOTS], delay = new int[SLOTS], charge = new int[SLOTS];
-    public int killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot other; boolean ghost, stompHit;
+    public int beamT, trapAim = 1, lassoFree, killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot other; boolean ghost, stompHit;
     public int wallDir, windT; int windSlot, lastWall, wallT, wallLock;
     /** Preparación breve antes del primer disparo: 6 ticks, una décima de segundo. */
     public static final int WIND = 6;
@@ -126,10 +130,12 @@ public final class Robot {
             float a = base + (float) StrictMath.toRadians(g.rng.r(-w.spread, w.spread));
             float v = w.speed * (w.parts > 1 && w.stagger == 0 ? g.rng.r(.82f, 1.1f) : 1);
             float dx = (float) StrictMath.cos(a) * facing, dy = (float) StrictMath.sin(a);
-            if (w.beam) g.beam(w, id, mx, my, dx, dy);
+            if (w.lasso) g.proton(this, mx, my);
+            else if (w.trap) { float[] tv = TRAP_V[trapAim]; g.spawn(w, id, mx, my, facing * tv[0] + vx * .3f, tv[1]); }
+            else if (w.beam) g.beam(w, id, mx, my, dx, dy);
             else { Shot sh = g.spawn(w, id, mx, my, dx * v + (w.grav > .1f ? vx * .4f : 0), dy * v); if (sh != null) sh.wait = i * w.stagger; }
         }
-        g.fx(Fx.FLASH, mx, my, deg * facing, id).b = Wpn.index(w.name);
+        if (!w.lasso || fireT == 0) g.fx(Fx.FLASH, mx, my, deg * facing, id).b = Wpn.index(w.name); // el rayo continuo avisa solo al empezar
         vx -= facing * w.recoil; fireT = 22; fireSlot = slot;
         if (!w.infinite) ammo[slot]--; delay[slot] = w.delay;
         if (ammo[slot] <= 0) reload[slot] = w.reload;
@@ -137,7 +143,8 @@ public final class Robot {
     }
     /** Proton Ray: queda atado al rayo del rival. */
     public void lasso(World g, int by) {
-        if (!alive() || invuln > 0) return;
+        if (!alive() || invuln > 0 || lassoFree > 0) return;
+        if (lassoT > 0) { lassoT = Math.max(lassoT, 60); return; } // el rayo sigue encima: no lo suelta
         lassoT = LASSO_T; lassoBy = by; rope = 0; slideT = 0; windT = 0; g.fx(Fx.LASSO, px, py - 30, 1, id);
     }
     /** Cannon Punch: sale lanzado en el sentido del golpe, girando. Al chocar pierde un porcentaje de vida. */
@@ -152,11 +159,16 @@ public final class Robot {
         boolean up = (in & Input.UP) != 0, down = (in & Input.DOWN) != 0;
         boolean side = freshDir && ((in & Input.LEFT) != 0 ^ (in & Input.RIGHT) != 0);
         heldSlot = -1; heldBtn = btn;
-        if (btn == Input.A) use(g, up ? 2 : down ? 0 : side ? 1 : 3);
+        if (btn == Input.A) {
+            int ts = readyTrap();
+            if (ts >= 0) { trapAim = up ? 2 : down ? 0 : 1; use(g, ts); } // trampa lista: la cruceta elige dónde cae
+            else use(g, up ? 2 : down ? 0 : side ? 1 : 3);
+        }
         else if (up) throwHook(g, in);
         else if (down) { if (grounded && slideT == 0) { slideT = 26; h = SLIDE_H; g.fx(Fx.SLIDE, px, py, facing, 0); } }
         else jump(g);
     }
+    private int readyTrap() { for (int i = 0; i < SLOTS; i++) if (loadout[i].trap && loadout[i].charge > 0 && charge[i] >= loadout[i].charge && reload[i] == 0) return i; return -1; }
     /** Arma normal: dispara. Arma con carga: el primer comando carga y, ya cargada, el siguiente la lanza. */
     private void trigger(World g, int s) {
         if (reload[s] > 0 || delay[s] > 0 || windT > 0) return;
@@ -198,13 +210,13 @@ public final class Robot {
         if (lassoT > 0) { // Proton Ray: atrapado, baja lento y pierde energía; solo se suelta saltando
             Robot o = g.robots[lassoBy]; lassoT--;
             if (!o.alive() || StrictMath.hypot(o.px - px, o.py - py) > LASSO_RANGE) lassoT = 0;
-            else if ((in & Input.B) != 0 && (prev & Input.B) == 0) { lassoT = 0; g.fx(Fx.LASSO, px, py - 30, 0, id); }
+            else if ((in & Input.B) != 0 && (prev & Input.B) == 0) { lassoT = 0; lassoFree = 45; g.fx(Fx.LASSO, px, py - 30, 0, id); }
             else {
                 in &= Input.B; vx *= .6f; if (vy < -1) vy = -1; rope = 0; slideT = 0;
                 if (lassoT % 10 == 0) damage(g, LASSO_DMG, 0, 0, lassoBy, px, py - 30);
             }
         }
-        if (rollT > 0) rollT--;
+        if (rollT > 0) rollT--; if (beamT > 0) beamT--; if (lassoFree > 0) lassoFree--;
         aiming = (in & Input.X) != 0;
         if (aiming && (in & Input.UP) != 0) aim = Math.min(AIM_MAX, aim + AIM_SPEED);
         if (aiming && (in & Input.DOWN) != 0) aim = Math.max(AIM_MIN, aim - AIM_SPEED);

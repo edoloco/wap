@@ -43,7 +43,7 @@ public final class Wpn {
             new Wpn("WINCHESTER", "Seis tiros de precisión").mag(6, 28, 150).shot(1, 1, 26).hit(20, 5, 2).rec(.8f),
             new Wpn("BAZOOKA", "Cohete que acelera").mag(3, 42, 130).shot(1, 1, 4).boom(36, 30, 32, 3.4f).look(ROCKET).rec(1.5f),
             new Wpn("DOOMSDAY", "Cinco cohetes de una vez").mag(1, 40, 240).shot(5, 13, 4.5f).boom(28, 18, 25, 2.4f).look(ROCKET).rec(3),
-            new Wpn("PROTON RAY", "Rayo que atrapa al rival; se suelta saltando").mag(1, 20, 240).shot(1, 0, 13).hit(0, 0, 0).fuse(18).look(PROTON),
+            new Wpn("PROTON RAY", "Mantén el disparo: el rayo atrapa al rival y se agota lento").mag(240, 1, 240).shot(1, 0, 0).hit(0, 0, 0).look(PROTON),
             new Wpn("GRENADE", "Rebota y estalla").mag(3, 40, 160).shot(1, 2, 6.8f).phys(.17f, .5f, 1).boom(38, 34, 34, 3.4f).fuse(110).look(GRENADE).lob(22),
             new Wpn("CLUSTER BOMB", "Se parte en diez").mag(2, 40, 210).shot(1, 2, 6.5f).phys(.17f, .35f, 1).boom(22, 12, 20, 2).fuse(70).look(GRENADE).lob(25).split(frag, 10),
             new Wpn("MINI BOMB", "Se parte y se vuelve a partir").mag(1, 40, 280).shot(1, 2, 6).phys(.17f, .35f, 1).boom(26, 14, 22, 2).fuse(75).look(GRENADE).lob(25).split(chiq, 5),
@@ -53,7 +53,7 @@ public final class Wpn {
             new Wpn("FLAK CANNON", "Revienta en el aire").mag(3, 34, 150).shot(1, 2, 9).boom(14, 8, 12, 1).fuse(34).look(GRENADE).split(shrap, 28),
             new Wpn("NAPALM", "Deja el suelo ardiendo").mag(1, 40, 230).shot(1, 2, 6.5f).phys(.14f, 0, 1).boom(24, 12, 20, 2).look(GRENADE).lob(18).split(fire, 32),
             new Wpn("FLAMER", "Lanzallamas de largo alcance").mag(70, 1, 200).shot(2, 9, 8.5f).phys(-.02f, 0, .97f).hit(1.2f, 3, .06f).fuse(44).look(FLAME),
-            new Wpn("ROBOT TRAP", "Cárgala y lánzala: atrae y elimina al instante").mag(1, 30, 420).shot(1, 2, 5.5f).phys(.2f, 0, 1).fuse(0).look(TRAP).lob(22),
+            new Wpn("ROBOT TRAP", "Cárgala; lista, A con arriba, adelante o abajo elige dónde cae").mag(1, 30, 420).shot(1, 2, 5.5f).phys(.2f, 0, 1).fuse(0).look(TRAP).lob(22),
             new Wpn("LASER", "Rayo continuo").mag(40, 1, 220).hit(1.6f, 2, .05f).look(ORB),
             new Wpn("BOUNCY LASER", "Láser que rebota en diagonal").mag(1, 20, 160).shot(1, 0, 5.5f).phys(0, 1, 1).boom(14, 14, 12, 1.6f).fuse(600).look(BLASER),
             new Wpn("ZIMM", "Rebota en todo y no pierde fuerza").mag(1, 20, 120).shot(1, 0, 9).phys(0, 1, 1).hit(30, 0, 2.4f).fuse(320).look(ORB),
@@ -74,8 +74,8 @@ public final class Wpn {
             if (w.name.equals("BOUNCY LASER")) { w.maxBounce = 10; w.angle = 40; w.impact = true; w.boomStyle = 2; }
             if (w.name.equals("FAN")) w.infinite = true;
             if (w.name.equals("LASER")) w.beam = true;
-            if (w.name.equals("PROTON RAY")) { w.lasso = true; w.impact = true; }
-            if (w.name.equals("ROBOT TRAP")) { w.trap = true; w.sticky = true; w.charge = 150; }
+            if (w.name.equals("PROTON RAY")) w.lasso = true;
+            if (w.name.equals("ROBOT TRAP")) { w.trap = true; w.charge = 150; }
             if (w.name.equals("GRASSHOPPER")) w.hops = 5;
             if (w.name.equals("CRACKLER")) w.jitter = .55f;
             if (w.name.equals("HELLRAIDER")) w.jitter = .2f;

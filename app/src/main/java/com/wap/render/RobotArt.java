@@ -3,7 +3,6 @@ import com.wap.core.*;
 /** Personaje vectorial con contorno grueso, según las referencias: cabeza gris, traje de color, hombros blancos y guanteletes grises sobre un esqueleto negro.
  *  Se dibuja a 1 píxel de arte por unidad del mundo, sin suavizado, y cada pieza de armadura puede caer por separado. */
 public final class RobotArt {
-    static { Arte.loadDefault(); }
     public static final int INK = 0xFF141414, WHITE = 0xFFFFFFFF, HEADC = 0xFF9E9E9E, PADC = 0xFFC2C3C7, GLOWC = 0xFFD8F2FF;
     /** Color del traje: el jugador lo cambia en el editor; el rival usa otro. */
     public static final int[] COLOR = {0xFF5E5650, 0xFF1266FF};
@@ -192,14 +191,13 @@ public final class RobotArt {
     /** El dibujo en sí, en coordenadas locales mirando a la derecha. */
     public static void drawPose(Gfx g, View v, int ar, int c, int unused) {
         if (v.ball) { drawBall(g, v, ar, c); return; }
-        if (Arte.current != null && !exportAll && !(g instanceof Arte.Pen)) { Arte.Pen pen = new Arte.Pen(g, Arte.current); pen.suit = c; g = pen; } // dibujos del usuario
         float e = (v.assemble / HOLD * HOLD) / 30f; e *= e;
         boolean on = e < .1f, glow = v.shotT > 6;
         float px = 0, py = v.pel, lr = (float) Math.toRadians(v.lean), sn = (float) Math.sin(lr), cs = (float) Math.cos(lr);
         float cx = px + sn * SHOULDER, cy = py - cs * SHOULDER, sp = e * 16;
         float ffx = cx + cs * 4.6f, ffy = cy + sn * 4.6f + 1, nx = cx - cs * 4.6f, ny = cy - sn * 4.6f + 1;
         arm(g, ffx, ffy, v.b1, v.b2, (ar >> Robot.BR_F & 1) != 0 && on, false, false, "lejano");
-        if ((ar >> Robot.SH_F & 1) != 0) { g.layer("hombro_lejano"); g.save(); g.translate(ffx + sp * .8f, ffy); g.circle(0, 0, 3, WHITE, INK, SW); g.restore(); g.endLayer(); }
+        if ((ar >> Robot.SH_F & 1) != 0) { g.layer("hombro_lejano"); g.circle(ffx + sp * .8f, ffy, 3, WHITE, INK, SW); g.endLayer(); }
         leg(g, px + 2, py + 1, v.fx, v.fy - 1 + v.gFront, (ar >> Robot.TH_F & 1) != 0 && on, (ar >> Robot.SN_F & 1) != 0 && on, c, "lejana");
         g.save(); g.translate(px, py); g.rotate(lr); g.translate(0, -TORSO_LEN);
         g.layer("hueso_torso"); g.rrect(-1.2f, 8, 2.4f, 7, .6f, INK, 0, 0); g.poly(TORSO, INK, 0, 0); g.poly(PELVIS, INK, 0, 0);
@@ -213,7 +211,7 @@ public final class RobotArt {
         leg(g, px - 2, py + 1, v.bx, v.by + v.gBack, (ar >> Robot.TH_B & 1) != 0 && on, (ar >> Robot.SN_B & 1) != 0 && on, c, "cercana");
         if ((ar >> Robot.HIP & 1) != 0) { g.layer("pelvis"); g.save(); g.translate(px, py); g.rotate(lr); g.translate(0, sp * .5f); limb(g, HIPS, PADC); g.restore(); g.endLayer(); }
         arm(g, nx, ny, v.a1, v.a2, (ar >> Robot.BR_B & 1) != 0 && on, v.open, glow, "cercano");
-        if ((ar >> Robot.SH_B & 1) != 0) { g.layer("hombro_cercano"); g.save(); g.translate(nx - sp * .8f, ny); g.circle(0, 0, 3.6f, WHITE, INK, SW); g.restore(); g.endLayer(); }
+        if ((ar >> Robot.SH_B & 1) != 0) { g.layer("hombro_cercano"); g.circle(nx - sp * .8f, ny, 3.6f, WHITE, INK, SW); g.endLayer(); }
         if (exportAll && v.open) { float d = UA + FA + 5; g.layer("punto_disparo"); g.circle(nx + (float) Math.cos(Math.toRadians(v.a1)) * d, ny + (float) Math.sin(Math.toRadians(v.a1)) * d, 1.2f, 0xFF00E5FF, 0, 0); g.endLayer(); }
         if (v.shotT > 0 && v.open) { float d = UA + FA + 7; muzzle(g, nx + (float) Math.cos(Math.toRadians(v.a1)) * d, ny + (float) Math.sin(Math.toRadians(v.a1)) * d, 2 - (v.shotT - 1) / 4); }
     }

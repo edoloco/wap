@@ -7,7 +7,7 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
     <uses-feature android:name="android.hardware.gamepad" android:required="false"/>
-    <application android:label="WAP" android:icon="@drawable/ic_launcher" android:allowBackup="true"
+    <application android:label="WAP" android:icon="@mipmap/ic_launcher" android:allowBackup="true"
         android:appCategory="game" android:isGame="true" android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
         <provider android:name=".android.ApkProvider" android:authorities="com.wap.apk" android:exported="false" android:grantUriPermissions="true"/>
         <activity android:name=".android.MainActivity" android:exported="true"
