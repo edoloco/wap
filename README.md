@@ -49,11 +49,19 @@ El importador de dibujos (`tools/arte.sh`, `arte/dibujos/`) queda listo, pero el
 
 ## Editor de niveles
 
-En el menú, **EDITOR DE NIVELES** crea un nivel vacío o parte de uno aleatorio. Herramientas: tierra destructible en 8 colores (3 grosores), bloque morado, acero indestructible, caja, metal, computador, piedra, ducto, agua (se toca la altura de la superficie, o "SIN AGUA"), borrar y mover la vista; con zoom de 3 niveles. Con mando: la cruceta mueve un cursor, A aplica, X cambia de herramienta y B sale. El nivel se guarda al salir o al probarlo; tocar el nombre lo renombra. **NIVEL** en el menú elige entre ALEATORIO y los niveles guardados.
+En el menú, **EDITOR DE NIVELES** crea un nivel vacío o parte de uno aleatorio. Un dedo dibuja; dos dedos mueven la vista y el pellizco hace zoom. Herramientas: pincel, línea, cuadrado, círculo y triángulo (relleno o contorno), balde (toca tierra o madera para cambiarle el color a toda la zona, o un hueco cerrado para llenarlo) y borrar, todas con **tierra** (con vetas) o **madera** (color liso) en 10 colores y 3 grosores; además bloque morado, acero indestructible, caja, metal, computador, piedra, ducto y agua (se toca la altura, o "SIN AGUA"). Con mando: la cruceta mueve un cursor, A aplica (en las formas, apretar marca el inicio y soltar las dibuja), X cambia de herramienta y B sale. El nivel se guarda al salir o al probarlo; tocar el nombre lo renombra.
+
+La madera no se recorta como la tierra: está dividida en trozos irregulares de unos 20 px que aguantan golpes (un poco menos que una caja), muestran grietas y se rompen en astillas de su color.
+
+**SELECCIONA NIVEL** muestra cuadritos con la miniatura y el nombre de cada nivel (y el aleatorio).
 
 Bajo el agua se avanza más lento (65 %), la gravedad es menor y el salto es más lento pero de la misma altura; el fuego se apaga y los disparos se frenan.
 
 En línea, si el anfitrión eligió un nivel suyo, se manda al otro teléfono en el saludo y se usa solo para esa partida; al final se pregunta si conservarlo.
+
+## Rivales
+
+**RIVALES** elige de 1 a 4 rivales de la máquina, el modo (todos contra todos o equipos con colores: rojo, azul, verde, amarillo) y, por rival, la dificultad, las armas (al azar o elegidas) y el color o el equipo. En equipos no hay fuego amigo y gana el último equipo con vidas. En línea sigue siendo 1 contra 1.
 
 ## En línea (red local)
 

@@ -3,12 +3,26 @@ package com.wap.core;
 public final class Terrain {
     public static final int W = 1800, H = 1000, TILE = 128;
     /** 0 es aire; STEEL es indestructible; lo demás se destruye. */
-    public static final byte PANEL = 1, STEEL = 2, CRATE = 3, VENT = 4, COMPUTER = 5, DEBRIS = 6, DECOR = 7, METAL = 8, STONE = 9;
+    public static final byte PANEL = 1, STEEL = 2, CRATE = 3, VENT = 4, COMPUTER = 5, DEBRIS = 6, DECOR = 7, METAL = 8, STONE = 9, EARTH = 10, WOOD = 11;
     /** Objetos con resistencia propia: {x, y, ancho, alto, material}. */
     public final java.util.ArrayList<int[]> props = new java.util.ArrayList<>();
     public static boolean isProp(int k) { return k == CRATE || k == COMPUTER || k == METAL || k == STONE; }
     /** El radio de una explosión no los recorta píxel a píxel. */
-    static boolean hard(int k) { return k == STEEL || isProp(k); }
+    static boolean hard(int k) { return k == STEEL || k == WOOD || isProp(k); }
+    /** Madera: no la recortan las explosiones; se rompe por trozos irregulares (ver World.hitWood). */
+    public static final int FRAG = 20, FW = W / FRAG + 1, FH = H / FRAG + 1;
+    /** Trozo de madera al que pertenece un píxel: el punto semilla más cercano de una grilla con desorden. */
+    public static int frag(int x, int y) {
+        int cx = x / FRAG, cy = y / FRAG, best = 0, bd = Integer.MAX_VALUE;
+        for (int j = cy - 1; j <= cy + 1; j++) for (int i = cx - 1; i <= cx + 1; i++) {
+            if (i < 0 || j < 0 || i >= FW || j >= FH) continue;
+            int sx = i * FRAG + (hash(i, j) & 15) + 2, sy = j * FRAG + (hash(j + 91, i + 7) & 15) + 2, d = (x - sx) * (x - sx) + (y - sy) * (y - sy);
+            if (d < bd) { bd = d; best = j * FW + i; }
+        }
+        return best;
+    }
+    public static int fragX(int f) { int i = f % FW, j = f / FW; return i * FRAG + (hash(i, j) & 15) + 2; }
+    public static int fragY(int f) { int i = f % FW, j = f / FW; return j * FRAG + (hash(j + 91, i + 7) & 15) + 2; }
     /** Tamaño bajo el cual un trozo deja de chocar: grosor en píxeles y área de una pieza suelta. */
     static final int THIN = 6, SMALL = 420;
     static final int FRONT = 0xFF8214FF, TOP = 0xFF4A00A8, DARK = 0xFF2B1A4D, DARK_TOP = 0xFF1B1036;
@@ -77,6 +91,7 @@ public final class Terrain {
         }
         mark(ex0, ey0, ex1, ey1);
     }
+    void markArea(int x0, int y0, int x1, int y1) { mark(x0, y0, x1, y1); }
     private void mark(int x0, int y0, int x1, int y1) {
         int a = Math.max(0, (x0 - 3) / TILE), b = Math.min(TW - 1, (x1 + 3) / TILE);
         int c = Math.max(0, (y0 - 3) / TILE), d = Math.min(TH - 1, (y1 + 3) / TILE);
@@ -261,13 +276,74 @@ public final class Terrain {
         return 0xFF000000 | r << 16 | g << 8 | b;
     }
     /** Pinta tierra destructible del color elegido; no tapa bloques ni objetos. */
-    public void earth(int cx, int cy, int r, int color) {
-        for (int y = cy - r; y <= cy + r; y++) for (int x = cx - r; x <= cx + r; x++) {
-            if (!inside(x, y) || (x - cx) * (x - cx) + (y - cy) * (y - cy) > r * r) continue;
-            int i = y * W + x, k = m[i]; if (k != 0 && k != DEBRIS && k != DECOR && k != PANEL) continue;
-            m[i] = PANEL; tex[i] = earthTex(color, x, y);
-        }
+    public void earth(int cx, int cy, int r, int color) { brush(cx, cy, r, EARTH, color); }
+    /** Pincel redondo de tierra (con vetas) o madera (color sólido). */
+    public void brush(int cx, int cy, int r, int mat, int color) {
+        for (int y = cy - r; y <= cy + r; y++) for (int x = cx - r; x <= cx + r; x++)
+            if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) paint(x, y, mat, color);
         mark(cx - r, cy - r, cx + r, cy + r);
+    }
+    /** Pinta un píxel con tierra o madera; no tapa bloques, acero ni objetos. */
+    public void paint(int x, int y, int mat, int color) {
+        if (!inside(x, y)) return;
+        int i = y * W + x, k = m[i]; if (k != 0 && k != DEBRIS && k != DECOR && k != EARTH && k != WOOD) return;
+        m[i] = (byte) mat; tex[i] = mat == WOOD ? color : earthTex(color, x, y);
+    }
+    // ---------- Formas del editor (relleno o contorno de grosor r)
+    public void line(int x0, int y0, int x1, int y1, int r, int mat, int color) {
+        int n = Math.max(1, (int) (Math.hypot(x1 - x0, y1 - y0) / Math.max(1, r * .5f)));
+        for (int k = 0; k <= n; k++) brush(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n, r, mat, color);
+    }
+    public void rect(int x0, int y0, int x1, int y1, boolean fill, int r, int mat, int color) {
+        int a = Math.min(x0, x1), b = Math.max(x0, x1), c = Math.min(y0, y1), d = Math.max(y0, y1);
+        if (fill) { for (int y = c; y <= d; y++) for (int x = a; x <= b; x++) paint(x, y, mat, color); mark(a, c, b, d); }
+        else { line(a, c, b, c, r, mat, color); line(b, c, b, d, r, mat, color); line(b, d, a, d, r, mat, color); line(a, d, a, c, r, mat, color); }
+    }
+    /** Círculo (o elipse) inscrito en el rectángulo arrastrado. */
+    public void oval(int x0, int y0, int x1, int y1, boolean fill, int r, int mat, int color) {
+        float cx = (x0 + x1) / 2f, cy = (y0 + y1) / 2f, rx = Math.max(1, Math.abs(x1 - x0) / 2f), ry = Math.max(1, Math.abs(y1 - y0) / 2f);
+        if (fill) {
+            for (int y = (int) (cy - ry); y <= cy + ry; y++) for (int x = (int) (cx - rx); x <= cx + rx; x++) { float u = (x - cx) / rx, v = (y - cy) / ry; if (u * u + v * v <= 1) paint(x, y, mat, color); }
+            mark((int) (cx - rx), (int) (cy - ry), (int) (cx + rx), (int) (cy + ry));
+        } else {
+            int n = (int) Math.max(12, (rx + ry) * 3.2f / Math.max(1, r * .5f));
+            for (int k = 0; k < n; k++) { double a = k * Math.PI * 2 / n; brush((int) Math.round(cx + Math.cos(a) * rx), (int) Math.round(cy + Math.sin(a) * ry), r, mat, color); }
+        }
+    }
+    /** Triángulo con la punta arriba al centro, inscrito en el rectángulo arrastrado. */
+    public void tri(int x0, int y0, int x1, int y1, boolean fill, int r, int mat, int color) {
+        int a = Math.min(x0, x1), b = Math.max(x0, x1), c = Math.min(y0, y1), d = Math.max(y0, y1), mx = (a + b) / 2;
+        if (fill) {
+            for (int y = c; y <= d; y++) { float k = d == c ? 1 : (y - c) / (float) (d - c); int hw = Math.round((b - a) / 2f * k); for (int x = mx - hw; x <= mx + hw; x++) paint(x, y, mat, color); }
+            mark(a, c, b, d);
+        } else { line(mx, c, b, d, r, mat, color); line(b, d, a, d, r, mat, color); line(a, d, mx, c, r, mat, color); }
+    }
+    /**
+     * Balde: si se toca tierra o madera, le cambia el color a toda esa zona unida del mismo material;
+     * si se toca un hueco vacío y cerrado, lo rellena. Devuelve false si el hueco no está cerrado.
+     */
+    public boolean bucket(int x, int y, int mat, int color) {
+        if (!inside(x, y)) return false;
+        int i0 = y * W + x, k = m[i0]; boolean empty = k == 0 || k == DEBRIS || k == DECOR;
+        if (!empty && k != EARTH && k != WOOD) return false;
+        final int LIMIT = 260_000; int[] q = new int[4096]; int n = 0, head = 0; java.util.BitSet seen = new java.util.BitSet(W * H);
+        q[n++] = i0; seen.set(i0); int x0 = x, x1 = x, y0 = y, y1 = y;
+        while (head < n) {
+            int p = q[head++], px = p % W, py = p / W;
+            x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+            for (int d = 0; d < 4; d++) {
+                int ox = px + (d == 0 ? 1 : d == 1 ? -1 : 0), oy = py + (d == 2 ? 1 : d == 3 ? -1 : 0);
+                if (!inside(ox, oy)) continue; int o = oy * W + ox; if (seen.get(o)) continue;
+                int ko = m[o]; boolean same = empty ? ko == 0 || ko == DEBRIS || ko == DECOR : ko == k;
+                if (!same) continue;
+                seen.set(o); if (n >= LIMIT) return false;
+                if (n == q.length) q = java.util.Arrays.copyOf(q, q.length * 2);
+                q[n++] = o;
+            }
+        }
+        int to = empty ? mat : k;
+        for (int j = 0; j < n; j++) { int p = q[j], px = p % W, py = p / W; m[p] = (byte) to; tex[p] = to == WOOD ? color : earthTex(color, px, py); }
+        mark(x0, y0, x1, y1); return true;
     }
     /** Borra todo lo que no sea el marco ni un objeto (los objetos los quita el mundo). */
     public void wipe(int cx, int cy, int r) {

@@ -5,7 +5,7 @@ import com.wap.core.*;
 public final class RobotArt {
     public static final int INK = 0xFF141414, WHITE = 0xFFFFFFFF, HEADC = 0xFF9E9E9E, PADC = 0xFFC2C3C7, GLOWC = 0xFFD8F2FF;
     /** Color del traje: el jugador lo cambia en el editor; el rival usa otro. */
-    public static final int[] COLOR = {0xFF5E5650, 0xFF1266FF};
+    public static final int[] COLOR = {0xFF5E5650, 0xFF1266FF, 0xFF2BAA4A, 0xFFE8B21E, 0xFFB04FD8};
     static final float TH = 10, SH = 10, UA = 6, FA = 6.5f, ANK = 4, SW = .75f, TORSO_LEN = 15, SHOULDER = 11;
     /** Cabeza irregular como en la referencia (no un círculo), suavizada con curvas Catmull-Rom. */
     static final float[] HEAD;

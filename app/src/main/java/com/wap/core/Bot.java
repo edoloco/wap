@@ -58,8 +58,9 @@ public final class Bot {
         return found;
     }
     public int think(World g) {
-        Robot m = g.robots[me], e = g.robots[1 - me];
+        Robot m = g.robots[me], e = g.nearest(m, true); // el enemigo más cercano
         if (!m.alive()) return 0;
+        if (e == null) return 0;
         if (aimT > 0) { // mantiene X y mueve la mira; luego lanza el gancho
             aimT--; float d = aimGoal - m.aim;
             if (Math.abs(d) > Robot.AIM_SPEED && aimT > 0) return Input.X | (d > 0 ? Input.UP : Input.DOWN);

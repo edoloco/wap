@@ -18,7 +18,9 @@ public final class Renderer {
         }
     }
     static final class P { float x, y, vx, vy, life, max, rot, vr, size, g = .2f; int kind, slot, color; boolean ground; }
-    public final RobotArt.View[] views = {new RobotArt.View(), new RobotArt.View()};
+    public final RobotArt.View[] views = {new RobotArt.View(), new RobotArt.View(), new RobotArt.View(), new RobotArt.View(), new RobotArt.View()};
+    /** Equipos en pantalla: si hay equipos, la flecha y los nombres usan el color del equipo. */
+    public boolean teams;
     final ArrayList<P> ps = new ArrayList<>(); final ArrayList<float[]> beams = new ArrayList<>(); final ArrayList<float[]> booms = new ArrayList<>();
     final Random r = new Random(7); final int[] px = new int[Terrain.TILE * Terrain.TILE];
     public float camX = 900, camY = 500, shake; public float zoom = 3; float vx0, vy0, vw, vh; boolean first = true;
@@ -71,6 +73,14 @@ public final class Renderer {
             case Fx.CHIPS: for (int i = 0; i < f.a; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 4, -r.nextFloat() * 3, 24, 1.6f, DIRT2); break;
             case Fx.SMOKE: { P p = part(f.a > 0 ? FIRE : SMOKE, f.x, f.y, 0, -.2f, f.a > 0 ? 14 : 30, f.a > 0 ? 3 : 2.5f, f.a > 0 ? 0xFFFF8A1A : 0x5A3A3E48); p.g = 0; break; }
             case Fx.FLASH: { RobotArt.View v = views[f.who]; v.label = Wpn.ALL[(int) f.b].name; v.labelT = LABEL; if (v.shotT <= 0) v.shotT = 12; break; }
+            case Fx.WOOD: { // astillas del color de la madera
+                int n = Math.min(26, 5 + (int) f.a / 18), c = (int) f.b, d = RobotArt.mixDark(c);
+                for (int i = 0; i < n; i++) {
+                    float a = r.nextFloat() * 6.28f, v = 1.2f + r.nextFloat() * 3.5f;
+                    P p = part(CHUNK, f.x + (r.nextFloat() - .5f) * 14, f.y + (r.nextFloat() - .5f) * 14, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 2, 90 + r.nextInt(60), 2 + r.nextFloat() * 4, i % 3 == 0 ? d : c); p.slot = r.nextInt(99);
+                }
+                for (int i = 0; i < 5; i++) { P p = part(DUST, f.x, f.y, (r.nextFloat() - .5f) * 1.5f, -r.nextFloat(), 26, 3, 0x66E8D8C0); p.g = 0; }
+                break; }
             case Fx.PROP: {
                 int kind = (int) f.c, n = (int) (f.a * f.b / 110) + 6;
                 int[] tone = kind == Terrain.METAL ? new int[]{0xFF8D99A8, 0xFFB4BFCC} : kind == Terrain.STONE ? new int[]{0xFF9C9488, 0xFF7A7369} : kind == Terrain.COMPUTER ? new int[]{0xFF2C323F, 0xFF46F08A} : new int[]{0xFFCB8C3C, 0xFF96601F};
@@ -83,7 +93,7 @@ public final class Renderer {
             case Fx.STOMP: {
                 for (int i = 0; i < 10; i++) { float a = i * .628f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3, (float) Math.sin(a) * 1.6f - 1, 12, 1, 0xFFFFFFFF); p.g = 0; }
                 RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "¡BARRIDA!" : "¡PISADO!"; v.labelT = LABEL; break; }
-            case Fx.GRAB: { RobotArt.View v = views[1 - f.who]; v.label = "¡PUNCH!"; v.labelT = LABEL;
+            case Fx.GRAB: { RobotArt.View v = views[f.who]; v.label = "¡PUNCH!"; v.labelT = LABEL;
                 for (int i = 0; i < 12; i++) { float a = i * .52f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3.5f, (float) Math.sin(a) * 3.5f, 12, 1, 0xFFFFFFFF); p.g = 0; }
                 booms.add(new float[]{f.x, f.y, 20, 0, 0, 3}); break; }
             case Fx.SLAM: {
@@ -177,7 +187,7 @@ public final class Renderer {
     public void tick(World w) {
         feedStep(); trails(w);
         stepFx(w);
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < w.robots.length; i++) {
             Robot o = w.robots[i]; RobotArt.update(views[i], o, w);
         }
     }
@@ -216,11 +226,12 @@ public final class Renderer {
             g.poly(new float[]{-z, -z * k, z * .7f, -z, z, z * .4f, -z * .3f, z * k}, p.color, 0x66141414, .5f); g.restore();
         }
         for (P p : ps) if (p.kind == ARMOR || p.kind == BONE) { g.save(); g.translate(p.x, p.y); g.rotate(p.rot); if (p.kind == ARMOR) RobotArt.piece(g, p.slot, p.color); else RobotArt.bonePiece(g, p.slot); g.restore(); }
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < w.robots.length; i++) {
             Robot o = w.robots[i]; if (!o.alive()) continue;
             if (o.rope != 0) { float hx = o.px + o.facing * 12, hy = o.py - 33; g.line(hx, hy, o.rx, o.ry, INK, 1.1f); g.circle(o.rx, o.ry, 2.4f, 0xFFFFFFFF, INK, .7f); }
             RobotArt.draw(g, views[i], o, RobotArt.COLOR[i]);
         }
+        woodCracks(g, w);
         water(g, w, x0, y0);
         for (P p : ps) {
             float k = p.life / p.max;
@@ -352,7 +363,7 @@ public final class Renderer {
     /** Nombres sobre los personajes, con la fuente de pixel art, en la capa de interfaz de escala s. */
     void labels(Gfx g, World w, int s) {
         float lw = uw, k = zoom / s;
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < w.robots.length; i++) {
             Robot o = w.robots[i]; RobotArt.View v = views[i];
             if (!o.alive()) continue;
             if (showNames) { // nombre sobre el personaje
@@ -366,13 +377,33 @@ public final class Renderer {
             PixelFont.draw(g, v.label, lx, ly, 8, 0xFFFFF4D6, 0, 0);
         }
     }
+    /** Flechas en el borde hacia cada rival que está fuera de la pantalla. */
     void pointer(Gfx g, World w, int who, int s) {
-        Robot e = w.robots[1 - who]; if (!e.alive()) return;
-        float k = zoom / s, lw = uw, lh = uh, sx = (e.px - vx0) * k, sy = (e.py - 30 - vy0) * k, m = 14;
-        if (sx > 0 && sx < lw && sy > 0 && sy < lh) return;
-        float cx = lw / 2f, cy = lh / 2f, dx = sx - cx, dy = sy - cy, q = Math.min((lw / 2f - m) / Math.max(1, Math.abs(dx)), (lh / 2f - m) / Math.max(1, Math.abs(dy)));
-        g.save(); g.translate(Math.round(cx + dx * q), Math.round(cy + dy * q)); g.rotate((float) Math.atan2(dy, dx));
-        g.poly(new float[]{7,0, -5,-6, -2,0, -5,6}, RobotArt.COLOR[1 - who], INK, 1); g.restore();
+        Robot me = w.robots[who];
+        for (Robot e : w.robots) {
+            if (e == me || !e.alive() || e.team == me.team) continue;
+            float k = zoom / s, lw = uw, lh = uh, sx = (e.px - vx0) * k, sy = (e.py - 30 - vy0) * k, m = 14;
+            if (sx > 0 && sx < lw && sy > 0 && sy < lh) continue;
+            float cx = lw / 2f, cy = lh / 2f, dx = sx - cx, dy = sy - cy, q = Math.min((lw / 2f - m) / Math.max(1, Math.abs(dx)), (lh / 2f - m) / Math.max(1, Math.abs(dy)));
+            g.save(); g.translate(Math.round(cx + dx * q), Math.round(cy + dy * q)); g.rotate((float) Math.atan2(dy, dx));
+            g.poly(new float[]{7,0, -5,-6, -2,0, -5,6}, RobotArt.COLOR[e.id], INK, 1); g.restore();
+        }
+    }
+    /** Grietas en los trozos de madera dañados. */
+    void woodCracks(Gfx g, World w) {
+        if (w.woodDmg == null) return;
+        int a = Math.max(0, (int) (vx0 / Terrain.FRAG) - 1), b = Math.min(Terrain.FW - 1, (int) ((vx0 + vw) / Terrain.FRAG) + 1);
+        int c = Math.max(0, (int) (vy0 / Terrain.FRAG) - 1), d = Math.min(Terrain.FH - 1, (int) ((vy0 + vh) / Terrain.FRAG) + 1);
+        for (int j = c; j <= d; j++) for (int i = a; i <= b; i++) {
+            int f = j * Terrain.FW + i, dmg = w.woodDmg[f]; if (dmg <= 0) continue;
+            float k = dmg / (float) World.WOOD_HP; int x = Terrain.fragX(f), y = Terrain.fragY(f), h = hash(i, j);
+            for (int n = 0; n < 2 + (int) (k * 4); n++) {
+                float ang = (h >> n * 3 & 7) * .785f + n, len = 4 + k * 9;
+                float x1 = x + (float) Math.cos(ang) * len, y1 = y + (float) Math.sin(ang) * len;
+                if (w.t.at((int) x1, (int) y1) != Terrain.WOOD || w.t.at(x, y) != Terrain.WOOD) continue;
+                g.line(x, y, x1, y1, 0xAA1A1208, 1.1f); g.line(x1, y1, x1 + (float) Math.cos(ang + 1) * len * .5f, y1 + (float) Math.sin(ang + 1) * len * .5f, 0x881A1208, .8f);
+            }
+        }
     }
     World world;
     static int alpha(int c, float k) { return (int) (Math.max(0, Math.min(1, k)) * (c >>> 24)) << 24 | c & 0xFFFFFF; }

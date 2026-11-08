@@ -4,7 +4,7 @@ import com.wap.net.*;
 import java.util.ArrayList; import java.util.List;
 /** Pantallas y flujo de la aplicación. No conoce Android; recibe entradas y dibuja por Gfx. */
 public final class App {
-    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8;
+    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8, RIVALS = 9, LEVEL_SEL = 10;
     /** Servicios del teléfono para jugar en red. */
     public interface Device { String name(); void listen(boolean on);
         /** Pide un texto con el teclado del teléfono; done recibe el texto o null si se cancela. */
@@ -22,7 +22,7 @@ public final class App {
     static final int SLOTS = Robot.SLOTS;
     static String key(int i) { return "arma" + (i == 3 ? 4 : i); } // conserva lo elegido en versiones anteriores
     public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey; public Updater up; public Device dev;
-    String myName = ""; final String[] names = {"PLAYER 1", "PLAYER 2"};
+    String myName = ""; String[] names = {"PLAYER 1", "PLAYER 2"};
     /** Niveles guardados: archivos de la app. levelName es el elegido para jugar ("" = aleatorio). */
     public Files files = new Files.Memory(); String levelName = ""; final Editor editor = new Editor(this);
     /** Nivel que se está probando desde el editor (al terminar se vuelve al editor). */
@@ -30,6 +30,32 @@ public final class App {
     public String levelName() { return levelName; }
     /** Nivel recibido del otro teléfono en una partida en línea, para ofrecer conservarlo al final. */
     Level received; boolean receivedSaved;
+    // ---------- Rivales (solo contra la máquina): cantidad, modo, y por rival dificultad, armas y color o equipo
+    static final int MAX_RIVALS = 4;
+    static final int[] RIVAL_COLORS = {0xFF1266FF, 0xFFE0302A, 0xFF2BAA4A, 0xFFE8B21E, 0xFFB04FD8, 0xFFFF7A1A, 0xFF23C8C8, 0xFFEDEDED, 0xFF2A2A2A};
+    static final int[] TEAM_COLORS = {0xFFE0302A, 0xFF1266FF, 0xFF2BAA4A, 0xFFE8B21E}; static final String[] TEAM_NAMES = {"ROJO", "AZUL", "VERDE", "AMARILLO"};
+    int rivals = 1, myTeam; boolean teams;
+    final int[] rLevel = {1, 1, 1, 1}, rColor = {0, 1, 2, 3}, rTeam = {1, 1, 1, 1}; final boolean[] rRandom = {true, true, true, true};
+    final int[][] rSlots = new int[MAX_RIVALS][SLOTS];
+    /** Para la pantalla de armas: -1 son las tuyas; 0..3, las de ese rival. */
+    int armsFor = -1;
+    int[] eslots() { return armsFor < 0 ? slots : rSlots[armsFor]; }
+    Bot[] bots = new Bot[0];
+    void loadRivals() {
+        try {
+            rivals = Math.max(1, Math.min(MAX_RIVALS, Integer.parseInt(st.get("rivales", "1")))); teams = st.get("equipos", "0").equals("1"); myTeam = Integer.parseInt(st.get("miequipo", "0")) & 3;
+            for (int i = 0; i < MAX_RIVALS; i++) {
+                String[] p = st.get("rival" + i, "").split(",");
+                if (p.length < 8) { rLevel[i] = i == 0 ? level : 1; for (int k = 0; k < SLOTS; k++) rSlots[i][k] = Wpn.index(DEF[k]); continue; }
+                rLevel[i] = Integer.parseInt(p[0]) % 3; rColor[i] = Integer.parseInt(p[1]) % RIVAL_COLORS.length; rTeam[i] = Integer.parseInt(p[2]) & 3; rRandom[i] = p[3].equals("1");
+                for (int k = 0; k < SLOTS; k++) rSlots[i][k] = Math.floorMod(Integer.parseInt(p[4 + k]), Wpn.ALL.length);
+            }
+        } catch (Exception e) { }
+    }
+    void saveRivals() {
+        st.put("rivales", "" + rivals); st.put("equipos", teams ? "1" : "0"); st.put("miequipo", "" + myTeam);
+        for (int i = 0; i < MAX_RIVALS; i++) { StringBuilder b = new StringBuilder(rLevel[i] + "," + rColor[i] + "," + rTeam[i] + "," + (rRandom[i] ? 1 : 0)); for (int k = 0; k < SLOTS; k++) b.append(',').append(rSlots[i][k]); st.put("rival" + i, b.toString()); }
+    }
     int myColor = 0xFF5E5650, me; boolean online, hosting; Lockstep ls; Link link; Lan.Browser browser; Lan.Beacon beacon; java.net.ServerSocket server;
     volatile Link pending; volatile Link.Hello pendHost, pendGuest; volatile String netMsg = ""; String toast = ""; int toastT; volatile boolean busy;
     final Store st; final Audio au; public final TouchPad pad = new TouchPad(); public final Renderer ren = new Renderer();
@@ -44,17 +70,29 @@ public final class App {
         try { myColor = 0xFF000000 | Integer.parseInt(st.get("traje", "5E5650"), 16); } catch (Exception e) { }
         myName = clean(st.get("nombre", "")); levelName = st.get("nivel", "");
         try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
+        loadRivals();
     }
     public void seed(int s) { seed = s; }
     public void start() {
-        Wpn[] a = new Wpn[SLOTS], b = new Wpn[SLOTS]; seed = seed * 1103515245 + 12345;
-        Rng r = new Rng(seed ^ 0x5A5A);
-        for (int i = 0; i < SLOTS; i++) { a[i] = Wpn.ALL[slots[i]]; b[i] = Wpn.ALL[r.i(Wpn.ALL.length)]; }
-        RobotArt.COLOR[0] = myColor; RobotArt.COLOR[1] = near(myColor, 0xFF1266FF) ? 0xFFFF0000 : 0xFF1266FF; me = 0; online = false;
+        seed = seed * 1103515245 + 12345; Rng r = new Rng(seed ^ 0x5A5A);
+        int n = 1 + rivals; Wpn[][] loads = new Wpn[n][SLOTS]; int[] team = new int[n];
+        for (int k = 0; k < SLOTS; k++) loads[0][k] = Wpn.ALL[slots[k]];
+        for (int i = 1; i < n; i++) for (int k = 0; k < SLOTS; k++) loads[i][k] = Wpn.ALL[rRandom[i - 1] ? r.i(Wpn.ALL.length) : rSlots[i - 1][k]];
+        boolean oneTeam = true; for (int i = 0; i < rivals; i++) oneTeam &= rTeam[i] == myTeam;
+        for (int i = 0; i < n; i++) team[i] = !teams ? i : i == 0 ? myTeam : oneTeam ? (myTeam + 1) % 4 : rTeam[i - 1]; // si todos quedan en tu equipo, los rivales pasan al siguiente
+        for (int i = 0; i < n; i++) RobotArt.COLOR[i] = teams ? TEAM_COLORS[team[i]] : i == 0 ? myColor : RIVAL_COLORS[rColor[i - 1]];
+        if (!teams) for (int i = 1; i < n; i++) { // si un rival se parece a ti o a otro, toma un color libre
+            boolean clash = near(RobotArt.COLOR[i], myColor); for (int j = 1; j < i; j++) clash |= RobotArt.COLOR[j] == RobotArt.COLOR[i];
+            if (!clash) continue;
+            for (int c : RIVAL_COLORS) { boolean ok = !near(c, myColor); for (int j = 0; j < i; j++) ok &= !near(c, RobotArt.COLOR[j]); if (ok) { RobotArt.COLOR[i] = c; break; } }
+        }
+        me = 0; online = false;
         Level lv = testing != null ? testLevel : levelName.isEmpty() ? null : loadLevel(levelName);
         if (lv == null && testing == null && !levelName.isEmpty()) { levelName = ""; save(); } // el nivel elegido ya no existe
-        w = new World(seed, LIVES[livesIx], a, b, lv); bot = new Bot(seed + 1, 1, SKILL[level]); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
-        setNames(or(myName, "PLAYER 1"), "PLAYER 2", false);
+        w = new World(seed, LIVES[livesIx], loads, team, lv); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
+        bots = new Bot[n]; for (int i = 1; i < n; i++) bots[i] = new Bot(seed + i, i, SKILL[rLevel[i - 1]]);
+        String[] nm = new String[n]; nm[0] = or(myName, "PLAYER 1"); for (int i = 1; i < n; i++) nm[i] = "PLAYER " + (i + 1);
+        setNames(nm, n > 2); ren.teams = teams;
         pad.clear();
     }
     // ---------- Niveles guardados
@@ -66,12 +104,12 @@ public final class App {
     }
     Level loadFile(String f) { try { byte[] d = files.read(f); return d == null ? null : Level.load(d); } catch (Exception e) { return null; } }
     Level loadLevel(String name) { return loadFile(file(name)); }
-    void saveLevel(Level l) { files.write(file(l.name), l.save()); }
+    void saveLevel(Level l) { files.write(file(l.name), l.save()); forgetThumb(l.name); }
     String unusedName(String base) { List<String> l = levelNames(); for (int i = 1; ; i++) { String n = base + " " + i; if (!l.contains(n)) return n; } }
     public void openEditor(Level l) { editor.open(l); go(EDIT); }
     /** Sale del editor: guarda (o borra) el nivel y vuelve a la lista. */
     public void leaveEditor(boolean delete) {
-        if (delete) { files.delete(file(editor.name)); if (editor.name.equals(levelName)) { levelName = ""; save(); } toast = "NIVEL BORRADO"; }
+        if (delete) { files.delete(file(editor.name)); forgetThumb(editor.name); if (editor.name.equals(levelName)) { levelName = ""; save(); } toast = "NIVEL BORRADO"; }
         else { saveLevel(editor.level()); toast = "NIVEL GUARDADO"; }
         toastT = 120; editor.close(); testing = null; go(LEVEL_LIST);
     }
@@ -104,15 +142,106 @@ public final class App {
         menu(g, W / 2 - 150 * u, 46 * u, 300 * u, l.toArray(new String[0]), a.toArray(new Runnable[0]));
         if (toastT > 0) { g.rect(0, H - 16, W, 16, MINT); txtS(g, toast, W / 2, H - 4, 8, CREAM, 0); }
     }
-    int levelPage;
+    int levelPage, selPage;
+    /** Con mando, marca el botón elegido en pantallas con muchos botones. */
+    void focusBox(Gfx g) {
+        if (!padSeen || btns.isEmpty()) return; focus = Math.floorMod(focus, btns.size()); float[] b = btns.get(focus);
+        int x = Math.round(b[0]) - 1, y = Math.round(b[1]) - 1, w2 = Math.round(b[2] - b[0]) + 2, h2 = Math.round(b[3] - b[1]) + 2;
+        g.rect(x, y, w2, 1, GOLD); g.rect(x, y + h2 - 1, w2, 1, GOLD); g.rect(x, y, 1, h2, GOLD); g.rect(x + w2 - 1, y, 1, h2, GOLD);
+    }
+    /** Botón chico de texto. */
+    void chip(Gfx g, float x, float y, float w, float h, String t, boolean on, Runnable r) {
+        box(g, x, y, w, h, on ? GOLD : BLUE, on ? CREAM : SKY, on ? 0xFFB8862A : NAVY); txtS(g, t, x + w / 2, y + h / 2 + 3.5f, 8, on ? DEEP : CREAM, 0); btn(x, y, w, h, r);
+    }
+    void swatch(Gfx g, float x, float y, float w, float h, int c, String t, Runnable r) {
+        box(g, x, y, w, h, c, RobotArt.mixLight(c), RobotArt.mixDark(c)); if (t != null) txtS(g, t, x + w / 2, y + h / 2 + 3.5f, 8, CREAM, 0); btn(x, y, w, h, r);
+    }
+    /** Pantalla RIVALES: cuántos, modo (todos contra todos o equipos) y por rival dificultad, armas y color o equipo. */
+    void rivalsScreen(Gfx g) {
+        sky(g);
+        float cw = Math.min(W - 8, 400), x0 = (W - cw) / 2, y = 4;
+        txtS(g, "RIVALES", W / 2, y + 13, 16, GOLD, 0); y += 22;
+        txt(g, "CUÁNTOS", x0, y + 12, 8, CREAM, -1);
+        for (int i = 1; i <= MAX_RIVALS; i++) { final int k = i; chip(g, x0 + 50 + (i - 1) * 20, y, 18, 17, "" + i, rivals == i, () -> rivals = k); }
+        chip(g, x0 + 140, y, cw - 140, 17, teams ? "MODO  EQUIPOS" : "MODO  TODOS CONTRA TODOS", false, () -> teams = !teams); y += 21;
+        if (teams) {
+            txt(g, "TU EQUIPO", x0, y + 12, 8, CREAM, -1);
+            swatch(g, x0 + 60, y, 80, 17, TEAM_COLORS[myTeam], TEAM_NAMES[myTeam], () -> myTeam = (myTeam + 1) % 4);
+            txt(g, "LOS DEL MISMO EQUIPO NO SE HACEN DAÑO", x0 + 148, y + 12, 8, MUTE, -1); y += 21;
+        }
+        for (int i = 0; i < rivals; i++) {
+            final int k = i; float rh = 21;
+            box(g, x0, y, cw, rh, 0xE61B1F4A, BLUE, DEEP);
+            int col = teams ? TEAM_COLORS[rTeam[i]] : RIVAL_COLORS[rColor[i]];
+            swatch(g, x0 + 3, y + 3, teams ? 62 : 18, rh - 6, col, teams ? TEAM_NAMES[rTeam[i]] : null, () -> { if (teams) rTeam[k] = (rTeam[k] + 1) % 4; else rColor[k] = (rColor[k] + 1) % RIVAL_COLORS.length; });
+            float lx = x0 + (teams ? 70 : 26);
+            txt(g, "PLAYER " + (i + 2), lx, y + 14, 8, GOLD, -1);
+            float bx = lx + 56, bw2 = (x0 + cw - 3 - bx) / 2 - 2;
+            chip(g, bx, y + 3, bw2, rh - 6, LEVELS[rLevel[i]], false, () -> rLevel[k] = (rLevel[k] + 1) % 3);
+            chip(g, bx + bw2 + 4, y + 3, bw2, rh - 6, rRandom[i] ? "ARMAS AL AZAR" : "ARMAS ELEGIDAS", false, () -> { armsFor = k; selSlot = 0; go(ARMS); });
+            y += rh + 2;
+        }
+        float by = H - 22;
+        box(g, W / 2 - 60, by, 120, 19, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", W / 2, by + 13, 8, CREAM, 0);
+        btn(W / 2 - 60, by, 120, 19, () -> { saveRivals(); go(TITLE); });
+    }
+    // ---------- SELECCIONA NIVEL: cuadritos con miniatura y nombre
+    static final int THUMB = 80, THUMB_H = 44;
+    final java.util.HashMap<String, int[]> thumbs = new java.util.HashMap<>(); final java.util.HashMap<String, Integer> thumbIds = new java.util.HashMap<>(); final java.util.HashSet<Integer> thumbUp = new java.util.HashSet<>();
+    void forgetThumb(String name) { thumbs.remove(name); Integer id = thumbIds.get(name); if (id != null) thumbUp.remove(id); }
+    int[] thumb(String name) {
+        int[] t = thumbs.get(name); if (t != null) return t;
+        Level l = name.isEmpty() ? Level.random(4242, "") : loadLevel(name); t = new int[THUMB * THUMB];
+        if (l != null) for (int ty = 0; ty < THUMB_H; ty++) for (int tx = 0; tx < THUMB; tx++) {
+            int c = 0xFF20264A;
+            for (int sy = 0; sy < 3 && c == 0xFF20264A; sy++) for (int sx = 0; sx < 3; sx++) {
+                int x = tx * Terrain.W / THUMB + sx * Terrain.W / THUMB / 3, y = ty * Terrain.H / THUMB_H + sy * Terrain.H / THUMB_H / 3, k = l.m[y * Terrain.W + x];
+                if (k != 0 && k != Terrain.DEBRIS && k != Terrain.DECOR) { c = l.tex[y * Terrain.W + x] | 0xFF000000; if (c == 0xFF000000) c = 0xFF8214FF; break; }
+            }
+            if (l.water >= 0 && ty * Terrain.H / THUMB_H > l.water) c = 0xFF000000 | ((c >> 16 & 255) * 6 / 10 + 0x18) << 16 | ((c >> 8 & 255) * 6 / 10 + 0x38) << 8 | (c & 255) * 6 / 10 + 0x66;
+            t[ty * THUMB + tx] = c;
+        }
+        thumbs.put(name, t); if (!thumbIds.containsKey(name)) thumbIds.put(name, 1_000_000 + thumbIds.size()); thumbUp.remove(thumbIds.get(name));
+        return t;
+    }
+    void levelSel(Gfx g) {
+        sky(g);
+        txtS(g, "SELECCIONA NIVEL", W / 2, 17, 16, GOLD, 0);
+        List<String> l = levelNames(); l.add(0, "");
+        int per = 6, pages = Math.max(1, (l.size() + per - 1) / per); selPage = Math.min(selPage, pages - 1);
+        float gw = Math.min(W - 12, 300), cw = gw / 3, ch = 70, x0 = (W - gw) / 2, y0 = 26;
+        for (int k = 0; k < per; k++) {
+            int i = selPage * per + k; if (i >= l.size()) break;
+            final String n = l.get(i); float x = x0 + k % 3 * cw, y = y0 + k / 3 * (ch + 4); boolean sel = n.equals(levelName);
+            box(g, x + 2, y, cw - 4, ch, sel ? GOLD : BLUE, sel ? CREAM : SKY, sel ? 0xFFB8862A : NAVY);
+            int[] t = thumb(n); int id = thumbIds.get(n); boolean fresh = thumbUp.add(id);
+            float tx = Math.round(x + cw / 2 - THUMB / 2f), ty = y + 4;
+            g.rect(tx - 1, ty - 1, THUMB + 2, THUMB_H + 2, INK); g.tile(id, t, THUMB, fresh, tx, ty);
+            if (n.isEmpty()) txtS(g, "?", x + cw / 2, ty + 32, 24, GOLD, 0);
+            String shown = n.isEmpty() ? "ALEATORIO" : n; if (PixelFont.width(shown, 8) > cw - 8) shown = shown.substring(0, Math.max(3, (int) ((cw - 8) / 6)));
+            txtS(g, shown, x + cw / 2, y + ch - 7, 8, sel ? DEEP : CREAM, 0);
+            btn(x + 2, y, cw - 4, ch, () -> { levelName = n; save(); go(TITLE); });
+        }
+        float by = H - 22;
+        if (pages > 1) {
+            chip(g, W / 2 - 110, by, 40, 19, "<", false, () -> selPage = (selPage + pages - 1) % pages);
+            txt(g, (selPage + 1) + "/" + pages, W / 2 - 50, by + 13, 8, CREAM, 0);
+            chip(g, W / 2 - 30, by, 40, 19, ">", false, () -> selPage = (selPage + 1) % pages);
+        }
+        chip(g, W / 2 + 20, by, 90, 19, "VOLVER", false, () -> go(TITLE));
+    }
     /** Para las pruebas: elegir herramienta y aplicarla en un punto del mapa. */
     public void editorTool(int t) { editor.tool = t; }
-    public void editorApply(int x, int y) { editor.apply(x, y, true); }
+    public void setRivals(int n, boolean t) { rivals = n; teams = t; }
+    public void saveTestLevel(String n) { Level l = Level.random(n.hashCode(), n); if (n.equals("PLAYA")) l.water = 650; saveLevel(l); }
+    public int editorSolidCount() { int c = 0; for (int i = 0; i < editor.w.t.m.length; i += 7) { int k = editor.w.t.m[i]; if (k == Terrain.EARTH || k == Terrain.WOOD) c++; } return c * 7; }
+    public void editorApply(int x, int y) { editor.apply(x, y); }
     static final int NAME_MAX = 12;
     /** Nombre en mayúsculas, sin saltos de línea y con largo máximo. */
     static String clean(String n) { if (n == null) return ""; n = n.replaceAll("[\\r\\n\\t|]", " ").trim().toUpperCase(); return n.length() > NAME_MAX ? n.substring(0, NAME_MAX) : n; }
     static String or(String n, String d) { n = clean(n); return n.isEmpty() ? d : n; }
-    void setNames(String a, String b, boolean show) { names[0] = a; names[1] = b; ren.names = names; ren.showNames = show; ren.feedClear(); }
+    void setNames(String a, String b, boolean show) { setNames(new String[]{a, b}, show); }
+    void setNames(String[] n, boolean show) { names = n; ren.names = names; ren.showNames = show; ren.feedClear(); }
     static boolean near(int a, int b) {
         int r = (a >> 16 & 255) - (b >> 16 & 255), g = (a >> 8 & 255) - (b >> 8 & 255), l = (a & 255) - (b & 255);
         return r * r + g * g + l * l < 14000;
@@ -177,6 +306,7 @@ public final class App {
         String hn = or(h.name, "PLAYER 1"), cn = or(c.name, "PLAYER 2"); if (hn.equals(cn)) cn = cn.length() < NAME_MAX - 1 ? cn + " 2" : "PLAYER 2";
         setNames(hn, cn, true); // en línea se ve el nombre de cada uno sobre su personaje
         if (dev != null) dev.lowLatency(true);
+        ren.teams = false;
     }
     /** Guarda el nivel recibido (con otro nombre si ya hay uno igual). */
     void keepReceived() {
@@ -196,15 +326,16 @@ public final class App {
         if (screen == OVER && online) { endOnline(null); return; }
         if (screen == PAINT) { save(); go(TITLE); return; }
         if (screen == EDIT) { leaveEditor(false); return; }
-        if (screen == LEVEL_LIST) { go(TITLE); return; }
+        if (screen == LEVEL_LIST || screen == LEVEL_SEL) { go(TITLE); return; }
+        if (screen == RIVALS) { saveRivals(); go(TITLE); return; }
         if (testing != null && (screen == OVER || screen == PAUSE)) { backToEditor(); return; }
-        if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); go(TITLE); } else if (screen == OVER) go(TITLE);
+        if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); saveRivals(); go(armsFor >= 0 ? RIVALS : TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
     void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
     public void go(int s) { screen = s; focus = 0; pad.clear(); }
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
-    public void pointer(int id, float x, float y, boolean down) { pad.pointer(id, x / uiScale, y / uiScale, down); }
+    public void pointer(int id, float x, float y, boolean down) { if (screen == EDIT) editor.pointer(id, x, y, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
     public boolean tap(float x, float y) {
         x /= uiScale; y /= uiScale;
         for (int i = btns.size() - 1; i >= 0; i--) { float[] b = btns.get(i); if (x >= b[0] && y >= b[1] && x <= b[2] && y <= b[3]) { au.play(Audio.MENU); acts.get(i).run(); return true; } }
@@ -228,7 +359,8 @@ public final class App {
         if (screen == PLAY) {
             if (cd > 0) cd--;
             else {
-                in[0] = m; in[1] = bot.think(w); w.step(in); ren.tick(w);
+                int[] ins = new int[w.robots.length]; ins[0] = m; for (int i = 1; i < ins.length; i++) ins[i] = bots[i].think(w);
+                w.step(ins); ren.tick(w);
                 sounds();
                 ren.consume(w, false);
                 if (w.finished && ++overT > 110) go(OVER);
@@ -280,10 +412,10 @@ public final class App {
     }
     /** Arrastre sobre las barras de color. */
     /** Dedo que toca, se mueve o se levanta (el editor dibuja con esto). */
-    public void down(float x, float y) { if (screen == EDIT) editor.down(x, y); }
-    public void up() { if (screen == EDIT) editor.up(); }
+    public void down(float x, float y) { }
+    public void up() { }
     public void drag(float x, float y) {
-        if (screen == EDIT) { editor.drag(x, y); return; }
+        if (screen == EDIT) return; // el editor usa los gestos de pointer()
         if (screen != PAINT) return;
         x /= uiScale; y /= uiScale;
         for (int i = 0; i < 3; i++) {
@@ -362,7 +494,7 @@ public final class App {
         if ((p & Input.LEFT) != 0) cur = (cur + n - 1) % n;
         if ((p & Input.DOWN) != 0) cur = Math.min(n - 1, cur + COLS);
         if ((p & Input.UP) != 0) cur = Math.max(0, cur - COLS);
-        if ((p & Input.A) != 0) { slots[selSlot] = cur; selSlot = (selSlot + 1) % SLOTS; au.play(Audio.PICK); }
+        if ((p & Input.A) != 0) { eslots()[selSlot] = cur; selSlot = (selSlot + 1) % SLOTS; au.play(Audio.PICK); }
         if ((p & Input.B) != 0) back();
     }
     void btn(float x, float y, float w, float h, Runnable r) { btns.add(new float[]{x, y, x + w, y + h}); acts.add(r); }
@@ -391,6 +523,8 @@ public final class App {
             case LOBBY: lobby(g); break;
             case EDIT: editor.draw(g); if (toastT > 0) { g.rect(0, 26, W, 14, MINT); txtS(g, toast, W / 2, 37, 8, CREAM, 0); } break;
             case LEVEL_LIST: levels(g); break;
+            case RIVALS: rivalsScreen(g); focusBox(g); break;
+            case LEVEL_SEL: levelSel(g); focusBox(g); break;
             default:
                 ren.overlay(g, s); hud(g);
                 if (online && ls.stall > 45) txtS(g, "ESPERANDO AL OTRO TELÉFONO...", W / 2, H * .5f, 16 * u, CREAM, 0);
@@ -409,7 +543,7 @@ public final class App {
                     else if (testing != null) menu(g, W / 2 - 110 * u, H * .4f, 220 * u, new String[]{"SEGUIR", "VOLVER AL EDITOR"}, new Runnable[]{() -> screen = PLAY, this::backToEditor});
                     else menu(g, W / 2 - 110 * u, H * .4f, 220 * u, new String[]{"SEGUIR", "VOLVER AL MENÚ"}, new Runnable[]{() -> screen = PLAY, () -> go(TITLE)});
                 } else {
-                    veil(g); boolean win = w.winner == me;
+                    veil(g); boolean win = w.winnerTeam == w.robots[me].team;
                     txtS(g, win ? "¡GANASTE!" : "PERDISTE", W / 2, H * .28f, 48 * u, win ? GOLD : RED, 0);
                     txt(g, "BAJAS " + w.robots[me].kills + "   MUERTES " + w.robots[me].deaths, W / 2, H * .37f, 14 * u, CREAM, 0);
                     if (online && received != null && !receivedSaved) { // nivel del otro teléfono: ¿conservarlo?
@@ -450,9 +584,9 @@ public final class App {
         hero(g, hero, W * .25f, H * .92f);
         float x = W * .5f, wd = W * .44f;
         txtS(g, "WAP", x, H * .17f, 48 * u, GOLD, -1);
-        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA (RED LOCAL)", "NIVEL  " + (levelName.isEmpty() ? "ALEATORIO" : levelName), "EDITOR DE NIVELES", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + LIVES[livesIx] + "   RIVAL  " + LEVELS[level]));
-        List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, this::nextLevel, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> go(ARMS), () -> go(PAINT),
-            () -> { if (livesIx == LIVES.length - 1) { livesIx = 0; level = (level + 1) % 3; } else livesIx++; save(); }));
+        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA (RED LOCAL)", "SELECCIONA NIVEL", "EDITOR DE NIVELES", "RIVALES", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + LIVES[livesIx]));
+        List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, () -> { selPage = 0; go(LEVEL_SEL); }, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> go(RIVALS), () -> { armsFor = -1; go(ARMS); }, () -> go(PAINT),
+            () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }));
         if (up != null) { l.add(up.label()); a.add(() -> up.act()); txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
         menu(g, x, H * .21f, wd, l.toArray(new String[0]), a.toArray(new Runnable[0]));
         if (toastT > 0) { g.rect(0, H - 16, W, 16, RED); txtS(g, toast, W / 2, H - 4, 8, CREAM, 0); }
@@ -475,32 +609,39 @@ public final class App {
     void arms(Gfx g) {
         sky(g);
         float m = 12 * u, cw = 200 * u, row = 44 * u, y = 10 * u;
-        txtS(g, "TUS 4 ARMAS", m, y + 16 * u, 15 * u, GOLD, -1); y += 24 * u;
+        txtS(g, armsFor < 0 ? "TUS 4 ARMAS" : "ARMAS DE " + "PLAYER " + (armsFor + 2), m, y + 16 * u, 15 * u, GOLD, -1); y += 24 * u;
         for (int i = 0; i < SLOTS; i++) {
             boolean sel = i == selSlot; final int ix = i;
             if (sel) box(g, m, y, cw, row - 5 * u, RED, 0xFFFF8A8F, 0xFF8E1520); else box(g, m, y, cw, row - 5 * u, BLUE, SKY, NAVY);
             combo(g, i, m + 6 * u, y + 17 * u, 14 * u, sel ? GOLD : CREAM);
-            txtS(g, Wpn.ALL[slots[i]].name, m + 46 * u, y + 23 * u, 8, CREAM, -1);
+            txtS(g, Wpn.ALL[eslots()[i]].name, m + 46 * u, y + 23 * u, 8, CREAM, -1);
             btn(m, y, cw, row - 5 * u, () -> selSlot = ix); y += row;
         }
         float bx = m, by = H - 48 * u;
         box(g, bx, by, cw, 38 * u, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", bx + cw / 2, by + 24 * u, 16 * u, CREAM, 0);
-        btn(bx, by, cw, 38 * u, () -> { save(); go(TITLE); });
+        if (armsFor >= 0) { // rival: puede volver a armas al azar
+            float hw = cw / 2 - 2 * u; box(g, bx, by, hw, 38 * u, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", bx + hw / 2, by + 24 * u, 12 * u, CREAM, 0);
+            btn(bx, by, hw, 38 * u, () -> { rRandom[armsFor] = false; saveRivals(); go(RIVALS); });
+            box(g, bx + hw + 4 * u, by, hw, 38 * u, PURPLE, 0xFFB46BFF, 0xFF4A00A8); txtS(g, "AL AZAR", bx + hw * 1.5f + 4 * u, by + 24 * u, 12 * u, CREAM, 0);
+            btn(bx + hw + 4 * u, by, hw, 38 * u, () -> { rRandom[armsFor] = true; saveRivals(); go(RIVALS); });
+        } else btn(bx, by, cw, 38 * u, () -> { save(); go(TITLE); });
         float gx = m + cw + 10 * u, gw = (W - gx - m) / COLS, gh = 28 * u, gy = 8 * u; int n = Wpn.ALL.length;
         for (int i = 0; i < n; i++) {
             final int ix = i; float x = gx + i % COLS * gw, yy = gy + i / COLS * gh;
-            boolean c = i == cur, eq = false; for (int s : slots) eq |= s == i;
+            boolean c = i == cur, eq = false; for (int s : eslots()) eq |= s == i;
             if (c) box(g, x, yy, gw - u, gh - 2 * u, GOLD, CREAM, 0xFFB8862A);
             else if (eq) box(g, x, yy, gw - u, gh - 2 * u, PURPLE, 0xFFB46BFF, 0xFF4A00A8);
             else box(g, x, yy, gw - u, gh - 2 * u, NAVY, BLUE, DEEP);
             txt(g, Wpn.ALL[i].name, x + gw / 2, yy + gh / 2 + 3, 8, c ? DEEP : CREAM, 0);
-            btn(x, yy, gw, gh, () -> { cur = ix; slots[selSlot] = ix; selSlot = (selSlot + 1) % SLOTS; });
+            btn(x, yy, gw, gh, () -> { cur = ix; eslots()[selSlot] = ix; selSlot = (selSlot + 1) % SLOTS; });
         }
         txt(g, Wpn.ALL[cur].desc, gx + 2, H - 3, 8, SKY, -1);
     }
     void hud(Gfx g) {
-        Robot me = w.robots[this.me], e = w.robots[1 - this.me];
-        float bw = 168 * u; bar(g, 4, 4, bw, me, this.me); bar(g, W - 4 - bw, 4, bw, e, 1 - this.me);
+        Robot me = w.robots[this.me];
+        float bw = 168 * u; bar(g, 4, 4, bw, me, this.me);
+        if (w.robots.length == 2) bar(g, W - 4 - bw, 4, bw, w.robots[1 - this.me], 1 - this.me);
+        else { float y = 4; for (Robot o : w.robots) if (o != me) { mini(g, W - 4 - bw, y, bw, o); y += 15; } } // varios rivales: barras chicas
         if (online && ls != null) { // calidad de la conexión, para saber si la lentitud es de la red
             float p = ls.ping(); int c = p < 0 ? MUTE : p < 60 ? MINT : p < 120 ? GOLD : RED;
             txt(g, p < 0 ? "RED ..." : "RED " + Math.round(p) + " MS", 6, 42, 8, c, -1);
@@ -520,6 +661,14 @@ public final class App {
             int bx = Math.round(cx + 4), by = Math.round(y + h - 7), bwd = Math.round(cw - 10);
             g.rect(bx, by, bwd, 3, DEEP); g.rect(bx, by, Math.round(bwd * Math.max(0, Math.min(1, frac))), 3, c);
         }
+    }
+    /** Barra chica de un rival: color, vida en segmentos y vidas que le quedan. */
+    void mini(Gfx g, float x, float y, float wd, Robot r) {
+        int col = RobotArt.COLOR[r.id]; box(g, x, y, wd, 13, 0xE61B1F4A, r.team == w.robots[me].team ? MINT : BLUE, DEEP);
+        g.rect(Math.round(x + 3), Math.round(y + 3), 7, 7, col);
+        int seg = 10, sx = Math.round(x + 13), sw = Math.max(2, Math.round((wd - 46) / seg)), full = (int) Math.ceil(Math.max(0, r.hp) / 10f);
+        for (int i = 0; i < seg; i++) g.rect(sx + i * sw, Math.round(y + 4), sw - 1, 5, r.lives < 0 ? DEEP : i < full ? col : DEEP);
+        txt(g, r.lives < 0 ? "FUERA" : "x" + r.lives, Math.round(x + wd - 4), Math.round(y + 10), 8, r.lives < 0 ? MUTE : CREAM, 1);
     }
     void bar(Gfx g, float x, float y, float w, Robot r, int id) {
         float h = 27; box(g, x, y, w, h, 0xE61B1F4A, BLUE, DEEP);
