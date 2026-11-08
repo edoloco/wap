@@ -31,10 +31,28 @@ public final class Level {
             ByteArrayOutputStream b = new ByteArrayOutputStream(); DataOutputStream o = new DataOutputStream(b);
             o.writeInt(MAGIC); o.writeInt(VERSION); o.writeUTF(name); o.writeInt(water); o.writeInt(props.size());
             for (int[] q : props) for (int v : q) o.writeInt(v);
-            DataOutputStream z = new DataOutputStream(new DeflaterOutputStream(o, new Deflater(9)));
+            DataOutputStream z = new DataOutputStream(new BufferedOutputStream(new DeflaterOutputStream(o, new Deflater(9)), 65536));
             z.write(m); for (int i = 0; i < tex.length; i++) z.writeInt(m[i] == 0 ? 0 : tex[i]);
             z.close(); return b.toByteArray();
         } catch (IOException e) { throw new RuntimeException(e); }
+    }
+    /** Solo el nombre, sin descomprimir el mapa (para las listas). */
+    public static String peekName(byte[] data) {
+        try { DataInputStream i = new DataInputStream(new ByteArrayInputStream(data)); if (i.readInt() != MAGIC) return null; i.readInt(); return i.readUTF(); } catch (IOException e) { return null; }
+    }
+    /** Captura chica del nivel (ancho x alto en píxeles): el color de lo que hay en cada punto, con el agua en azul. */
+    public int[] snapshot(int tw, int th) {
+        int[] t = new int[tw * th];
+        for (int ty = 0; ty < th; ty++) for (int tx = 0; tx < tw; tx++) {
+            int c = 0xFF20264A;
+            for (int sy = 0; sy < 3 && c == 0xFF20264A; sy++) for (int sx = 0; sx < 3; sx++) {
+                int x = tx * Terrain.W / tw + sx * Terrain.W / tw / 3, y = ty * Terrain.H / th + sy * Terrain.H / th / 3, k = m[y * Terrain.W + x];
+                if (k != 0 && k != Terrain.DEBRIS && k != Terrain.DECOR) { c = tex[y * Terrain.W + x] | 0xFF000000; if (c == 0xFF000000) c = 0xFF8214FF; break; }
+            }
+            if (water >= 0 && ty * Terrain.H / th > water) c = 0xFF000000 | ((c >> 16 & 255) * 6 / 10 + 0x18) << 16 | ((c >> 8 & 255) * 6 / 10 + 0x38) << 8 | (c & 255) * 6 / 10 + 0x66;
+            t[ty * tw + tx] = c;
+        }
+        return t;
     }
     public static Level load(byte[] data) throws IOException {
         DataInputStream i = new DataInputStream(new ByteArrayInputStream(data));
@@ -43,7 +61,7 @@ public final class Level {
         Level l = new Level(); l.name = i.readUTF(); l.water = i.readInt(); int n = i.readInt();
         if (n < 0 || n > 5000) throw new IOException("nivel dañado");
         for (int k = 0; k < n; k++) { int[] q = new int[5]; for (int j = 0; j < 5; j++) q[j] = i.readInt(); if (Terrain.isProp(q[4])) l.props.add(q); }
-        DataInputStream z = new DataInputStream(new InflaterInputStream(i));
+        DataInputStream z = new DataInputStream(new BufferedInputStream(new InflaterInputStream(i), 65536));
         z.readFully(l.m); for (int k = 0; k < l.tex.length; k++) l.tex[k] = z.readInt();
         return l;
     }

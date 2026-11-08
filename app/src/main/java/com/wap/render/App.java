@@ -97,19 +97,33 @@ public final class App {
     }
     // ---------- Niveles guardados
     static String file(String name) { return name.replaceAll("[^A-Z0-9ÁÉÍÓÚÑÜ _-]", "_") + ".wapn"; }
+    /** Nombres de los niveles guardados: se leen una vez (solo la cabecera de cada archivo) y se guardan en memoria. */
+    List<String> namesCache;
+    void levelsChanged() { namesCache = null; }
     public List<String> levelNames() {
-        List<String> l = new ArrayList<>();
-        for (String f : files.list()) if (f.endsWith(".wapn")) { Level v = loadFile(f); if (v != null) l.add(v.name); }
-        java.util.Collections.sort(l); return l;
+        if (namesCache == null) {
+            List<String> l = new ArrayList<>();
+            for (String f : files.list()) if (f.endsWith(".wapn")) { byte[] d = files.read(f); String n = d == null ? null : Level.peekName(d); if (n != null) l.add(n); }
+            java.util.Collections.sort(l); namesCache = l;
+        }
+        return new ArrayList<>(namesCache);
     }
     Level loadFile(String f) { try { byte[] d = files.read(f); return d == null ? null : Level.load(d); } catch (Exception e) { return null; } }
     Level loadLevel(String name) { return loadFile(file(name)); }
-    void saveLevel(Level l) { files.write(file(l.name), l.save()); forgetThumb(l.name); }
+    /** Guarda el nivel y su captura chica (archivo .wapt), que es lo que muestra SELECCIONA NIVEL. */
+    void saveLevel(Level l) {
+        files.write(file(l.name), l.save()); forgetThumb(l.name); levelsChanged();
+        int[] t = l.snapshot(THUMB, THUMB_H); byte[] b = new byte[t.length * 4];
+        for (int i = 0; i < t.length; i++) { b[i * 4] = (byte) (t[i] >> 24); b[i * 4 + 1] = (byte) (t[i] >> 16); b[i * 4 + 2] = (byte) (t[i] >> 8); b[i * 4 + 3] = (byte) t[i]; }
+        files.write(thumbFile(l.name), b);
+    }
+    static String thumbFile(String name) { return file(name).replace(".wapn", ".wapt"); }
+    void deleteLevel(String name) { files.delete(file(name)); files.delete(thumbFile(name)); forgetThumb(name); levelsChanged(); }
     String unusedName(String base) { List<String> l = levelNames(); for (int i = 1; ; i++) { String n = base + " " + i; if (!l.contains(n)) return n; } }
     public void openEditor(Level l) { editor.open(l); go(EDIT); }
     /** Sale del editor: guarda (o borra) el nivel y vuelve a la lista. */
     public void leaveEditor(boolean delete) {
-        if (delete) { files.delete(file(editor.name)); forgetThumb(editor.name); if (editor.name.equals(levelName)) { levelName = ""; save(); } toast = "NIVEL BORRADO"; }
+        if (delete) { deleteLevel(editor.name); if (editor.name.equals(levelName)) { levelName = ""; save(); } toast = "NIVEL BORRADO"; }
         else { saveLevel(editor.level()); toast = "NIVEL GUARDADO"; }
         toastT = 120; editor.close(); testing = null; go(LEVEL_LIST);
     }
@@ -121,7 +135,7 @@ public final class App {
         dev.askText("Nombre del nivel", old, NAME_MAX, n -> {
             if (n == null) return; n = clean(n); if (n.isEmpty() || n.equals(old)) return;
             if (levelNames().contains(n)) { toast = "YA EXISTE UN NIVEL CON ESE NOMBRE"; toastT = 150; return; }
-            files.delete(file(old)); editor.name = n; saveLevel(editor.level()); if (old.equals(levelName)) { levelName = n; save(); }
+            deleteLevel(old); editor.name = n; saveLevel(editor.level()); if (old.equals(levelName)) { levelName = n; save(); }
         });
     }
     /** Cambia el nivel para jugar: aleatorio y después los guardados. */
@@ -191,16 +205,14 @@ public final class App {
     void forgetThumb(String name) { thumbs.remove(name); Integer id = thumbIds.get(name); if (id != null) thumbUp.remove(id); }
     int[] thumb(String name) {
         int[] t = thumbs.get(name); if (t != null) return t;
-        Level l = name.isEmpty() ? Level.random(4242, "") : loadLevel(name); t = new int[THUMB * THUMB];
-        if (l != null) for (int ty = 0; ty < THUMB_H; ty++) for (int tx = 0; tx < THUMB; tx++) {
-            int c = 0xFF20264A;
-            for (int sy = 0; sy < 3 && c == 0xFF20264A; sy++) for (int sx = 0; sx < 3; sx++) {
-                int x = tx * Terrain.W / THUMB + sx * Terrain.W / THUMB / 3, y = ty * Terrain.H / THUMB_H + sy * Terrain.H / THUMB_H / 3, k = l.m[y * Terrain.W + x];
-                if (k != 0 && k != Terrain.DEBRIS && k != Terrain.DECOR) { c = l.tex[y * Terrain.W + x] | 0xFF000000; if (c == 0xFF000000) c = 0xFF8214FF; break; }
-            }
-            if (l.water >= 0 && ty * Terrain.H / THUMB_H > l.water) c = 0xFF000000 | ((c >> 16 & 255) * 6 / 10 + 0x18) << 16 | ((c >> 8 & 255) * 6 / 10 + 0x38) << 8 | (c & 255) * 6 / 10 + 0x66;
-            t[ty * THUMB + tx] = c;
+        t = new int[THUMB * THUMB]; int[] snap = null;
+        byte[] b = name.isEmpty() ? null : files.read(thumbFile(name)); // la captura guardada junto al nivel
+        if (b != null && b.length == THUMB * THUMB_H * 4) { snap = new int[THUMB * THUMB_H]; for (int i = 0; i < snap.length; i++) snap[i] = (b[i * 4] & 255) << 24 | (b[i * 4 + 1] & 255) << 16 | (b[i * 4 + 2] & 255) << 8 | b[i * 4 + 3] & 255; }
+        if (snap == null) { // niveles guardados antes de esta versión (o el aleatorio): se hace la captura una vez
+            Level l = name.isEmpty() ? Level.random(4242, "") : loadLevel(name);
+            if (l != null) { if (!name.isEmpty()) saveLevel(l); snap = l.snapshot(THUMB, THUMB_H); }
         }
+        if (snap != null) System.arraycopy(snap, 0, t, 0, snap.length);
         thumbs.put(name, t); if (!thumbIds.containsKey(name)) thumbIds.put(name, 1_000_000 + thumbIds.size()); thumbUp.remove(thumbIds.get(name));
         return t;
     }
