@@ -165,7 +165,7 @@ public final class App {
     }
     /** Botón chico de texto. */
     void chip(Gfx g, float x, float y, float w, float h, String t, boolean on, Runnable r) {
-        box(g, x, y, w, h, on ? GOLD : BLUE, on ? CREAM : SKY, on ? 0xFFB8862A : NAVY); txtS(g, t, x + w / 2, y + h / 2 + 3.5f, 8, on ? DEEP : CREAM, 0); btn(x, y, w, h, r);
+        box(g, x, y, w, h, on ? GOLD : BLUE, on ? CREAM : SKY, on ? 0xFFB8862A : NAVY); label(g, t, x, y, w, h, on ? DEEP : CREAM, on ? 0 : DEEP); btn(x, y, w, h, r);
     }
     void swatch(Gfx g, float x, float y, float w, float h, int c, String t, Runnable r) {
         box(g, x, y, w, h, c, RobotArt.mixLight(c), RobotArt.mixDark(c)); if (t != null) txtS(g, t, x + w / 2, y + h / 2 + 3.5f, 8, CREAM, 0); btn(x, y, w, h, r);
@@ -609,7 +609,8 @@ public final class App {
                 }
         }
         g.endPixels(0, 0, s);
-        if (heroV != null) { float k = H * s * .78f / 52; g.save(); g.translate(heroX * s, heroY * s); g.scale(k, k); RobotArt.drawPose(g, heroV, (1 << Robot.PIECES) - 1, myColor, 0); g.restore(); }
+        drawFine(g);
+        if (heroV != null) { float k = Math.min(H * s * .78f / 52, (W * .45f - heroX) * s / 40); /* en pantallas angostas se achica para no tapar los botones */ g.save(); g.translate(heroX * s, heroY * s); g.scale(k, k); RobotArt.drawPose(g, heroV, (1 << Robot.PIECES) - 1, myColor, 0); g.restore(); }
     }
     /** Texto largo partido en líneas que caben en el ancho. */
     void para(Gfx g, String t, float cx, float y, float maxW, int c) {
@@ -622,21 +623,56 @@ public final class App {
         txt(g, line.toString(), cx, y, 8, c, 0);
     }
     void veil(Gfx g) { g.rect(0, 0, W, H, 0xC0101330); }
-    /** Botón grueso con el texto centrado; si no cabe en una línea se parte en dos. */
-    void fat(Gfx g, float x, float y, float w, float h, String label, int index, int fill, Runnable act) {
-        boolean f = index == focus && padSeen;
-        if (f) box(g, x, y, w, h, GOLD, CREAM, 0xFFB8862A); else box(g, x, y, w, h, fill, RobotArt.mixLight(fill), RobotArt.mixDark(fill));
-        List<String> lines = new ArrayList<>(); StringBuilder cur = new StringBuilder(); float max = w - 10;
-        for (String part : label.split("\n")) { // un salto de línea manual manda; si no, se parte por palabras
-            cur = new StringBuilder();
+    /** Textos que se dibujan más finos que la capa de pixel art (después de ella), para que quepan en su botón. */
+    final ArrayList<Object[]> fine = new ArrayList<>(); public int overflow;
+    /** Parte un texto en líneas de hasta max píxeles de fuente; un salto de línea manual manda. */
+    static List<String> wrap(String text, float max) {
+        List<String> lines = new ArrayList<>();
+        for (String part : text.split("\n")) {
+            StringBuilder cur = new StringBuilder();
             for (String word : part.trim().split(" +")) {
                 String next = cur.length() == 0 ? word : cur + " " + word;
                 if (PixelFont.width(next, 8) > max && cur.length() > 0) { lines.add(cur.toString()); cur = new StringBuilder(word); } else cur = new StringBuilder(next);
             }
             lines.add(cur.toString());
         }
-        float lh = 10, y0 = y + (h - 2) / 2 - (lines.size() * lh) / 2 + 8;
-        for (int i = 0; i < lines.size(); i++) txtS(g, lines.get(i), x + w / 2, y0 + i * lh, 8, f ? DEEP : CREAM, 0);
+        return lines;
+    }
+    /**
+     * Texto centrado dentro de un rectángulo. Si no cabe al tamaño normal se achica (en pasos de píxeles enteros de la
+     * pantalla, para que siga nítido) hasta que quepa: así las letras nunca se salen del botón.
+     */
+    void label(Gfx g, String text, float x, float y, float w, float h, int color, int shadow) {
+        int s = Math.max(1, Math.round(uiScale)), min = Math.max(1, (int) Math.floor(s * .45f));
+        for (int p = s; p >= min; p--) {
+            float k = p / (float) s; List<String> lines = wrap(text, (w - 6) / k);
+            float lw = 0; for (String l : lines) lw = Math.max(lw, PixelFont.width(l, 8) * k);
+            float th = (lines.size() * 10 - 3) * k;
+            if (lw <= w - 6 && th <= h - 4 || p == min) {
+                if (!(lw <= w - 6 && th <= h - 4)) overflow++;
+                float top = y + (h - th) / 2;
+                for (int i = 0; i < lines.size(); i++) {
+                    float base = top + (7 + i * 10) * k;
+                    if (p == s) PixelFont.draw(g, lines.get(i), x + w / 2, base, 8, color, 0, shadow);
+                    else fine.add(new Object[]{lines.get(i), x + w / 2, base, p, color, shadow});
+                }
+                return;
+            }
+        }
+    }
+    void drawFine(Gfx g) {
+        int s = Math.max(1, Math.round(uiScale));
+        for (Object[] t : fine) {
+            int p = (Integer) t[3]; float sc = s / (float) p;
+            g.save(); g.scale(p, p); PixelFont.draw(g, (String) t[0], (Float) t[1] * sc, (Float) t[2] * sc, 8, (Integer) t[4], 0, (Integer) t[5]); g.restore();
+        }
+        fine.clear();
+    }
+    /** Botón grueso con el texto centrado; si no cabe en una línea se parte en dos, y si aún no cabe se achica. */
+    void fat(Gfx g, float x, float y, float w, float h, String label, int index, int fill, Runnable act) {
+        boolean f = index == focus && padSeen;
+        if (f) box(g, x, y, w, h, GOLD, CREAM, 0xFFB8862A); else box(g, x, y, w, h, fill, RobotArt.mixLight(fill), RobotArt.mixDark(fill));
+        label(g, label, x, y, w, h, f ? DEEP : CREAM, DEEP);
         btn(x, y, w, h, act);
     }
     void menu(Gfx g, float x, float y, float w, String[] l, Runnable[] a) {
@@ -644,7 +680,7 @@ public final class App {
         for (int i = 0; i < l.length; i++) {
             boolean f = i == focus && padSeen;
             if (f) box(g, x, y, w, h, RED, 0xFFFF8A8F, 0xFF8E1520); else box(g, x, y, w, h, BLUE, SKY, NAVY);
-            txtS(g, l[i], x + w / 2, y + h / 2 + 3.5f * PixelFont.scale(15 * u) - 1, 15 * u, f ? GOLD : CREAM, 0);
+            label(g, l[i], x, y, w, h, f ? GOLD : CREAM, DEEP);
             btn(x, y, w, h, a[i]); y += h + gap;
         }
     }
