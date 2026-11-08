@@ -622,6 +622,23 @@ public final class App {
         txt(g, line.toString(), cx, y, 8, c, 0);
     }
     void veil(Gfx g) { g.rect(0, 0, W, H, 0xC0101330); }
+    /** Botón grueso con el texto centrado; si no cabe en una línea se parte en dos. */
+    void fat(Gfx g, float x, float y, float w, float h, String label, int index, int fill, Runnable act) {
+        boolean f = index == focus && padSeen;
+        if (f) box(g, x, y, w, h, GOLD, CREAM, 0xFFB8862A); else box(g, x, y, w, h, fill, RobotArt.mixLight(fill), RobotArt.mixDark(fill));
+        List<String> lines = new ArrayList<>(); StringBuilder cur = new StringBuilder(); float max = w - 10;
+        for (String part : label.split("\n")) { // un salto de línea manual manda; si no, se parte por palabras
+            cur = new StringBuilder();
+            for (String word : part.trim().split(" +")) {
+                String next = cur.length() == 0 ? word : cur + " " + word;
+                if (PixelFont.width(next, 8) > max && cur.length() > 0) { lines.add(cur.toString()); cur = new StringBuilder(word); } else cur = new StringBuilder(next);
+            }
+            lines.add(cur.toString());
+        }
+        float lh = 10, y0 = y + (h - 2) / 2 - (lines.size() * lh) / 2 + 8;
+        for (int i = 0; i < lines.size(); i++) txtS(g, lines.get(i), x + w / 2, y0 + i * lh, 8, f ? DEEP : CREAM, 0);
+        btn(x, y, w, h, act);
+    }
     void menu(Gfx g, float x, float y, float w, String[] l, Runnable[] a) {
         float h = (l.length > 9 ? 22 : l.length > 8 ? 24 : l.length > 7 ? 26 : l.length > 6 ? 31 : l.length > 5 ? 34 : l.length > 4 ? 37 : 40) * u, gap = (l.length > 8 ? 3 : l.length > 7 ? 4 : l.length > 6 ? 5 : l.length > 4 ? 6 : 9) * u;
         for (int i = 0; i < l.length; i++) {
@@ -635,14 +652,20 @@ public final class App {
         sky(g); floor(g, 0, H * .92f, W * .46f);
         hero.lean = frames / 30 % 2 == 0 ? 4 : 6;
         hero(g, hero, W * .25f, H * .92f);
-        float x = W * .5f, wd = W * .44f;
-        txtS(g, "WAP", x, H * .17f, 48 * u, GOLD, -1);
-        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA (RED LOCAL)", "SELECCIONA NIVEL", "EDITOR DE NIVELES", "RIVALES", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + LIVES[livesIx]));
+        float x = W * .47f, wd = W - x - 6;
+        txtS(g, "WAP", x, H * .15f, 48 * u, GOLD, -1);
+        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA\nRED LOCAL", "SELECCIONA NIVEL", "EDITOR DE NIVELES", "RIVALES", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + LIVES[livesIx]));
         List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, () -> { selPage = pageOf(levelName); go(LEVEL_SEL); }, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> go(RIVALS), () -> { armsFor = -1; go(ARMS); }, () -> go(PAINT),
             () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }));
         if (up != null) { l.add(up.label()); a.add(() -> up.act()); txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
         l.add("SALIR DEL JUEGO"); a.add(() -> { save(); if (dev != null) dev.exit(); });
-        menu(g, x, H * .21f, wd, l.toArray(new String[0]), a.toArray(new Runnable[0]));
+        // botones gorditos: JUGAR ocupa toda la fila; el resto va de a dos, con el texto en dos líneas si no cabe
+        int rest = l.size() - 1, rows = 1 + (rest + 1) / 2; float top = H * .19f, gap = 4, rh = Math.min(32, (H - 5 - top - gap * (rows - 1)) / rows), cw = (wd - gap) / 2;
+        fat(g, x, top, wd, rh, l.get(0), 0, RED, a.get(0));
+        for (int i = 1; i < l.size(); i++) {
+            int r = (i - 1) / 2, c = (i - 1) % 2; boolean last = i == l.size() - 1 && c == 0;
+            fat(g, x + c * (cw + gap), top + (r + 1) * (rh + gap), last ? wd : cw, rh, l.get(i), i, l.get(i).startsWith("SALIR") ? 0xFF4A5590 : BLUE, a.get(i));
+        }
         if (toastT > 0) { g.rect(0, H - 16, W, 16, RED); txtS(g, toast, W / 2, H - 4, 8, CREAM, 0); }
     }
     void lobby(Gfx g) {

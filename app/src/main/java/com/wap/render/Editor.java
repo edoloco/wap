@@ -88,6 +88,7 @@ final class Editor {
             else if (mode == GESTURE) gesture();
         } else {
             float[] p = fingers.remove(id);
+            if (fingers.isEmpty() && mode == GESTURE) { cx = app.ren.camX; cy = app.ren.camY; } // el cursor del mando se queda donde quedó la vista
             if (mode == DRAW && id == drawId) { if (p != null) { sx1 = x != 0 || y != 0 ? x : p[0]; sy1 = x != 0 || y != 0 ? y : p[1]; } drawEnd(); mode = NONE; }
             if (fingers.isEmpty()) mode = NONE;
         }
@@ -124,10 +125,16 @@ final class Editor {
         w.tick++; // solo anima el agua
         if (!app.padSeen) return;
         float sp = 5 / Math.max(.3f, app.ren.zoomMul);
+        boolean dpad = (held & (Input.LEFT | Input.RIGHT | Input.UP | Input.DOWN)) != 0;
+        if (!fingers.isEmpty()) { cx = app.ren.camX; cy = app.ren.camY; return; } // con los dedos manda el tacto; el cursor queda al centro
         if ((held & Input.LEFT) != 0) cx -= sp; if ((held & Input.RIGHT) != 0) cx += sp;
         if ((held & Input.UP) != 0) cy -= sp; if ((held & Input.DOWN) != 0) cy += sp;
         cx = Math.max(Terrain.EDGE, Math.min(Terrain.W - Terrain.EDGE, cx)); cy = Math.max(Terrain.EDGE, Math.min(Terrain.H - Terrain.EDGE, cy));
-        app.ren.camX += (cx - app.ren.camX) * .2f; app.ren.camY += (cy - app.ren.camY) * .2f;
+        if (dpad) { // la vista sigue al cursor solo mientras se mueve con la cruceta (antes lo hacía siempre y deshacía el zoom con los dedos)
+            float vw = app.ren.vwNow(), vh = app.ren.vh, mx = vw * .3f, my = vh * .3f;
+            if (cx < app.ren.camX - mx) app.ren.camX = cx + mx; if (cx > app.ren.camX + mx) app.ren.camX = cx - mx;
+            if (cy < app.ren.camY - my) app.ren.camY = cy + my; if (cy > app.ren.camY + my) app.ren.camY = cy - my;
+        }
         if ((press & Input.X) != 0) { tool = (tool + 1) % TOOLS; confirmDelete = false; }
         boolean a = (held & Input.A) != 0;
         if (a && !aHeld) { gx0 = cx; gy0 = cy; lastX = Float.NaN; if (!shape() && !paints()) apply(cx, cy); }
