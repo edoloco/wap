@@ -10,7 +10,9 @@ public final class App {
         /** Pide un texto con el teclado del teléfono; done recibe el texto o null si se cancela. */
         default void askText(String title, String current, int max, java.util.function.Consumer<String> done) {}
         /** WiFi en modo de baja latencia durante la partida en línea (sin ahorro de energía). */
-        default void lowLatency(boolean on) {} }
+        default void lowLatency(boolean on) {}
+        /** Cierra el juego. */
+        default void exit() {} }
     static final int[] SWATCH = {0xFF5E5650, 0xFFFF0000, 0xFFFF7A00, 0xFFFFD200, 0xFF19C24A, 0xFF00B8D4, 0xFF1266FF, 0xFF8214FF, 0xFFFF2FA8, 0xFF2A2A2A};
     static final int RED = 0xFFE8323C, INK = RobotArt.INK, WHITE = 0xFFFFFFFF, MUTE = 0xFF9AA6D6, LINE = 0xFFCBD2DC;
     /** Paleta de la interfaz en pixel art. */
@@ -143,18 +145,16 @@ public final class App {
         List<String> l = levelNames(); l.add(0, "");
         int i = l.indexOf(levelName); levelName = l.get((i + 1) % l.size()); save();
     }
+    static final String NEW_EMPTY = "\u0001VACIO", NEW_RANDOM = "\u0001AZAR";
+    /** EDITOR DE NIVELES: los mismos cuadritos con miniatura; los dos primeros crean un nivel nuevo. */
     void levels(Gfx g) {
-        sky(g);
-        txtS(g, "EDITOR DE NIVELES", W / 2, 30 * u, 24 * u, GOLD, 0);
-        List<String> l = new ArrayList<>(); List<Runnable> a = new ArrayList<>();
-        l.add("NUEVO NIVEL VACÍO"); a.add(() -> openEditor(Level.empty(unusedName("NIVEL"))));
-        l.add("NUEVO DESDE UNO ALEATORIO"); a.add(() -> { seed = seed * 1103515245 + 12345; openEditor(Level.random(seed, unusedName("NIVEL"))); });
-        List<String> names = levelNames(); int per = 4, pages = Math.max(1, (names.size() + per - 1) / per); levelPage = Math.min(levelPage, pages - 1);
-        for (int i = levelPage * per; i < Math.min(names.size(), levelPage * per + per); i++) { final String n = names.get(i); l.add("EDITAR  " + n); a.add(() -> { Level v = loadLevel(n); if (v != null) openEditor(v); }); }
-        if (pages > 1) { l.add("MÁS NIVELES (" + (levelPage + 1) + "/" + pages + ")"); a.add(() -> { levelPage = (levelPage + 1) % Math.max(1, (levelNames().size() + 3) / 4); focus = 0; }); }
-        l.add("VOLVER"); a.add(() -> go(TITLE));
-        menu(g, W / 2 - 150 * u, 46 * u, 300 * u, l.toArray(new String[0]), a.toArray(new Runnable[0]));
-        if (toastT > 0) { g.rect(0, H - 16, W, 16, MINT); txtS(g, toast, W / 2, H - 4, 8, CREAM, 0); }
+        List<String> l = levelNames(); l.add(0, NEW_RANDOM); l.add(0, NEW_EMPTY);
+        levelPage = grid(g, "EDITOR DE NIVELES", l, levelPage, null, n -> {
+            if (n.equals(NEW_EMPTY)) openEditor(Level.empty(unusedName("NIVEL")));
+            else if (n.equals(NEW_RANDOM)) { seed = seed * 1103515245 + 12345; openEditor(Level.random(seed, unusedName("NIVEL"))); }
+            else { Level v = loadLevel(n); if (v != null) openEditor(v); }
+        }, (l.size() - 2) + (l.size() - 2 == 1 ? " NIVEL GUARDADO" : " NIVELES GUARDADOS"));
+        if (toastT > 0) { g.rect(0, 22, W, 14, MINT); txtS(g, toast, W / 2, 33, 8, CREAM, 0); }
     }
     int levelPage, selPage;
     /** Con mando, marca el botón elegido en pantallas con muchos botones. */
@@ -206,45 +206,76 @@ public final class App {
     int[] thumb(String name) {
         int[] t = thumbs.get(name); if (t != null) return t;
         t = new int[THUMB * THUMB]; int[] snap = null;
-        byte[] b = name.isEmpty() ? null : files.read(thumbFile(name)); // la captura guardada junto al nivel
+        byte[] b = name.isEmpty() || name.startsWith("\u0001") ? null : files.read(thumbFile(name)); // la captura guardada junto al nivel
         if (b != null && b.length == THUMB * THUMB_H * 4) { snap = new int[THUMB * THUMB_H]; for (int i = 0; i < snap.length; i++) snap[i] = (b[i * 4] & 255) << 24 | (b[i * 4 + 1] & 255) << 16 | (b[i * 4 + 2] & 255) << 8 | b[i * 4 + 3] & 255; }
         if (snap == null) { // niveles guardados antes de esta versión (o el aleatorio): se hace la captura una vez
-            Level l = name.isEmpty() ? Level.random(4242, "") : loadLevel(name);
-            if (l != null) { if (!name.isEmpty()) saveLevel(l); snap = l.snapshot(THUMB, THUMB_H); }
+            Level l = name.isEmpty() ? Level.random(4242, "") : name.equals(NEW_EMPTY) ? Level.empty("") : loadLevel(name);
+            if (l != null) { if (!name.isEmpty() && !name.startsWith("\u0001")) saveLevel(l); snap = l.snapshot(THUMB, THUMB_H); }
         }
         if (snap != null) System.arraycopy(snap, 0, t, 0, snap.length);
         thumbs.put(name, t); if (!thumbIds.containsKey(name)) thumbIds.put(name, 1_000_000 + thumbIds.size()); thumbUp.remove(thumbIds.get(name));
         return t;
     }
     void levelSel(Gfx g) {
-        sky(g);
-        txtS(g, "SELECCIONA NIVEL", W / 2, 17, 16, GOLD, 0);
         List<String> l = levelNames(); l.add(0, "");
-        int per = 6, pages = Math.max(1, (l.size() + per - 1) / per); selPage = Math.min(selPage, pages - 1);
-        float gw = Math.min(W - 12, 300), cw = gw / 3, ch = 70, x0 = (W - gw) / 2, y0 = 26;
+        selPage = grid(g, "SELECCIONA NIVEL", l, selPage, levelName, n -> { levelName = n; save(); go(TITLE); }, l.size() - 1 == 0 ? "AÚN NO HAY NIVELES GUARDADOS" : (l.size() - 1) + " GUARDADOS + ALEATORIO");
+    }
+    int gridCols() { return Math.max(3, Math.min(5, (int) ((W - 12) / 96))); }
+    int pageOf(String name) { List<String> l = levelNames(); l.add(0, ""); int i = Math.max(0, l.indexOf(name)); return i / (gridCols() * 2); }
+    /**
+     * Cuadritos con miniatura y nombre, por páginas (2 filas). Se cambia de página con las flechas, tocando los puntitos
+     * de abajo o deslizando el dedo a los lados. Devuelve la página actual.
+     */
+    int grid(Gfx g, String title, List<String> items, int page, String selected, java.util.function.Consumer<String> pick, String info) {
+        sky(g);
+        txtS(g, title, W / 2, 15, 16, GOLD, 0);
+        int cols = gridCols(), per = cols * 2, pages = Math.max(1, (items.size() + per - 1) / per); page = Math.max(0, Math.min(page, pages - 1)); gridPages = pages;
+        float cw = Math.min(96, (W - 12) / cols), ch = 62, gw = cw * cols, x0 = (W - gw) / 2, y0 = 32;
+        txt(g, info + (pages > 1 ? " · DESLIZA PARA VER MÁS" : ""), W / 2, 28, 8, MUTE, 0);
         for (int k = 0; k < per; k++) {
-            int i = selPage * per + k; if (i >= l.size()) break;
-            final String n = l.get(i); float x = x0 + k % 3 * cw, y = y0 + k / 3 * (ch + 4); boolean sel = n.equals(levelName);
-            box(g, x + 2, y, cw - 4, ch, sel ? GOLD : BLUE, sel ? CREAM : SKY, sel ? 0xFFB8862A : NAVY);
-            int[] t = thumb(n); int id = thumbIds.get(n); boolean fresh = thumbUp.add(id);
+            int i = page * per + k; if (i >= items.size()) break;
+            final String n = items.get(i); float x = x0 + k % cols * cw, y = y0 + k / cols * (ch + 4); boolean sel = n.equals(selected), make = n.startsWith("\u0001");
+            box(g, x + 2, y, cw - 4, ch, sel ? GOLD : make ? MINT : BLUE, sel ? CREAM : make ? 0xFF9CF5C9 : SKY, sel ? 0xFFB8862A : make ? 0xFF1F8A5B : NAVY);
+            int[] t = thumb(n.equals(NEW_RANDOM) ? "" : n); int id = thumbIds.get(n.equals(NEW_RANDOM) ? "" : n); boolean fresh = thumbUp.add(id);
             float tx = Math.round(x + cw / 2 - THUMB / 2f), ty = y + 4;
             g.rect(tx - 1, ty - 1, THUMB + 2, THUMB_H + 2, INK); g.tile(id, t, THUMB, fresh, tx, ty);
             if (n.isEmpty()) txtS(g, "?", x + cw / 2, ty + 32, 24, GOLD, 0);
-            String shown = n.isEmpty() ? "ALEATORIO" : n; if (PixelFont.width(shown, 8) > cw - 8) shown = shown.substring(0, Math.max(3, (int) ((cw - 8) / 6)));
+            if (make) { g.rect(tx, ty, THUMB, THUMB_H, 0x88101330); txtS(g, "+", x + cw / 2, ty + 32, 24, MINT, 0); }
+            String shown = n.isEmpty() ? "ALEATORIO" : n.equals(NEW_EMPTY) ? "NUEVO VACÍO" : n.equals(NEW_RANDOM) ? "NUEVO AL AZAR" : n;
+            int fit = (int) ((cw - 8) / 6); if (shown.length() > fit) shown = shown.substring(0, Math.max(3, fit - 1)) + ".";
             txtS(g, shown, x + cw / 2, y + ch - 7, 8, sel ? DEEP : CREAM, 0);
-            btn(x + 2, y, cw - 4, ch, () -> { levelName = n; save(); go(TITLE); });
+            btn(x + 2, y, cw - 4, ch, () -> pick.accept(n));
         }
-        float by = H - 22;
+        // navegación: flechas, puntitos por página (tocables) y deslizar
+        float by = H - 21; final int pg = page;
         if (pages > 1) {
-            chip(g, W / 2 - 110, by, 40, 19, "<", false, () -> selPage = (selPage + pages - 1) % pages);
-            txt(g, (selPage + 1) + "/" + pages, W / 2 - 50, by + 13, 8, CREAM, 0);
-            chip(g, W / 2 - 30, by, 40, 19, ">", false, () -> selPage = (selPage + 1) % pages);
+            arrow(g, 6, by, 34, 18, -1, () -> gridGo(-1));
+            if (pages <= 12) { float dx = 10, sx = W / 2 - 40 - pages * dx / 2; for (int p = 0; p < pages; p++) { final int q = p; g.rect(Math.round(sx + p * dx), Math.round(by + 6), 6, 6, p == pg ? GOLD : 0xFF4A5590); btn(sx + p * dx - 2, by, dx, 18, () -> gridSet(q)); } }
+            else txt(g, (page + 1) + " / " + pages, W / 2 - 40, by + 12, 8, CREAM, 0);
+            arrow(g, W - 40 - 96, by, 34, 18, 1, () -> gridGo(1));
         }
-        chip(g, W / 2 + 20, by, 90, 19, "VOLVER", false, () -> go(TITLE));
+        chip(g, W - 98, by, 92, 18, "VOLVER", false, () -> go(TITLE));
+        return page;
     }
+    int gridPages = 1;
+    /** Botón con flecha de pixel art (la fuente no tiene < ni >). */
+    void arrow(Gfx g, float x, float y, float w, float h, int dir, Runnable r) {
+        chip(g, x, y, w, h, "", false, r);
+        int cx = Math.round(x + w / 2), cy = Math.round(y + h / 2 - 1);
+        for (int i = 0; i < 5; i++) g.rect(cx + (dir > 0 ? -2 + i : 2 - i), cy - 4 + i, 1, 9 - 2 * i, CREAM);
+    }
+    void gridSet(int p) { if (screen == LEVEL_SEL) selPage = p; else levelPage = p; focus = 0; }
+    void gridGo(int d) { int p = (screen == LEVEL_SEL ? selPage : levelPage) + d; gridSet(Math.floorMod(p, Math.max(1, gridPages))); au.play(Audio.MENU); }
+    // ---------- Deslizar el dedo en las pantallas de cuadritos: el toque se decide al soltar
+    float swX0, swX, swTapX, swTapY; boolean swOn;
+    boolean gridScreen() { return screen == LEVEL_SEL || screen == LEVEL_LIST; }
     /** Para las pruebas: elegir herramienta y aplicarla en un punto del mapa. */
     public void editorTool(int t) { editor.tool = t; }
     public void setRivals(int n, boolean t) { rivals = n; teams = t; }
+    public int selPageNow() { return selPage; }
+    public float[] editorWorldAt(float sx, float sy) { return new float[]{editor.wx(sx), editor.wy(sy)}; }
+    /** Para las pruebas: deslizar un dedo en pantalla (coordenadas de la pantalla). */
+    public void swipe(float x0, float y0, float x1, float y1) { tap(x0, y0); drag(x0, y0); drag(x1, y1); up(); }
     public void saveTestLevel(String n) { Level l = Level.random(n.hashCode(), n); if (n.equals("PLAYA")) l.water = 650; saveLevel(l); }
     public int editorSolidCount() { int c = 0; for (int i = 0; i < editor.w.t.m.length; i += 7) { int k = editor.w.t.m[i]; if (k == Terrain.EARTH || k == Terrain.WOOD) c++; } return c * 7; }
     public void editorApply(int x, int y) { editor.apply(x, y); }
@@ -349,6 +380,10 @@ public final class App {
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
     public void pointer(int id, float x, float y, boolean down) { if (screen == EDIT) editor.pointer(id, x, y, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
     public boolean tap(float x, float y) {
+        if (gridScreen()) { swOn = true; swX0 = swX = x; swTapX = x / uiScale; swTapY = y / uiScale; return true; }
+        return tapNow(x, y);
+    }
+    boolean tapNow(float x, float y) {
         x /= uiScale; y /= uiScale;
         for (int i = btns.size() - 1; i >= 0; i--) { float[] b = btns.get(i); if (x >= b[0] && y >= b[1] && x <= b[2] && y <= b[3]) { au.play(Audio.MENU); acts.get(i).run(); return true; } }
         return false;
@@ -425,8 +460,14 @@ public final class App {
     /** Arrastre sobre las barras de color. */
     /** Dedo que toca, se mueve o se levanta (el editor dibuja con esto). */
     public void down(float x, float y) { }
-    public void up() { }
+    public void up() {
+        if (!swOn) return; swOn = false;
+        float dx = (swX - swX0) / uiScale;
+        if (gridScreen() && Math.abs(dx) > 30) gridGo(dx < 0 ? 1 : -1); // deslizar: página siguiente o anterior
+        else tapNow(swTapX * uiScale, swTapY * uiScale);
+    }
     public void drag(float x, float y) {
+        if (swOn) { swX = x; return; }
         if (screen == EDIT) return; // el editor usa los gestos de pointer()
         if (screen != PAINT) return;
         x /= uiScale; y /= uiScale;
@@ -446,7 +487,7 @@ public final class App {
     /** Caja con esquinas recortadas, brillo arriba y sombra abajo. */
     void box(Gfx g, float x, float y, float w, float h, int fill, int light, int dark) {
         int X = Math.round(x), Y = Math.round(y), Wd = Math.round(w), Hd = Math.round(h);
-        g.rect(X + 1, Y, Wd - 2, Hd, INK); g.rect(X, Y + 1, Wd, Hd - 2, INK);
+        g.rect(X, Y, Wd, Hd, INK); // rectángulo con esquinas rectas
         g.rect(X + 1, Y + 1, Wd - 2, Hd - 2, fill); g.rect(X + 2, Y + 1, Wd - 4, 1, light); g.rect(X + 1, Y + Hd - 3, Wd - 2, 2, dark);
     }
     /** Fondo de los menús: cielo nocturno en bandas, con estrellas que titilan. */
@@ -582,7 +623,7 @@ public final class App {
     }
     void veil(Gfx g) { g.rect(0, 0, W, H, 0xC0101330); }
     void menu(Gfx g, float x, float y, float w, String[] l, Runnable[] a) {
-        float h = (l.length > 7 ? 26 : l.length > 6 ? 31 : l.length > 5 ? 34 : l.length > 4 ? 37 : 40) * u, gap = (l.length > 7 ? 4 : l.length > 6 ? 5 : l.length > 4 ? 6 : 9) * u;
+        float h = (l.length > 9 ? 22 : l.length > 8 ? 24 : l.length > 7 ? 26 : l.length > 6 ? 31 : l.length > 5 ? 34 : l.length > 4 ? 37 : 40) * u, gap = (l.length > 8 ? 3 : l.length > 7 ? 4 : l.length > 6 ? 5 : l.length > 4 ? 6 : 9) * u;
         for (int i = 0; i < l.length; i++) {
             boolean f = i == focus && padSeen;
             if (f) box(g, x, y, w, h, RED, 0xFFFF8A8F, 0xFF8E1520); else box(g, x, y, w, h, BLUE, SKY, NAVY);
@@ -597,9 +638,10 @@ public final class App {
         float x = W * .5f, wd = W * .44f;
         txtS(g, "WAP", x, H * .17f, 48 * u, GOLD, -1);
         List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA (RED LOCAL)", "SELECCIONA NIVEL", "EDITOR DE NIVELES", "RIVALES", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + LIVES[livesIx]));
-        List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, () -> { selPage = 0; go(LEVEL_SEL); }, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> go(RIVALS), () -> { armsFor = -1; go(ARMS); }, () -> go(PAINT),
+        List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, () -> { selPage = pageOf(levelName); go(LEVEL_SEL); }, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> go(RIVALS), () -> { armsFor = -1; go(ARMS); }, () -> go(PAINT),
             () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }));
         if (up != null) { l.add(up.label()); a.add(() -> up.act()); txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
+        l.add("SALIR DEL JUEGO"); a.add(() -> { save(); if (dev != null) dev.exit(); });
         menu(g, x, H * .21f, wd, l.toArray(new String[0]), a.toArray(new Runnable[0]));
         if (toastT > 0) { g.rect(0, H - 16, W, 16, RED); txtS(g, toast, W / 2, H - 4, 8, CREAM, 0); }
     }

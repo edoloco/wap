@@ -23,6 +23,7 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
         app.dev = new App.Device() {
             @Override public String name() { return "Sala de " + Build.MODEL; }
             @Override public void listen(boolean on) { if (lock == null) return; try { if (on) lock.acquire(); else if (lock.isHeld()) lock.release(); } catch (RuntimeException e) { } }
+            @Override public void exit() { runOnUiThread(() -> finishAndRemoveTask()); }
             @Override public void lowLatency(boolean on) { if (fast == null) return; try { if (on) fast.acquire(); else if (fast.isHeld()) fast.release(); } catch (RuntimeException e) { } }
             @Override public void askText(String title, String current, int max, java.util.function.Consumer<String> done) {
                 runOnUiThread(() -> {

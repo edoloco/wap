@@ -201,7 +201,10 @@ public final class Renderer {
     /** El mundo se dibuja suavizado, con zoom libre; solo la interfaz queda en pixel art. */
     public void drawWorld(Gfx g, World w, int who) {
         zoom = g.h() / 280f * zoomMul; vw = g.w() / zoom; vh = g.h() / zoom;
-        if (freeCam) { camX = Math.max(vw / 2f, Math.min(Terrain.W - vw / 2f, camX)); camY = Math.max(vh / 2f, Math.min(Terrain.H - vh / 2f, camY)); if (vw > Terrain.W) camX = Terrain.W / 2f; if (vh > Terrain.H) camY = Terrain.H / 2f; }
+        if (freeCam) { // editor: se puede llevar cualquier borde o esquina del mapa hasta el centro de la pantalla
+            float mx = vw * .45f, my = vh * .45f, lx = vw / 2f - mx, hx = Terrain.W - vw / 2f + mx, ly = vh / 2f - my, hy = Terrain.H - vh / 2f + my;
+            camX = lx > hx ? Terrain.W / 2f : Math.max(lx, Math.min(hx, camX)); camY = ly > hy ? Terrain.H / 2f : Math.max(ly, Math.min(hy, camY));
+        }
         else camera(w, who);
         float x0 = camX - vw / 2f, y0 = camY - vh / 2f; vx0 = x0; vy0 = y0;
         g.clear(0xFFC7D2E0);
@@ -278,6 +281,7 @@ public final class Renderer {
     public String[] names = {"PLAYER 1", "PLAYER 2"}; public boolean showNames;
     /** Editor de niveles: cámara libre y zoom propio. */
     public boolean freeCam; public float zoomMul = 1;
+    public float vwNow() { return vw; }
     /** Agua: celeste translúcido desde la superficie hacia abajo, con una línea ondulada. */
     void water(Gfx g, World w, float x0, float y0) {
         if (w.water < 0) return; float top = w.water;

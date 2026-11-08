@@ -53,7 +53,7 @@ En el menú, **EDITOR DE NIVELES** crea un nivel vacío o parte de uno aleatorio
 
 La madera no se recorta como la tierra: está dividida en trozos irregulares de unos 20 px que aguantan golpes (un poco menos que una caja), muestran grietas y se rompen en astillas de su color.
 
-**SELECCIONA NIVEL** muestra cuadritos con la miniatura y el nombre de cada nivel (y el aleatorio).
+**SELECCIONA NIVEL** y la lista del **EDITOR DE NIVELES** muestran cuadritos con la captura y el nombre de cada nivel (en el editor, los dos primeros crean uno nuevo). Con muchos niveles se cambia de página deslizando el dedo, con las flechas o tocando los puntitos de abajo. En el editor se puede llevar cualquier esquina del mapa al centro y hacer zoom ahí. El menú tiene **SALIR DEL JUEGO**.
 
 Bajo el agua se avanza más lento (65 %), la gravedad es menor y el salto es más lento pero de la misma altura; el fuego se apaga y los disparos se frenan.
 
