@@ -271,6 +271,7 @@ public final class App {
     boolean gridScreen() { return screen == LEVEL_SEL || screen == LEVEL_LIST; }
     /** Para las pruebas: elegir herramienta y aplicarla en un punto del mapa. */
     public void editorTool(int t) { editor.tool = t; }
+    public void editorFill(boolean f) { editor.fill = f; }
     public void setRivals(int n, boolean t) { rivals = n; teams = t; }
     public int selPageNow() { return selPage; }
     public float[] editorWorldAt(float sx, float sy) { return new float[]{editor.wx(sx), editor.wy(sy)}; }

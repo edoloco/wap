@@ -15,7 +15,7 @@ final class Editor {
         "TOCA UNA ZONA PARA PINTARLA O UN HUECO CERRADO PARA LLENARLO", "BORRA LO QUE TOQUES", "BLOQUES MORADOS, SE PUEDEN ROMPER", "NO SE PUEDE ROMPER", "TOCA PARA PONER UNA CAJA", "CAJA DE METAL, MÁS RESISTENTE",
         "TOCA PARA PONER UN COMPUTADOR", "BLOQUE DE PIEDRA, MUY PESADO", "DUCTO DE VENTILACIÓN", "TOCA PARA ELEGIR LA ALTURA DEL AGUA"};
     /** Colores para tierra y madera: los mismos para los dos materiales (la tierra lleva vetas, la madera es lisa). */
-    static final int[] COLORS = {0xFF8B5A2B, 0xFFD9B26F, 0xFFB5482E, 0xFF5E8C3A, 0xFF7D8590, 0xFFE8EEF4, 0xFF3E6FB0, 0xFFB04FD8, 0xFFC8955A, 0xFF6B4226};
+    static final int[] COLORS = {0xFF8B5A2B, 0xFFD9B26F, 0xFFB5482E, 0xFF5E8C3A, 0xFF7D8590, 0xFFE8EEF4, 0xFF3E6FB0, 0xFFB04FD8, 0xFFC8955A, 0xFF6B4226, 0xFF1E1E24};
     static final int[] SIZES = {4, 9, 18};
     final App app; World w; String name; int tool = BRUSH, color, size = 1; boolean wood, fill = true, dirty, confirmDelete;
     float cx = 900, cy = 600;
@@ -173,29 +173,33 @@ final class Editor {
         // barra inferior: material, colores, grosor y relleno
         float by = H - BOTTOM; g.rect(0, by, W, BOTTOM, 0xE6101330); g.rect(0, by, W, 1, App.INK);
         float x = 4;
-        boolean usesMat = tool <= BUCKET;
+        boolean usesMat = tool <= BUCKET, tight = false;
         if (usesMat) {
             app.box(g, x, by + 3, 50, 18, wood ? 0xFFA0673A : 0xFF8B5A2B, 0xFFD9B26F, 0xFF4A2E14); app.txtS(g, wood ? "MADERA" : "TIERRA", x + 25, by + 15, 8, App.CREAM, 0);
             app.btn(x, by, 50, BOTTOM, () -> wood = !wood); x += 54;
+            // lo que va a la derecha de los colores; si no cabe todo, los cuadritos de color se angostan
+            float rest = 4 + (tool == BRUSH || tool == LINE || shape() && !fill ? 54 : 0) + (shape() ? 66 : 0);
+            tight = (W - x - rest - 2) / COLORS.length < 9; if (tight) rest -= 18; // pantallas angostas: grosores y relleno más compactos
+            int step = (int) Math.max(7, Math.min(13, Math.floor((W - x - rest - 2) / COLORS.length)));
             for (int i = 0; i < COLORS.length; i++) {
-                final int c = i; if (i == color) app.box(g, x - 1, by + 2, 14, 20, App.GOLD, App.CREAM, 0xFFB8862A);
-                app.box(g, x + 1, by + 4, 10, 16, COLORS[i], RobotArt.mixLight(COLORS[i]), RobotArt.mixDark(COLORS[i]));
-                app.btn(x - 1, by, 14, BOTTOM, () -> color = c); x += 13;
+                final int c = i; if (i == color) app.box(g, x - 1, by + 2, step + 1, 20, App.GOLD, App.CREAM, 0xFFB8862A);
+                app.box(g, x + 1, by + 4, step - 3, 16, COLORS[i], RobotArt.mixLight(COLORS[i]), RobotArt.mixDark(COLORS[i]));
+                app.btn(x - 1, by, step + 1, BOTTOM, () -> color = c); x += step;
             }
             x += 4;
         }
         if (tool == BRUSH || tool == ERASE || tool == LINE || shape() && !fill) {
             for (int i = 0; i < SIZES.length; i++) {
                 final int k = i; boolean sel = i == size;
-                app.box(g, x, by + 3, 15, 18, sel ? App.GOLD : App.BLUE, sel ? App.CREAM : App.SKY, sel ? 0xFFB8862A : App.NAVY);
-                int d = 2 + i * 2; g.rect(Math.round(x + 7.5f - d / 2f), Math.round(by + 12 - d / 2f), d, d, sel ? App.INK : App.CREAM);
-                app.btn(x, by, 15, BOTTOM, () -> size = k); x += 17;
+                int bw = tight ? 13 : 15; app.box(g, x, by + 3, bw, 18, sel ? App.GOLD : App.BLUE, sel ? App.CREAM : App.SKY, sel ? 0xFFB8862A : App.NAVY);
+                int d = 2 + i * 2; g.rect(Math.round(x + bw / 2f - d / 2f), Math.round(by + 12 - d / 2f), d, d, sel ? App.INK : App.CREAM);
+                app.btn(x, by, bw, BOTTOM, () -> size = k); x += bw + 2;
             }
             x += 3;
         }
         if (tool == RECT || tool == OVAL || tool == TRI) {
-            app.box(g, x, by + 3, 62, 18, App.BLUE, App.SKY, App.NAVY); app.txtS(g, fill ? "RELLENO" : "CONTORNO", x + 31, by + 15, 8, App.CREAM, 0);
-            app.btn(x, by, 62, BOTTOM, () -> fill = !fill); x += 66;
+            int fw = tight ? 54 : 62; app.box(g, x, by + 3, fw, 18, App.BLUE, App.SKY, App.NAVY); app.txtS(g, fill ? "RELLENO" : "CONTORNO", x + fw / 2f, by + 15, 8, App.CREAM, 0);
+            app.btn(x, by, fw, BOTTOM, () -> fill = !fill); x += fw + 4;
         }
         if (tool == WATER) {
             app.box(g, x, by + 3, 70, 18, w.water < 0 ? App.GOLD : App.BLUE, App.SKY, App.NAVY);

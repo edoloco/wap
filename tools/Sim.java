@@ -181,7 +181,8 @@ public class Sim {
         {int[][] res={{1600,720},{2400,1080},{1280,800},{2048,1536},{854,480},{2340,1080},{1920,1200}};int bad=0;String worst="";
          for(int[] r:res){BufferedImage bb=new BufferedImage(r[0],r[1],BufferedImage.TYPE_INT_RGB);J gg=new J(bb);App q=new App(store,mute);q.seed(3);
           for(int sc:new int[]{App.TITLE,App.RIVALS,App.LEVEL_SEL,App.LEVEL_LIST,App.PAINT}){q.go(sc);q.overflow=0;q.draw(gg);if(q.overflow>0){bad++;worst+=r[0]+"x"+r[1]+" pantalla "+sc+"; ";}}
-          q.go(App.TITLE);q.draw(gg);ImageIO.write(bb,"png",new File(out,"titulo_"+r[0]+"x"+r[1]+".png"));}
+          q.go(App.TITLE);q.draw(gg);ImageIO.write(bb,"png",new File(out,"titulo_"+r[0]+"x"+r[1]+".png"));
+          if(r[0]==2048){q.openEditor(Level.empty("TABLET"));q.editorTool(2);q.draw(gg);ImageIO.write(bb,"png",new File(out,"editor_tablet.png"));q.editorFill(false);q.draw(gg);ImageIO.write(bb,"png",new File(out,"editor_tablet2.png"));}}
          check(bad==0,"ningún texto se sale de su botón en 7 tamaños de pantalla "+worst);}
         {App q=new App(store,mute);q.seed(6);q.screen=App.LEVEL_LIST;q.draw(g);ImageIO.write(b,"png",new File(out,"6_niveles.png"));q.openEditor(Level.random(77,"MI NIVEL"));Editor_test(q);q.draw(g);ImageIO.write(b,"png",new File(out,"7_editor.png"));
          q.leaveEditor(false);check(q.levelNames().contains("MI NIVEL"),"el editor guarda el nivel");q.nextLevel();check(q.levelName().equals("MI NIVEL"),"se elige el nivel creado para jugar");q.start();check(q.w.water==640&&q.w.t.solid(300,300),"la partida usa el nivel creado (con agua)");q.go(App.TITLE);q.draw(g);ImageIO.write(b,"png",new File(out,"1b_titulo.png"));
