@@ -217,5 +217,12 @@ public class Sim {
         long diff=0;int n=0;for(int y=0;y<500;y++)for(int x=0;x<400;x++){int p=im[0].getRGB(x,y),q=im[1].getRGB(x,y);int d=Math.abs((p>>16&255)-(q>>16&255))+Math.abs((p>>8&255)-(q>>8&255))+Math.abs((p&255)-(q&255));if(d>120)n++;if((p&0xFFFFFF)==0xE0302A)red++;}
         check(n<2500,"el personaje en PNG se ve igual que el vectorial ("+n+" píxeles distintos)");check(red>3000,"el magenta de los PNG toma el color del traje ("+red+" píxeles rojos)");
         BufferedImage both=new BufferedImage(800,500,BufferedImage.TYPE_INT_RGB);both.getGraphics().drawImage(im[0],0,0,null);both.getGraphics().drawImage(im[1],400,0,null);ImageIO.write(both,"png",new File(out,"personaje_png_vs_vector.png"));}
-    public static void main(String[] a)throws Exception{new File(a.length>0?a[0]:"out").mkdirs();sprites(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void lottieFiles(){File d=new File("app/src/main/assets/animaciones");int ok=0;for(String[] an:RobotArt.ANIMS){File f=new File(d,an[0]+".json");try{String j=new String(java.nio.file.Files.readAllBytes(f.toPath()),"UTF-8");if(j.startsWith("{\"v\":")&&j.contains("\"w\":640,\"h\":720"))ok++;}catch(Exception e){}}
+        check(ok==RobotArt.ANIMS.length,"están las "+RobotArt.ANIMS.length+" animaciones Lottie del personaje ("+ok+")");
+        RobotArt.View v=new RobotArt.View();check(RobotArt.animOf(v).equals("de_pie"),"sin estado, la animación es de_pie");
+        World w=flat();Robot r=w.robots[0];RobotArt.View rv=new RobotArt.View();Set<String> seen=new TreeSet<>();Set<String> all=new HashSet<>();for(String[] an:RobotArt.ANIMS)all.add(an[0]);
+        int[][] seq={{0,30},{Input.RIGHT,40},{Input.RIGHT|Input.A,30},{Input.A,40},{Input.B,8},{0,30},{Input.B,5},{0,6},{Input.B,4},{0,40},{Input.DOWN|Input.B,30},{0,30}};
+        for(int[] q:seq)for(int i=0;i<q[1];i++){w.step(new int[]{q[0],0});RobotArt.update(rv,r,w);seen.add(rv.anim);}
+        check(all.containsAll(seen),"el juego solo pide animaciones que existen "+seen);check(seen.size()>=6,"al jugar se usan varias animaciones ("+seen.size()+")");}
+    public static void main(String[] a)throws Exception{lottieFiles();new File(a.length>0?a[0]:"out").mkdirs();sprites(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

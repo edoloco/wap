@@ -47,6 +47,7 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
                 return new com.wap.render.Sprites.Img(w, h, px);
             } catch (java.io.IOException e) { return null; }
         });
+        com.wap.render.RobotArt.skin = LottieSkin.load(this);
         app.files = new DiskFiles(new java.io.File(getFilesDir(), "niveles"));
         app.up = new AppUpdater(this); ((AppUpdater) app.up).check();
         view = new GameView(this, app); setContentView(view); view.requestFocus();

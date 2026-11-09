@@ -1,0 +1,43 @@
+ANIMACIONES DEL PERSONAJE (Lottie, para editar en Glaxnimate)
+=============================================================
+
+Cada archivo .json es una animación. Ábrelo en Glaxnimate (https://glaxnimate.org),
+cámbiale lo que quieras (formas, colores, poses, cuadros clave, duración) y guárdalo
+con File > Save As... en formato Lottie (.json), con el MISMO nombre, en esta carpeta.
+Si borras un archivo, esa animación vuelve al dibujo de siempre.
+
+LAS ANIMACIONES
+  de_pie            parado (se repite)
+  correr            se repite y avanza según la distancia recorrida, no el tiempo
+  correr_disparo    corriendo mientras dispara
+  preparar          los 6 cuadros antes del disparo (en el suelo)
+  disparo           disparando en el suelo
+  salto_subir, salto_caer, salto_disparo
+  doble_salto       la bola (se repite)
+  estirar           al terminar el doble salto
+  barrida           deslizarse
+  pared, pared_disparo, gancho
+  lanzado           cuando un golpe lo lanza (el juego además lo hace girar)
+Las que no se repiten se quedan en su último cuadro mientras dure la acción.
+El juego va a 60 cuadros por segundo: una animación de 30 cuadros dura medio segundo.
+
+REGLAS DEL LIENZO (no las cambies)
+- Tamaño 640 x 720.
+- Los pies van en (320, 640) y el personaje mira a la DERECHA. La capa oculta "guia"
+  marca esa línea y el centro. 10 píxeles = 1 unidad del juego (el personaje mide ~52).
+
+NOMBRES QUE EL JUEGO ENTIENDE
+- Grupo llamado "traje": su relleno toma el color que el jugador elige en PERSONALIZAR.
+- Capas de armadura: cabeza, pecho, abdomen, pelvis, hombro_lejano, hombro_cercano,
+  guantelete_lejano, guantelete_cercano, muslo_lejano, muslo_cercano, canilla_lejana,
+  canilla_cercana. Se esconden cuando esa pieza se cae.
+- Capa "craneo": solo se ve cuando se cae la cabeza.
+- Capa "punto_disparo" (el puntito celeste) y capa "guia": son referencias; en el juego no se ven.
+Las demás capas puedes nombrarlas como quieras.
+
+Los cuadros clave vienen "congelados" (cambian de golpe, como los cuadros del juego).
+Si quieres movimiento suave entre poses, cámbialos a interpolación lineal o con curva.
+
+VOLVER A EMPEZAR DESDE EL DIBUJO SVG
+  sh tools/lottie.sh arte/dibujos/de_pie_1.svg
+(OJO: sobrescribe todos los .json de esta carpeta.)

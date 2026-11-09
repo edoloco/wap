@@ -86,6 +86,49 @@ public final class RobotArt {
     public static final class View {
         public float phase; float pel = -22, lean, fx = 4, fy = -ANK, bx = -3, by = -ANK, a1 = 86, a2 = 96, b1 = 94, b2 = 86, flash; int assemble, clock, state = -1; public int shotT; boolean open, ball;
         float gFront, gBack; public String label = ""; public int labelT;
+        /** Animación actual (nombre de archivo en assets/animaciones) y ticks desde que empezó. */
+        public String anim = ""; public int animT; boolean thrown;
+    }
+    /** Animaciones dibujadas a mano (Lottie): las dibuja la plataforma; si no tiene una, se usa el dibujo de siempre. */
+    public interface Skin { boolean draw(Gfx g, View v, int armor, int color); }
+    public static Skin skin;
+    /**
+     * Animaciones y sus cuadros (nombre de pose: ticks a 60 por segundo) para exportar la plantilla de Lottie.
+     * "loop": se repite; si no, se queda en el último cuadro mientras dure la acción.
+     */
+    public static final String[][] ANIMS = {
+        {"de_pie", "loop", "de_pie_1:25", "de_pie_2:25"},
+        {"correr", "loop", "correr_1:5", "correr_2:5", "correr_3:5", "correr_4:5"},
+        {"correr_disparo", "loop", "correr_disparo_1:5", "correr_disparo_2:5", "correr_disparo_3:5", "correr_disparo_4:5"},
+        {"preparar", "", "preparar_1:3", "preparar_2:3"},
+        {"disparo", "", "disparo:10"},
+        {"salto_subir", "", "salto_subir:10"}, {"salto_caer", "", "salto_caer:10"}, {"salto_disparo", "", "salto_disparo:10"},
+        {"lanzado", "", "lanzado:10"},
+        {"doble_salto", "loop", "doble_salto_0:5", "doble_salto_1:5", "doble_salto_2:5", "doble_salto_3:5", "doble_salto_4:5"},
+        {"estirar", "", "estirar:10"},
+        {"barrida", "", "barrida_1:12", "barrida_2:14"},
+        {"pared", "", "pared:10"}, {"pared_disparo", "", "pared_disparo:10"}, {"gancho", "", "gancho:10"}};
+    public static boolean loops(String a) { for (String[] x : ANIMS) if (x[0].equals(a)) return x[1].equals("loop"); return false; }
+    /** Avance de la carrera (0 a 1), que va con la distancia recorrida y no con el tiempo. */
+    public static float runProgress(View v) { return v.phase / (STRIDE * 4); }
+    /** Qué animación corresponde al estado del robot. */
+    public static String animOf(View v) {
+        int st = v.state;
+        if (st < 0) return v.open ? "disparo" : "de_pie";
+        if (st == 20 || st == 22) return "preparar";
+        if (st == 21) return "disparo";
+        boolean act = st > 9 && st < 20;
+        switch (st % 10) {
+            case 1: return act ? "correr_disparo" : "correr";
+            case 2: return act ? "salto_disparo" : "salto_subir";
+            case 3: return v.thrown ? "lanzado" : act ? "salto_disparo" : "salto_caer";
+            case 4: case 9: return "barrida";
+            case 5: return "gancho";
+            case 6: return act ? "pared_disparo" : "pared";
+            case 7: return "doble_salto";
+            case 8: return "estirar";
+            default: return "de_pie";
+        }
     }
     /** Cuadros que se mantiene cada dibujo: a 60 ticks por segundo, 5 equivalen a 12 cuadros por segundo. */
     public static final int HOLD = 5; static final float STRIDE = 19; // carrera: 4 poses, cada una ~3 cuadros a 24 por segundo
@@ -146,6 +189,8 @@ public final class RobotArt {
             v.gFront = r.grounded ? ground(g.t, r.px + (int) (v.fx * r.facing), r.py) : 0;
             v.gBack = r.grounded ? ground(g.t, r.px + (int) (v.bx * r.facing), r.py) : 0;
         }
+        v.thrown = r.thrownT > 0;
+        String an = animOf(v); if (!an.equals(v.anim)) { v.anim = an; v.animT = 0; } else v.animT++;
         if (v.flash > 0) v.flash--;
         if (r.hurtT > 8) v.flash = 3;
         if (v.assemble > 0) v.assemble--;
@@ -241,6 +286,10 @@ public final class RobotArt {
     private static int mix(int c) { return 0xFF000000 | ((c >> 16 & 255) + 255) / 2 << 16 | ((c >> 8 & 255) + 255) / 2 << 8 | ((c & 255) + 255) / 2; }
     /** El dibujo en sí, en coordenadas locales mirando a la derecha. */
     public static void drawPose(Gfx g, View v, int ar, int c, int unused) {
+        if (skin != null) {
+            if (v.state < 0) v.anim = animOf(v);
+            if (skin.draw(g, v, ar, c)) { if (v.shotT > 0 && v.open && !v.ball) muzzleAt(g, v); return; }
+        }
         if (v.ball) { drawBall(g, v, ar, c); return; }
         float e = (v.assemble / HOLD * HOLD) / 30f; e *= e;
         boolean on = e < .1f, glow = v.shotT > 6;
@@ -274,6 +323,12 @@ public final class RobotArt {
         g.layer("hombro_cercano"); shoulder(g, -5.4f, 8, 4.2f, c);
         g.endLayer(); g.restore();
     }
+    /** Destello en la mano según la pose del esqueleto (aproximado si la animación es dibujada a mano). */
+    private static void muzzleAt(Gfx g, View v) {
+        float lr = (float) Math.toRadians(v.lean), sn = (float) Math.sin(lr), cs = (float) Math.cos(lr);
+        float cx = sn * SHOULDER, cy = v.pel - cs * SHOULDER, nx = cx - cs * 4.6f, ny = cy - sn * 4.6f + 1, d = UA + FA + 7;
+        muzzle(g, nx + (float) Math.cos(Math.toRadians(v.a1)) * d, ny + (float) Math.sin(Math.toRadians(v.a1)) * d, 2 - (v.shotT - 1) / 4);
+    }
     static final float[] FLAME = {0,-2.5f, 5,-4.5f, 7,-2, 11,-3.5f, 10,-1, 17,0, 10,1.2f, 11,3.4f, 6,2, 3,4, 0,2.5f};
     /** Destello de luz frente a la mano: fogonazo, luz estirada y llama naranja que se apaga. */
     private static void muzzle(Gfx g, float x, float y, int frame) {
@@ -298,7 +353,11 @@ public final class RobotArt {
             case "doble_salto": v.ball = true; break; case "estirar": pose(v, STRETCH_F); break;
             case "barrida_1": pose(v, SLIDE_A); break; case "barrida_2": pose(v, SLIDE_B); break;
             case "pared": pose(v, WALL_F); break; case "gancho": pose(v, HOOK_F); break;
-            default: throw new IllegalArgumentException(n);
+            case "pared_disparo": pose(v, WALL_F); v.a1 = 0; v.a2 = 0; v.open = true; break;
+            default:
+                if (n.startsWith("correr_disparo_")) { pose(v, RUN_F[n.charAt(15) - '1']); v.a1 = 0; v.a2 = 0; v.open = true; break; }
+                if (n.startsWith("doble_salto_")) { v.ball = true; v.clock = (n.charAt(12) - '0') * HOLD; break; }
+                throw new IllegalArgumentException(n);
         }
         return v;
     }
