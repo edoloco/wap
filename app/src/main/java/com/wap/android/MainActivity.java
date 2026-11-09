@@ -39,15 +39,6 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
                 });
             }
         };
-        // piezas del personaje en PNG (assets/personaje); si falta alguna, esa pieza se dibuja en vector
-        com.wap.render.Sprites.load(n -> {
-            try (java.io.InputStream in = getAssets().open("personaje/" + n + ".png")) {
-                android.graphics.Bitmap bm = android.graphics.BitmapFactory.decodeStream(in); if (bm == null) return null;
-                int w = bm.getWidth(), h = bm.getHeight(); int[] px = new int[w * h]; bm.getPixels(px, 0, w, 0, 0, w, h); bm.recycle();
-                return new com.wap.render.Sprites.Img(w, h, px);
-            } catch (java.io.IOException e) { return null; }
-        });
-        com.wap.render.RobotArt.skin = LottieSkin.load(this);
         app.files = new DiskFiles(new java.io.File(getFilesDir(), "niveles"));
         app.up = new AppUpdater(this); ((AppUpdater) app.up).check();
         view = new GameView(this, app); setContentView(view); view.requestFocus();

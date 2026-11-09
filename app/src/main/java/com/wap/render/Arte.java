@@ -86,7 +86,6 @@ public final class Arte {
         @Override public void rrect(float x, float y, float w, float h, float r, int f, int s, float sw) { if (!hit(false, new float[]{x, y, x + w, y + h})) t.rrect(x, y, w, h, r, f, s, sw); }
         @Override public void shape(float[][] p, int f, boolean eo, int s, float sw) { t.shape(p, f, eo, s, sw); }
         @Override public void text(String s, float x, float y, float z, int c, int a) { t.text(s, x, y, z, c, a); } @Override public float textW(String s, float z) { return t.textW(s, z); }
-        @Override public void image(Sprites.Img im, float x, float y, float w, float h) { t.image(im, x, y, w, h); }
         @Override public void tile(int id, int[] px, int size, boolean ch, float x, float y) { t.tile(id, px, size, ch, x, y); }
     }
 }

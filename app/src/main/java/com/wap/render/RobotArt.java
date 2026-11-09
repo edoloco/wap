@@ -30,105 +30,11 @@ public final class RobotArt {
     static final float[] SHIN = {.5f,-2.2f, 3,-2.6f, 7,-2.4f, 9.6f,-2.8f, 9.6f,2.8f, 5,2.6f, 1,2.6f};
     static final float[] KNEE = {-1.6f,-2.4f, 1.6f,-2.6f, 2.2f,0, 1.6f,2.4f, -1.6f,2.4f};
     static final float[] FOOT = {-3,-1.6f, 2,-2, 6,0, 7.6f,1.6f, 7.6f,4, -3,4};
-    static final float[] SHIN_BONE = {0,-1.8f, SH,-1.1f, SH,1.1f, 0,1.8f}, THIGH_BONE = {0,-2, TH,-1.2f, TH,1.2f, 0,2};
-
-    /** Cajas de las piezas en PNG (ver Sprites), en las coordenadas del hueso de cada una. */
-    static {
-        Sprites.def("cabeza", HEAD); Sprites.def("craneo", -3.4f, -8.9f, 3.4f, -2.1f);
-        Sprites.def("pecho", CHEST); Sprites.def("abdomen", BELLY); Sprites.def("pelvis", HIPS);
-        Sprites.def("torso", TORSO, PELVIS, NECK, new float[]{-1.2f, 8, 1.2f, 15});
-        Sprites.def("hombro", -3.6f, -3.6f, 3.6f, 3.6f);
-        Sprites.def("hueso_brazo", -1.6f, -1.6f, UA + 1.6f, 1.6f); Sprites.def("hueso_antebrazo", 0, -1.1f, FA, 1.1f);
-        Sprites.def("mano", HAND, new float[]{2.6f, -2.2f, 5.2f, 2}); Sprites.def("mano_abierta", OPEN, new float[]{4, -3.4f, 7.2f, .6f});
-        Sprites.def("guantelete", BRACER);
-        Sprites.def("hueso_muslo", THIGH_BONE); Sprites.def("muslo", THIGH); Sprites.def("rodilla", KNEE);
-        Sprites.def("hueso_canilla", SHIN_BONE); Sprites.def("canilla", SHIN); Sprites.def("bota", FOOT);
-        Sprites.def("bola", -12, -12, 12, 12); Sprites.def("bola_cabeza", -4.6f, -4.6f, 4.6f, 4.6f);
-    }
-    static void init() {}
-    /** Una pieza: su PNG si existe, si no el dibujo vectorial. c es el color del traje. */
-    static void part(Gfx g, String n, int c, boolean lit) { if (!Sprites.draw(g, n, c, lit)) vec(g, n, c, lit); }
-    /** El dibujo vectorial original de cada pieza (también sirve para exportar los PNG iniciales). */
-    public static void vec(Gfx g, String n, int c, boolean lit) {
-        switch (n) {
-            case "cabeza": if (lit) g.grad(HEAD, HEADC, WHITE, -7, 8, INK, SW); else limb(g, HEAD, HEADC); break;
-            case "craneo": g.circle(0, -5.5f, 3.4f, INK, 0, 0); break;
-            case "pecho": if (lit) g.grad(CHEST, c, 0xFFE8E2DC, -6, 6, INK, SW); else limb(g, CHEST, c); break;
-            case "abdomen": limb(g, BELLY, c); break;
-            case "pelvis": limb(g, HIPS, PADC); break;
-            case "torso": g.rrect(-1.2f, 8, 2.4f, 7, .6f, INK, 0, 0); g.poly(TORSO, INK, 0, 0); g.poly(PELVIS, INK, 0, 0); g.poly(NECK, INK, 0, 0); break;
-            case "hombro": g.circle(0, 0, 3.6f, WHITE, INK, SW); break;
-            case "hueso_brazo": stick(g, UA, 1.2f); ball(g, 0, 1.6f); ball(g, UA, 1.5f); break;
-            case "hueso_antebrazo": stick(g, FA, 1.1f); break;
-            case "mano": hand(g, false); break;
-            case "mano_abierta": hand(g, true); break;
-            case "guantelete": if (lit) g.grad(BRACER, PADC, WHITE, 0, 8, INK, SW); else limb(g, BRACER, PADC); break;
-            case "hueso_muslo": g.poly(THIGH_BONE, INK, 0, 0); break;
-            case "muslo": limb(g, THIGH, c); break;
-            case "rodilla": limb(g, KNEE, INK); break;
-            case "hueso_canilla": g.poly(SHIN_BONE, INK, 0, 0); break;
-            case "canilla": limb(g, SHIN, c); break;
-            case "bota": limb(g, FOOT, INK); g.line(-3, 3.6f, 7.4f, 3.6f, WHITE, SW); break;
-            case "bola":
-                g.circle(0, 0, 12, c, INK, SW);
-                for (int i = -1; i <= 1; i++) { float o = i * 5.5f, h = (float) Math.sqrt(144 - o * o) - .8f; // bandas diagonales del caparazón
-                    float ux = .7071f, uy = -.7071f, nx = .7071f, ny = .7071f;
-                    g.line(nx * o - ux * h, ny * o - uy * h, nx * o + ux * h, ny * o + uy * h, INK, SW); }
-                break;
-            case "bola_cabeza": g.circle(0, 0, 4.6f, HEADC, INK, SW); break;
-            default:
-        }
-    }
-    /** Círculo blanco del hombro con el radio pedido (el PNG está hecho para 3,6). */
-    private static void shoulder(Gfx g, float x, float y, float r, int c) { g.save(); g.translate(x, y); g.scale(r / 3.6f, r / 3.6f); part(g, "hombro", c, false); g.restore(); }
 
     /** Estado de animación solo visual de un robot. */
     public static final class View {
         public float phase; float pel = -22, lean, fx = 4, fy = -ANK, bx = -3, by = -ANK, a1 = 86, a2 = 96, b1 = 94, b2 = 86, flash; int assemble, clock, state = -1; public int shotT; boolean open, ball;
         float gFront, gBack; public String label = ""; public int labelT;
-        /** Animación actual (nombre de archivo en assets/animaciones) y ticks desde que empezó. */
-        public String anim = ""; public int animT; boolean thrown;
-    }
-    /** Animaciones dibujadas a mano (Lottie): las dibuja la plataforma; si no tiene una, se usa el dibujo de siempre. */
-    public interface Skin { boolean draw(Gfx g, View v, int armor, int color); }
-    public static Skin skin;
-    /**
-     * Animaciones y sus cuadros (nombre de pose: ticks a 60 por segundo) para exportar la plantilla de Lottie.
-     * "loop": se repite; si no, se queda en el último cuadro mientras dure la acción.
-     */
-    public static final String[][] ANIMS = {
-        {"de_pie", "loop", "de_pie_1:25", "de_pie_2:25"},
-        {"correr", "loop", "correr_1:5", "correr_2:5", "correr_3:5", "correr_4:5"},
-        {"correr_disparo", "loop", "correr_disparo_1:5", "correr_disparo_2:5", "correr_disparo_3:5", "correr_disparo_4:5"},
-        {"preparar", "", "preparar_1:3", "preparar_2:3"},
-        {"disparo", "", "disparo:10"},
-        {"salto_subir", "", "salto_subir:10"}, {"salto_caer", "", "salto_caer:10"}, {"salto_disparo", "", "salto_disparo:10"},
-        {"lanzado", "", "lanzado:10"},
-        {"doble_salto", "loop", "doble_salto_0:5", "doble_salto_1:5", "doble_salto_2:5", "doble_salto_3:5", "doble_salto_4:5"},
-        {"estirar", "", "estirar:10"},
-        {"barrida", "", "barrida_1:12", "barrida_2:14"},
-        {"pared", "", "pared:10"}, {"pared_disparo", "", "pared_disparo:10"}, {"gancho", "", "gancho:10"}};
-    public static boolean loops(String a) { for (String[] x : ANIMS) if (x[0].equals(a)) return x[1].equals("loop"); return false; }
-    /** Avance de la carrera (0 a 1), que va con la distancia recorrida y no con el tiempo. */
-    public static float runProgress(View v) { return v.phase / (STRIDE * 4); }
-    /** Qué animación corresponde al estado del robot. */
-    public static String animOf(View v) {
-        int st = v.state;
-        if (st < 0) return v.open ? "disparo" : "de_pie";
-        if (st == 20 || st == 22) return "preparar";
-        if (st == 21) return "disparo";
-        boolean act = st > 9 && st < 20;
-        switch (st % 10) {
-            case 1: return act ? "correr_disparo" : "correr";
-            case 2: return act ? "salto_disparo" : "salto_subir";
-            case 3: return v.thrown ? "lanzado" : act ? "salto_disparo" : "salto_caer";
-            case 4: case 9: return "barrida";
-            case 5: return "gancho";
-            case 6: return act ? "pared_disparo" : "pared";
-            case 7: return "doble_salto";
-            case 8: return "estirar";
-            default: return "de_pie";
-        }
     }
     /** Cuadros que se mantiene cada dibujo: a 60 ticks por segundo, 5 equivalen a 12 cuadros por segundo. */
     public static final int HOLD = 5; static final float STRIDE = 19; // carrera: 4 poses, cada una ~3 cuadros a 24 por segundo
@@ -189,8 +95,6 @@ public final class RobotArt {
             v.gFront = r.grounded ? ground(g.t, r.px + (int) (v.fx * r.facing), r.py) : 0;
             v.gBack = r.grounded ? ground(g.t, r.px + (int) (v.bx * r.facing), r.py) : 0;
         }
-        v.thrown = r.thrownT > 0;
-        String an = animOf(v); if (!an.equals(v.anim)) { v.anim = an; v.animT = 0; } else v.animT++;
         if (v.flash > 0) v.flash--;
         if (r.hurtT > 8) v.flash = 3;
         if (v.assemble > 0) v.assemble--;
@@ -201,7 +105,7 @@ public final class RobotArt {
     private static void stick(Gfx g, float len, float w) { g.rrect(0, -w, len, w * 2, w, INK, 0, 0); }
     private static void ball(Gfx g, float x, float r) { g.circle(x, 0, r, INK, 0, 0); }
     private static void limb(Gfx g, float[] q, int c) { g.poly(q, c, INK, SW); }
-    private static void hand(Gfx g, boolean open) {
+    private static void hand(Gfx g, boolean open, boolean glow) {
         limb(g, open ? OPEN : HAND, INK);
         if (!open) for (int i = 0; i < 3; i++) g.rrect(2.6f, -2.2f + i * 1.5f, 2.6f, 1.2f, .5f, WHITE, INK, SW * .5f); // dedos
         else { g.rrect(4, -3.4f, 2.6f, 1.2f, .5f, WHITE, INK, SW * .5f); g.rrect(4.6f, -.6f, 2.6f, 1.2f, .5f, WHITE, INK, SW * .5f); }
@@ -209,14 +113,14 @@ public final class RobotArt {
     /** Dibuja una pieza suelta, centrada, para los fragmentos que salen volando. */
     public static void piece(Gfx g, int slot, int c) {
         switch (slot) {
-            case Robot.HELMET: g.translate(0, 7.8f); part(g, "cabeza", c, false); break;
-            case Robot.CHEST: g.translate(0, -5); part(g, "pecho", c, false); break;
-            case Robot.BELLY: g.translate(0, -10); part(g, "abdomen", c, false); break;
-            case Robot.HIP: g.translate(0, 2); part(g, "pelvis", c, false); break;
-            case Robot.SH_F: case Robot.SH_B: shoulder(g, 0, 0, 3.4f, c); break;
-            case Robot.BR_F: case Robot.BR_B: g.translate(-4, 0); part(g, "guantelete", c, false); break;
-            case Robot.TH_F: case Robot.TH_B: g.translate(-5, 0); part(g, "muslo", c, false); break;
-            default: g.translate(-5, 0); part(g, "canilla", c, false);
+            case Robot.HELMET: g.translate(0, 7.8f); limb(g, HEAD, HEADC); break;
+            case Robot.CHEST: g.translate(0, -5); limb(g, CHEST, c); break;
+            case Robot.BELLY: g.translate(0, -10); limb(g, BELLY, c); break;
+            case Robot.HIP: g.translate(0, 2); limb(g, HIPS, PADC); break;
+            case Robot.SH_F: case Robot.SH_B: g.circle(0, 0, 3.4f, WHITE, INK, SW); break;
+            case Robot.BR_F: case Robot.BR_B: g.translate(-4, 0); limb(g, BRACER, PADC); break;
+            case Robot.TH_F: case Robot.TH_B: g.translate(-5, 0); limb(g, THIGH, c); break;
+            default: g.translate(-5, 0); limb(g, SHIN, c);
         }
     }
     /** Hueso suelto para el momento en que el robot se desarma. */
@@ -225,17 +129,17 @@ public final class RobotArt {
             case 0: stick(g, 10, 1.4f); ball(g, 10, 1.8f); break;
             case 1: g.translate(-3, 0); stick(g, 6.5f, 1.1f); ball(g, 0, 1.6f); ball(g, 6.5f, 1.6f); break;
             case 2: g.poly(TORSO, INK, 0, 0); break;
-            case 3: part(g, "bota", 0xFF5E5650, false); break;
-            default: part(g, "mano", 0xFF5E5650, false);
+            case 3: limb(g, FOOT, INK); break;
+            default: limb(g, HAND, INK);
         }
     }
     /** Si es verdadero, se dibuja todo (incluido el cráneo bajo el casco) para exportar la plantilla. */
     public static boolean exportAll;
-    private static void arm(Gfx g, float sx, float sy, float d1, float d2, boolean bracer, boolean open, boolean glow, String side, int c) {
+    private static void arm(Gfx g, float sx, float sy, float d1, float d2, boolean bracer, boolean open, boolean glow, String side) {
         float ex = sx + (float) Math.cos(Math.toRadians(d1)) * UA, ey = sy + (float) Math.sin(Math.toRadians(d1)) * UA;
-        g.layer("hueso_brazo_" + side); bone(g, sx, sy, d1); part(g, "hueso_brazo", c, false); g.restore();
-        bone(g, ex, ey, d2); part(g, "hueso_antebrazo", c, false); g.layer("mano_" + side.replace("no", "na")); g.translate(FA, 0); part(g, open ? "mano_abierta" : "mano", c, false); g.translate(-FA, 0);
-        if (bracer) { g.layer("guantelete_" + side); part(g, "guantelete", c, glow); }
+        g.layer("hueso_brazo_" + side); bone(g, sx, sy, d1); stick(g, UA, 1.2f); ball(g, 0, 1.6f); ball(g, UA, 1.5f); g.restore();
+        bone(g, ex, ey, d2); stick(g, FA, 1.1f); g.layer("mano_" + side.replace("no", "na")); g.translate(FA, 0); hand(g, open, glow); g.translate(-FA, 0);
+        if (bracer) { g.layer("guantelete_" + side); if (glow) g.grad(BRACER, PADC, WHITE, 0, 8, INK, SW); else limb(g, BRACER, PADC); }
         g.restore(); g.endLayer();
     }
     private static void leg(Gfx g, float hx, float hy, float ax, float ay, boolean th, boolean sn, int c, String side) {
@@ -245,10 +149,10 @@ public final class RobotArt {
         float kx = hx + dx / d * a + dy / d * h, ky = hy + dy / d * a - dx / d * h;
         if (kx < hx + dx / d * a) { kx = hx + dx / d * a - dy / d * h; ky = hy + dy / d * a + dx / d * h; }
         float t = (float) Math.toDegrees(Math.atan2(ky - hy, kx - hx)), s = (float) Math.toDegrees(Math.atan2(ay - ky, ax - kx));
-        g.layer("bota_" + side); bone(g, ax, ay, ay < -6.5f ? Math.max(-10, Math.min(55, (s - 90) * -.9f + 28)) : 0); part(g, "bota", c, false); g.restore();
-        g.layer("hueso_canilla_" + side); bone(g, kx, ky, s); part(g, "hueso_canilla", c, false); if (sn) { g.layer("canilla_" + side); part(g, "canilla", c, false); } g.restore();
-        g.layer("hueso_muslo_" + side.replace("na", "no")); bone(g, hx, hy, t); part(g, "hueso_muslo", c, false); if (th) { g.layer("muslo_" + side.replace("na", "no")); part(g, "muslo", c, false); } g.restore();
-        g.layer("rodilla_" + side); bone(g, kx, ky, s); part(g, "rodilla", c, false); g.restore(); g.endLayer();
+        g.layer("bota_" + side); bone(g, ax, ay, ay < -6.5f ? Math.max(-10, Math.min(55, (s - 90) * -.9f + 28)) : 0); limb(g, FOOT, INK); g.line(-3, 3.6f, 7.4f, 3.6f, WHITE, SW); g.restore();
+        g.layer("hueso_canilla_" + side); bone(g, kx, ky, s); g.poly(new float[]{0,-1.8f, SH,-1.1f, SH,1.1f, 0,1.8f}, INK, 0, 0); if (sn) { g.layer("canilla_" + side); limb(g, SHIN, c); } g.restore();
+        g.layer("hueso_muslo_" + side.replace("na", "no")); bone(g, hx, hy, t); g.poly(new float[]{0,-2, TH,-1.2f, TH,1.2f, 0,2}, INK, 0, 0); if (th) { g.layer("muslo_" + side.replace("na", "no")); limb(g, THIGH, c); } g.restore();
+        g.layer("rodilla_" + side); bone(g, kx, ky, s); limb(g, KNEE, INK); g.restore(); g.endLayer();
     }
     public static void draw(Gfx g, View v, Robot r, int color) {
         if (r.invuln > 0 && r.invuln < 80 && r.invuln / 4 % 2 == 0) return;
@@ -286,31 +190,28 @@ public final class RobotArt {
     private static int mix(int c) { return 0xFF000000 | ((c >> 16 & 255) + 255) / 2 << 16 | ((c >> 8 & 255) + 255) / 2 << 8 | ((c & 255) + 255) / 2; }
     /** El dibujo en sí, en coordenadas locales mirando a la derecha. */
     public static void drawPose(Gfx g, View v, int ar, int c, int unused) {
-        if (skin != null) {
-            if (v.state < 0) v.anim = animOf(v);
-            if (skin.draw(g, v, ar, c)) { if (v.shotT > 0 && v.open && !v.ball) muzzleAt(g, v); return; }
-        }
         if (v.ball) { drawBall(g, v, ar, c); return; }
         float e = (v.assemble / HOLD * HOLD) / 30f; e *= e;
         boolean on = e < .1f, glow = v.shotT > 6;
         float px = 0, py = v.pel, lr = (float) Math.toRadians(v.lean), sn = (float) Math.sin(lr), cs = (float) Math.cos(lr);
         float cx = px + sn * SHOULDER, cy = py - cs * SHOULDER, sp = e * 16;
         float ffx = cx + cs * 4.6f, ffy = cy + sn * 4.6f + 1, nx = cx - cs * 4.6f, ny = cy - sn * 4.6f + 1;
-        arm(g, ffx, ffy, v.b1, v.b2, (ar >> Robot.BR_F & 1) != 0 && on, false, false, "lejano", c);
-        if ((ar >> Robot.SH_F & 1) != 0) { g.layer("hombro_lejano"); shoulder(g, ffx + sp * .8f, ffy, 3, c); g.endLayer(); }
+        arm(g, ffx, ffy, v.b1, v.b2, (ar >> Robot.BR_F & 1) != 0 && on, false, false, "lejano");
+        if ((ar >> Robot.SH_F & 1) != 0) { g.layer("hombro_lejano"); g.circle(ffx + sp * .8f, ffy, 3, WHITE, INK, SW); g.endLayer(); }
         leg(g, px + 2, py + 1, v.fx, v.fy - 1 + v.gFront, (ar >> Robot.TH_F & 1) != 0 && on, (ar >> Robot.SN_F & 1) != 0 && on, c, "lejana");
         g.save(); g.translate(px, py); g.rotate(lr); g.translate(0, -TORSO_LEN);
-        g.layer("hueso_torso"); part(g, "torso", c, false); // columna, pelvis y cuello inclinado
-        if ((ar >> Robot.BELLY & 1) != 0) { g.layer("abdomen"); g.save(); g.translate(0, sp * .3f); part(g, "abdomen", c, false); g.restore(); }
+        g.layer("hueso_torso"); g.rrect(-1.2f, 8, 2.4f, 7, .6f, INK, 0, 0); g.poly(TORSO, INK, 0, 0); g.poly(PELVIS, INK, 0, 0);
+        g.poly(NECK, INK, 0, 0); // cuello inclinado
+        if ((ar >> Robot.BELLY & 1) != 0) { g.layer("abdomen"); g.save(); g.translate(0, sp * .3f); limb(g, BELLY, c); g.restore(); }
         boolean lit = v.shotT > 6; // el destello aclara el cuerpo en los primeros cuadros
-        if ((ar >> Robot.CHEST & 1) != 0) { g.layer("pecho"); g.save(); g.translate(0, -sp * .3f); part(g, "pecho", c, lit); g.restore(); }
-        if ((ar >> Robot.HELMET & 1) == 0 || exportAll) { g.layer("craneo"); part(g, "craneo", c, false); }
-        if ((ar >> Robot.HELMET & 1) != 0) { g.layer("cabeza"); g.save(); g.translate(0, -sp); g.rotate(-lr * .8f); part(g, "cabeza", c, lit); g.restore(); }
+        if ((ar >> Robot.CHEST & 1) != 0) { g.layer("pecho"); g.save(); g.translate(0, -sp * .3f); if (lit) g.grad(CHEST, c, 0xFFE8E2DC, -6, 6, INK, SW); else limb(g, CHEST, c); g.restore(); }
+        if ((ar >> Robot.HELMET & 1) == 0 || exportAll) { g.layer("craneo"); g.circle(0, -5.5f, 3.4f, INK, 0, 0); }
+        if ((ar >> Robot.HELMET & 1) != 0) { g.layer("cabeza"); g.save(); g.translate(0, -sp); g.rotate(-lr * .8f); if (lit) g.grad(HEAD, HEADC, WHITE, -7, 8, INK, SW); else limb(g, HEAD, HEADC); g.restore(); }
         g.endLayer(); g.restore();
         leg(g, px - 2, py + 1, v.bx, v.by + v.gBack, (ar >> Robot.TH_B & 1) != 0 && on, (ar >> Robot.SN_B & 1) != 0 && on, c, "cercana");
-        if ((ar >> Robot.HIP & 1) != 0) { g.layer("pelvis"); g.save(); g.translate(px, py); g.rotate(lr); g.translate(0, sp * .5f); part(g, "pelvis", c, false); g.restore(); g.endLayer(); }
-        arm(g, nx, ny, v.a1, v.a2, (ar >> Robot.BR_B & 1) != 0 && on, v.open, glow, "cercano", c);
-        if ((ar >> Robot.SH_B & 1) != 0) { g.layer("hombro_cercano"); shoulder(g, nx - sp * .8f, ny, 3.6f, c); g.endLayer(); }
+        if ((ar >> Robot.HIP & 1) != 0) { g.layer("pelvis"); g.save(); g.translate(px, py); g.rotate(lr); g.translate(0, sp * .5f); limb(g, HIPS, PADC); g.restore(); g.endLayer(); }
+        arm(g, nx, ny, v.a1, v.a2, (ar >> Robot.BR_B & 1) != 0 && on, v.open, glow, "cercano");
+        if ((ar >> Robot.SH_B & 1) != 0) { g.layer("hombro_cercano"); g.circle(nx - sp * .8f, ny, 3.6f, WHITE, INK, SW); g.endLayer(); }
         if (exportAll && v.open) { float d = UA + FA + 5; g.layer("punto_disparo"); g.circle(nx + (float) Math.cos(Math.toRadians(v.a1)) * d, ny + (float) Math.sin(Math.toRadians(v.a1)) * d, 1.2f, 0xFF00E5FF, 0, 0); g.endLayer(); }
         if (v.shotT > 0 && v.open) { float d = UA + FA + 7; muzzle(g, nx + (float) Math.cos(Math.toRadians(v.a1)) * d, ny + (float) Math.sin(Math.toRadians(v.a1)) * d, 2 - (v.shotT - 1) / 4); }
     }
@@ -318,16 +219,13 @@ public final class RobotArt {
     private static void drawBall(Gfx g, View v, int ar, int c) {
         boolean shell = (ar >> Robot.CHEST & 1) != 0;
         g.save(); g.translate(0, -16); g.rotate((v.clock / HOLD) * 1.2f);
-        g.layer("pecho"); part(g, "bola", shell ? c : INK, false);
-        if ((ar >> Robot.HELMET & 1) != 0) { g.layer("cabeza"); g.save(); g.translate(6.2f, -7); part(g, "bola_cabeza", c, false); g.restore(); }
-        g.layer("hombro_cercano"); shoulder(g, -5.4f, 8, 4.2f, c);
+        g.layer("pecho"); g.circle(0, 0, 12, shell ? c : INK, INK, SW);
+        for (int i = -1; i <= 1; i++) { float o = i * 5.5f, h = (float) Math.sqrt(144 - o * o) - .8f; // bandas diagonales del caparazón
+            float ux = .7071f, uy = -.7071f, nx = .7071f, ny = .7071f;
+            g.line(nx * o - ux * h, ny * o - uy * h, nx * o + ux * h, ny * o + uy * h, INK, SW); }
+        if ((ar >> Robot.HELMET & 1) != 0) { g.layer("cabeza"); g.circle(6.2f, -7, 4.6f, HEADC, INK, SW); }
+        g.layer("hombro_cercano"); g.circle(-5.4f, 8, 4.2f, WHITE, INK, SW);
         g.endLayer(); g.restore();
-    }
-    /** Destello en la mano según la pose del esqueleto (aproximado si la animación es dibujada a mano). */
-    private static void muzzleAt(Gfx g, View v) {
-        float lr = (float) Math.toRadians(v.lean), sn = (float) Math.sin(lr), cs = (float) Math.cos(lr);
-        float cx = sn * SHOULDER, cy = v.pel - cs * SHOULDER, nx = cx - cs * 4.6f, ny = cy - sn * 4.6f + 1, d = UA + FA + 7;
-        muzzle(g, nx + (float) Math.cos(Math.toRadians(v.a1)) * d, ny + (float) Math.sin(Math.toRadians(v.a1)) * d, 2 - (v.shotT - 1) / 4);
     }
     static final float[] FLAME = {0,-2.5f, 5,-4.5f, 7,-2, 11,-3.5f, 10,-1, 17,0, 10,1.2f, 11,3.4f, 6,2, 3,4, 0,2.5f};
     /** Destello de luz frente a la mano: fogonazo, luz estirada y llama naranja que se apaga. */
@@ -353,11 +251,7 @@ public final class RobotArt {
             case "doble_salto": v.ball = true; break; case "estirar": pose(v, STRETCH_F); break;
             case "barrida_1": pose(v, SLIDE_A); break; case "barrida_2": pose(v, SLIDE_B); break;
             case "pared": pose(v, WALL_F); break; case "gancho": pose(v, HOOK_F); break;
-            case "pared_disparo": pose(v, WALL_F); v.a1 = 0; v.a2 = 0; v.open = true; break;
-            default:
-                if (n.startsWith("correr_disparo_")) { pose(v, RUN_F[n.charAt(15) - '1']); v.a1 = 0; v.a2 = 0; v.open = true; break; }
-                if (n.startsWith("doble_salto_")) { v.ball = true; v.clock = (n.charAt(12) - '0') * HOLD; break; }
-                throw new IllegalArgumentException(n);
+            default: throw new IllegalArgumentException(n);
         }
         return v;
     }

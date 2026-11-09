@@ -24,7 +24,3 @@ android {
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
 }
-dependencies {
-    // reproduce las animaciones del personaje hechas a mano en Glaxnimate (assets/animaciones/*.json)
-    implementation 'com.airbnb.android:lottie:6.4.0'
-}

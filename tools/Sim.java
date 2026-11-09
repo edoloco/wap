@@ -25,9 +25,6 @@ public class Sim {
         public void rrect(float x,float y,float w,float h,float r,int f,int s,float sw){RoundRectangle2D.Float q=new RoundRectangle2D.Float(x,y,w,h,r*2,r*2);if(f!=0){c.setColor(col(f));c.fill(q);}if(s!=0){c.setColor(col(s));c.setStroke(new BasicStroke(sw(sw)));c.draw(q);}}
         public void text(String s,float x,float y,float z,int k,int a){c.setFont(new Font("SansSerif",Font.BOLD,12).deriveFont(z));c.setColor(col(k));float w=c.getFontMetrics().stringWidth(s);c.drawString(s,a==0?x-w/2:a>0?x-w:x,y);}
         public float textW(String s,float z){c.setFont(new Font("SansSerif",Font.BOLD,12).deriveFont(z));return c.getFontMetrics().stringWidth(s);}
-        public void image(Sprites.Img im,float x,float y,float w,float h){BufferedImage b=(BufferedImage)im.cache;if(b==null){b=new BufferedImage(im.w,im.h,BufferedImage.TYPE_INT_ARGB);b.setRGB(0,0,im.w,im.h,im.px,0,im.w);im.cache=b;}c.setRenderingHint(RenderingHints.KEY_INTERPOLATION,pix?RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR:RenderingHints.VALUE_INTERPOLATION_BILINEAR);AffineTransform t=c.getTransform();c.translate(x,y);c.scale(w/im.w,h/im.h);c.drawImage(b,0,0,null);c.setTransform(t);}
-        /** Carga las piezas PNG del personaje desde la carpeta del proyecto. */
-        static void loadSprites(File dir){Sprites.load(n->{try{BufferedImage b=ImageIO.read(new File(dir,n+".png"));if(b==null)return null;int w=b.getWidth(),h=b.getHeight();int[] px=b.getRGB(0,0,w,h,null,0,w);return new Sprites.Img(w,h,px);}catch(Exception e){return null;}});}
         public void tile(int id,int[] px,int S,boolean ch,float x,float y){BufferedImage b=tiles.get(id);if(b==null){b=new BufferedImage(S,S,BufferedImage.TYPE_INT_ARGB);tiles.put(id,b);ch=true;}if(ch)b.setRGB(0,0,S,S,px,0,S);c.setRenderingHint(RenderingHints.KEY_INTERPOLATION,pix?RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR:RenderingHints.VALUE_INTERPOLATION_BILINEAR);c.drawImage(b,(int)x,(int)y,null);}
     }
     static Store store=new Store(){HashMap<String,String> m=new HashMap<>();public String get(String k,String d){return m.getOrDefault(k,d);}public void put(String k,String v){m.put(k,v);}};
@@ -207,22 +204,5 @@ public class Sim {
             if(app.screen!=App.PLAY)break;if(i==700){for(int q=0;q<14;q++){app.keys=Input.X|Input.UP;app.tick();}app.draw(g);ImageIO.write(b,"png",new File(out,"3b_mira.png"));}if(i>120&&i%(190)==0&&app.w.robots[0].alive()){app.draw(g);ImageIO.write(b,"png",new File(out,"j_"+(s++)+".png"));}}
     }
     static void Editor_test(App q){q.editorTool(0);q.editorApply(300,300);q.editorApply(310,305);q.editorTool(14);q.editorApply(500,640);q.editorTool(9);q.editorApply(700,200);}
-    static void sprites(String out)throws Exception{
-        J.loadSprites(new File("app/src/main/assets/personaje"));check(Sprites.loaded==Sprites.PIECES.size(),"se cargan las "+Sprites.PIECES.size()+" piezas PNG del personaje ("+Sprites.loaded+")");
-        // mismo personaje dibujado con PNG y con vector: deben verse casi iguales
-        RobotArt.View v=RobotArt.poster();BufferedImage[] im=new BufferedImage[2];int red=0;
-        for(int k=0;k<2;k++){im[k]=new BufferedImage(400,500,BufferedImage.TYPE_INT_RGB);J g=new J(im[k]);g.clear(0xFFC7D2E0);g.save();g.translate(200,470);g.scale(8,8);
-          RobotArt.drawPose(g,v,(1<<Robot.PIECES)-1,0xFFE0302A,0);g.restore();if(k==0)J.loadSprites(new File("/nada"));}
-        J.loadSprites(new File("app/src/main/assets/personaje"));
-        long diff=0;int n=0;for(int y=0;y<500;y++)for(int x=0;x<400;x++){int p=im[0].getRGB(x,y),q=im[1].getRGB(x,y);int d=Math.abs((p>>16&255)-(q>>16&255))+Math.abs((p>>8&255)-(q>>8&255))+Math.abs((p&255)-(q&255));if(d>120)n++;if((p&0xFFFFFF)==0xE0302A)red++;}
-        check(n<2500,"el personaje en PNG se ve igual que el vectorial ("+n+" píxeles distintos)");check(red>3000,"el magenta de los PNG toma el color del traje ("+red+" píxeles rojos)");
-        BufferedImage both=new BufferedImage(800,500,BufferedImage.TYPE_INT_RGB);both.getGraphics().drawImage(im[0],0,0,null);both.getGraphics().drawImage(im[1],400,0,null);ImageIO.write(both,"png",new File(out,"personaje_png_vs_vector.png"));}
-    static void lottieFiles(){File d=new File("app/src/main/assets/animaciones");int ok=0;for(String[] an:RobotArt.ANIMS){File f=new File(d,an[0]+".json");try{String j=new String(java.nio.file.Files.readAllBytes(f.toPath()),"UTF-8");if(j.startsWith("{\"v\":")&&j.contains("\"w\":640,\"h\":720"))ok++;}catch(Exception e){}}
-        check(ok==RobotArt.ANIMS.length,"están las "+RobotArt.ANIMS.length+" animaciones Lottie del personaje ("+ok+")");
-        RobotArt.View v=new RobotArt.View();check(RobotArt.animOf(v).equals("de_pie"),"sin estado, la animación es de_pie");
-        World w=flat();Robot r=w.robots[0];RobotArt.View rv=new RobotArt.View();Set<String> seen=new TreeSet<>();Set<String> all=new HashSet<>();for(String[] an:RobotArt.ANIMS)all.add(an[0]);
-        int[][] seq={{0,30},{Input.RIGHT,40},{Input.RIGHT|Input.A,30},{Input.A,40},{Input.B,8},{0,30},{Input.B,5},{0,6},{Input.B,4},{0,40},{Input.DOWN|Input.B,30},{0,30}};
-        for(int[] q:seq)for(int i=0;i<q[1];i++){w.step(new int[]{q[0],0});RobotArt.update(rv,r,w);seen.add(rv.anim);}
-        check(all.containsAll(seen),"el juego solo pide animaciones que existen "+seen);check(seen.size()>=6,"al jugar se usan varias animaciones ("+seen.size()+")");}
-    public static void main(String[] a)throws Exception{lottieFiles();new File(a.length>0?a[0]:"out").mkdirs();sprites(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    public static void main(String[] a)throws Exception{fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }
