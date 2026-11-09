@@ -96,5 +96,10 @@ final class AndroidGfx implements Gfx {
         if (changed) b.setPixels(px, 0, size, 0, 0, size, size);
         tilePaint.setFilterBitmap(!pix); c.drawBitmap(b, x, y, tilePaint); // fuera del pixel art, el mapa se amplía suavizado
     }
-    private final Paint tilePaint = new Paint();
+    private final Paint tilePaint = new Paint(), imgPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
+    @Override public void image(com.wap.render.Sprites.Img im, float x, float y, float w, float h) {
+        Bitmap b = (Bitmap) im.cache;
+        if (b == null) { b = Bitmap.createBitmap(im.px, im.w, im.h, Bitmap.Config.ARGB_8888); im.cache = b; }
+        imgPaint.setFilterBitmap(!pix); rf.set(x, y, x + w, y + h); c.drawBitmap(b, null, rf, imgPaint);
+    }
 }

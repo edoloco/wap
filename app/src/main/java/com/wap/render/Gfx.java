@@ -26,5 +26,7 @@ public interface Gfx {
     void rrect(float x, float y, float w, float h, float r, int fill, int stroke, float sw);
     void text(String s, float x, float y, float size, int c, int align);
     float textW(String s, float size);
+    /** Imagen (pieza del personaje en PNG) estirada a la caja x, y, w, h, suavizada. */
+    default void image(Sprites.Img im, float x, float y, float w, float h) {}
     void tile(int id, int[] px, int size, boolean changed, float x, float y);
 }
