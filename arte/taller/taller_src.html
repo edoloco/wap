@@ -1,0 +1,620 @@
+<title>Taller de piezas WAP</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Mesa de trabajo con los colores del menú de WAP: lista de piezas | pieza en grande | personaje en pose */
+:root{
+  --bg:#121831; --panel:#1b2348; --panel2:#232d5c; --line:#33407a; --fg:#eef0fa; --dim:#9aa3cf;
+  --gold:#ffc94a; --sky:#7fc8ff; --mint:#6ee2b4; --pink:#ff6f9c; --navy:#0c1024;
+  --pix:"Silkscreen",ui-monospace,monospace; --ui:"Inter",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--ui);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px}
+h1,h2,.pix{font-family:var(--pix);font-weight:400;letter-spacing:.04em}
+h1{font-size:20px;margin:0;color:var(--gold)}
+h2{font-size:13px;margin:0 0 8px;color:var(--sky);text-transform:uppercase}
+header{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:12px}
+header .sub{color:var(--dim);flex:1 1 260px;min-width:0}
+button,.btn{font:600 13px var(--ui);color:var(--navy);background:var(--gold);border:0;border-radius:3px;padding:8px 12px;cursor:pointer;box-shadow:0 3px 0 #b8862a}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 #b8862a}
+button.sec{background:var(--panel2);color:var(--fg);box-shadow:0 3px 0 var(--navy)}
+button.mint{background:var(--mint);box-shadow:0 3px 0 #2f9c78}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible,.piece:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
+.grid{display:grid;grid-template-columns:230px minmax(0,1fr) minmax(0,340px);gap:12px;align-items:start}
+@media (max-width:1100px){.grid{grid-template-columns:200px minmax(0,1fr)}.prev{grid-column:1/-1}}
+@media (max-width:700px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:2px solid var(--line);border-radius:4px;padding:12px;min-width:0}
+.list{display:grid;gap:4px;max-height:76vh;overflow:auto;padding-right:2px}
+@media (max-width:700px){.list{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));max-height:none}}
+.piece{display:flex;gap:8px;align-items:center;padding:4px 6px;border-radius:3px;cursor:pointer;border:2px solid transparent;background:transparent;color:var(--fg);font:500 13px var(--ui);text-align:left;box-shadow:none;width:100%}
+.piece:hover{background:var(--panel2)}
+.piece.on{border-color:var(--gold);background:var(--panel2)}
+.piece canvas{width:40px;height:30px;flex:none;background:var(--navy);border-radius:2px}
+.piece .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{font:400 9px var(--pix);padding:2px 4px;border-radius:2px;background:var(--line);color:var(--dim)}
+.chip.new{background:var(--mint);color:var(--navy)}
+.stage{position:relative;background:var(--navy);border-radius:3px;overflow:hidden;touch-action:none}
+.stage canvas{display:block;width:100%;height:auto}
+#ed{cursor:grab}
+#ed.drag{cursor:grabbing}
+.drop{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(18,24,49,.85);border:3px dashed var(--gold);font:16px var(--pix);color:var(--gold)}
+.stage.over .drop{display:flex}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.ctl{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 12px;margin-top:10px}
+.ctl label{display:grid;gap:2px;font-size:12px;color:var(--dim)}
+.ctl label span b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--gold)}
+select,input[type=color]{background:var(--panel2);color:var(--fg);border:2px solid var(--line);border-radius:3px;padding:5px;font:13px var(--ui)}
+input[type=color]{padding:0;width:44px;height:32px}
+.sw{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.sw button{width:auto;display:flex;align-items:center;gap:6px;background:var(--panel2);color:var(--fg);box-shadow:none;padding:4px 8px 4px 4px;border:2px solid var(--line);font:500 12px var(--ui)}
+.sw button i{width:22px;height:22px;border-radius:2px;border:1px solid #0008;display:block}
+.sw button.suit{border-color:var(--pink)}
+.sw button.suit::after{content:"TRAJE";font:9px var(--pix);color:var(--pink)}
+.status{margin-top:8px;font-size:13px;color:var(--dim);min-height:1.4em}
+.status.err{color:var(--pink)} .status.ok{color:var(--mint)}
+.meter{height:10px;background:var(--navy);border-radius:2px;overflow:hidden;margin-top:6px}
+.meter i{display:block;height:100%;background:var(--mint);width:0}
+.meter.warn i{background:var(--gold)} .meter.bad i{background:var(--pink)}
+.small{font-size:12px;color:var(--dim)}
+.hint{font-size:12px;color:var(--dim);margin:6px 0 0}
+kbd{font:11px var(--pix);background:var(--panel2);padding:1px 4px;border-radius:2px}
+dialog{background:var(--panel);color:var(--fg);border:2px solid var(--gold);border-radius:4px;max-width:min(760px,92vw);width:100%;padding:16px}
+dialog::backdrop{background:rgba(8,10,24,.7)}
+textarea{width:100%;height:260px;background:var(--navy);color:var(--fg);border:2px solid var(--line);border-radius:3px;font:12px ui-monospace,monospace;padding:8px}
+ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(--fg)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header>
+  <h1>TALLER DE PIEZAS</h1>
+  <div class="sub">Reemplaza las piezas del personaje de WAP con tus dibujos (PDF, EPS, AI o SVG) y exporta <b>personaje.txt</b> para el juego.</div>
+  <button class="sec" id="openTxt">Abrir personaje.txt</button>
+  <button id="exportBtn">Exportar personaje.txt</button>
+  <input type="file" id="txtFile" accept=".txt,text/plain" hidden>
+</header>
+
+<div class="grid">
+  <section class="card" aria-label="Piezas">
+    <h2>Piezas</h2>
+    <div class="list" id="list"></div>
+  </section>
+
+  <section class="card" aria-label="Pieza seleccionada">
+    <div class="row" style="margin-top:0;justify-content:space-between">
+      <h2 id="pname" style="margin:0">cabeza</h2>
+      <div class="row" style="margin-top:0">
+        <button id="importBtn">Importar dibujo…</button>
+        <button class="sec" id="resetBtn">Usar la original</button>
+      </div>
+    </div>
+    <input type="file" id="file" accept=".pdf,.eps,.ai,.svg,.epsf,.ps,application/pdf,image/svg+xml,application/postscript" hidden>
+    <div class="stage" id="stage" style="margin-top:10px">
+      <canvas id="ed" width="900" height="560" aria-label="Pieza en grande: arrastra para moverla, rueda para escalarla"></canvas>
+      <div class="drop">Suelta aquí el PDF, EPS, AI o SVG</div>
+    </div>
+    <p class="hint">Gris claro: la pieza original. La cruz dorada es la articulación (donde gira la pieza). Arrastra para mover, rueda para escalar, <kbd>Shift</kbd>+arrastrar para girar, flechas para ajustar fino.</p>
+    <div id="ctrls">
+      <div class="ctl">
+        <label><span>Escala <b id="vs">1</b></span><input type="range" id="s" min="-3" max="3" step="0.01" value="0"></label>
+        <label><span>Giro <b id="vr">0°</b></span><input type="range" id="r" min="-180" max="180" step="1" value="0"></label>
+        <label><span>Detalle (simplificar) <b id="vt">0.06</b></span><input type="range" id="t" min="0" max="0.5" step="0.01" value="0.06"></label>
+      </div>
+      <div class="row">
+        <button class="sec" id="fitBtn">Ajustar al tamaño de la original</button>
+        <button class="sec" id="fxBtn">Voltear ↔</button>
+        <button class="sec" id="fyBtn">Voltear ↕</button>
+      </div>
+      <div style="margin-top:12px">
+        <div class="small">Colores del dibujo: toca uno para que tome el <b>color del traje</b> del jugador.</div>
+        <div class="sw" id="sw"></div>
+      </div>
+    </div>
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <section class="card prev" aria-label="Vista previa">
+    <h2>El personaje</h2>
+    <div class="stage"><canvas id="pv" width="640" height="720" aria-label="Personaje completo en la animación elegida"></canvas></div>
+    <div class="row">
+      <select id="anim" aria-label="Animación"></select>
+      <button class="sec" id="playBtn">Pausa</button>
+      <input type="color" id="suit" value="#d4332e" aria-label="Color del traje para la vista previa">
+    </div>
+    <div style="margin-top:12px">
+      <div class="small">Peso del personaje: <b id="pts">0</b> puntos de tus piezas (máximo <span id="maxp">6000</span>, recomendado menos de 2500 para jugar en línea)</div>
+      <div class="meter" id="meter"><i></i></div>
+    </div>
+  </section>
+</div>
+
+<dialog id="dlg">
+  <h2>personaje.txt</h2>
+  <ol class="steps">
+    <li>Copia el texto con el botón.</li>
+    <li>En Android Studio, en <b>app/src/main/assets/</b>, crea o abre <b>personaje.txt</b> y pega todo.</li>
+    <li>Aprieta ▶ con el teléfono conectado, o haz commit y push para que GitHub arme el APK.</li>
+  </ol>
+  <textarea id="out" readonly aria-label="Contenido de personaje.txt"></textarea>
+  <div class="row"><button id="copyBtn">Copiar</button><button class="sec" id="closeDlg">Cerrar</button><span class="small" id="copyMsg"></span></div>
+</dialog>
+
+<script>
+"use strict";
+const BASE = __BASE__;
+const MAX_POINTS = 6000, GOOD_POINTS = 2500, SUIT_BASE = "FF5F574E";
+const ANIMS = [
+  ["De pie", [["de_pie_1",25],["de_pie_2",25]]],
+  ["Correr", [["correr_1",5],["correr_2",5],["correr_3",5],["correr_4",5]]],
+  ["Preparar y disparar", [["preparar_1",3],["preparar_2",3],["disparo",34]]],
+  ["Salto", [["salto_subir",22],["salto_caer",22]]],
+  ["Salto disparando", [["salto_disparo",40]]],
+  ["Doble salto", [["doble_salto",12],["estirar",12]]],
+  ["Barrida", [["barrida_1",12],["barrida_2",14]]],
+  ["Pared", [["pared",40]]],
+  ["Gancho", [["gancho",40]]],
+  ["Lanzado", [["lanzado",40]]],
+];
+const NAMES = Object.keys(BASE.pieces);
+const LABEL = {hueso_brazo:"hueso brazo",hueso_antebrazo:"hueso antebrazo",mano_abierta:"mano abierta",hueso_muslo:"hueso muslo",hueso_canilla:"hueso canilla",bola:"bola (doble salto)",bola_cabeza:"cabeza en la bola",craneo:"cráneo (sin casco)",torso:"torso (columna)"};
+
+/* ---------- estado ---------- */
+// P[nombre] = {shapes:[{polys,open,fill,fa,stroke,sa,sw,eo,suit}], cx, cy, tx, ty, s, rot, fx, fy, tol}
+let P = {}, sel = "cabeza";
+const $ = id => document.getElementById(id);
+function save(){ try{ localStorage.setItem("wap-taller", JSON.stringify(P)); }catch(e){} }
+function load(){ try{ const t = localStorage.getItem("wap-taller"); if(t) P = JSON.parse(t) || {}; }catch(e){ P = {}; } }
+
+/* ---------- formas base (las del juego) ---------- */
+function hexA(h){ return {c:"#"+h.slice(2), a:parseInt(h.slice(0,2),16)/255}; }
+const baseShapes = {};
+for (const n of NAMES) baseShapes[n] = BASE.pieces[n].map(s => { const f=hexA(s.fill), k=hexA(s.stroke);
+  return {polys:s.polys, open:s.polys.map(()=>s.open), fill:f.a?f.c:null, fa:f.a, stroke:k.a&&s.sw>0?k.c:null, sa:k.a, sw:s.sw, eo:s.eo, suit:s.suit}; });
+
+/* ---------- geometría ---------- */
+function bboxOf(shapes){ let a=1e9,b=1e9,c=-1e9,d=-1e9; for(const s of shapes) for(const p of s.polys) for(let i=0;i<p.length;i+=2){ a=Math.min(a,p[i]); c=Math.max(c,p[i]); b=Math.min(b,p[i+1]); d=Math.max(d,p[i+1]); } return a>c?[0,0,0,0]:[a,b,c,d]; }
+function simplify(p, tol, closed){
+  const n = p.length/2; if (tol <= 0 || n <= 3) return p.slice();
+  if (closed){
+    // un contorno cerrado se parte en dos tramos desde el punto más lejano al primero, para que el inicio y el fin no coincidan
+    let far=0, fd=-1; for(let k=1;k<n;k++){ const d=Math.hypot(p[k*2]-p[0],p[k*2+1]-p[1]); if(d>fd){fd=d;far=k;} }
+    if(far===0) return p.slice(0,6);
+    const a=dp(p.slice(0,far*2+2),tol), b=dp(p.slice(far*2).concat(p.slice(0,2)),tol);
+    const o=a.concat(b.slice(2,b.length-2));
+    // si el primero y el último quedaron repetidos, se quita el último
+    if(o.length>=8 && Math.hypot(o[0]-o[o.length-2],o[1]-o[o.length-1])<1e-6) o.length-=2;
+    return o.length>=6 ? o : pickN(p,3);
+  }
+  return dp(p,tol);
+}
+function dp(p, tol){
+  const n=p.length/2; if(n<=2) return p.slice();
+  const keep = new Uint8Array(n); keep[0]=1; keep[n-1]=1; const st=[[0,n-1]];
+  while(st.length){ const [i,j]=st.pop(); const ax=p[i*2],ay=p[i*2+1],bx=p[j*2],by=p[j*2+1],dx=bx-ax,dy=by-ay,L=Math.hypot(dx,dy); let md=-1,mk=-1;
+    for(let k=i+1;k<j;k++){ const d= L<1e-9 ? Math.hypot(p[k*2]-ax,p[k*2+1]-ay) : Math.abs((p[k*2]-ax)*dy-(p[k*2+1]-ay)*dx)/L; if(d>md){md=d;mk=k;} }
+    if(md>tol){ keep[mk]=1; st.push([i,mk],[mk,j]); } }
+  const o=[]; for(let k=0;k<n;k++) if(keep[k]) o.push(p[k*2],p[k*2+1]); return o;
+}
+function pickN(p,k){ const n=p.length/2,o=[]; for(let i=0;i<k;i++){ const j=Math.floor(i*n/k); o.push(p[j*2],p[j*2+1]); } return o; }
+/** La pieza del usuario en unidades del juego, ya simplificada: lo mismo que irá en personaje.txt. */
+const bakedCache = {};
+function baked(n){
+  const c = P[n]; if(!c) return null;
+  const key = JSON.stringify([c.tx,c.ty,c.s,c.rot,c.fx,c.fy,c.tol,c.shapes.map(s=>s.suit)]);
+  if (bakedCache[n] && bakedCache[n].key === key && bakedCache[n].src === c.shapes) return bakedCache[n].v;
+  const cs=Math.cos(c.rot*Math.PI/180), sn=Math.sin(c.rot*Math.PI/180), sx=c.s*c.fx, sy=c.s*c.fy;
+  const v = c.shapes.map(s => ({...s, sw:s.sw*c.s, polys:s.polys.map((p,i)=>{
+    const q=new Array(p.length); for(let k=0;k<p.length;k+=2){ const x=(p[k]-c.cx)*sx, y=(p[k+1]-c.cy)*sy; q[k]=x*cs-y*sn+c.tx; q[k+1]=x*sn+y*cs+c.ty; }
+    return simplify(q, c.tol, !s.open[i]); })}));
+  bakedCache[n] = {key, src:c.shapes, v}; return v;
+}
+function pointsOf(shapes){ let n=0; for(const s of shapes) for(const p of s.polys) n+=p.length/2; return n; }
+function totalPoints(){ let n=0; for(const k in P) n+=pointsOf(baked(k)); return n; }
+
+/* ---------- dibujo ---------- */
+function drawShapes(ctx, shapes, suitColor, alpha){
+  for(const s of shapes){
+    ctx.beginPath();
+    s.polys.forEach((p,i)=>{ if(p.length<2) return; ctx.moveTo(p[0],p[1]); for(let k=2;k<p.length;k+=2) ctx.lineTo(p[k],p[k+1]); if(!s.open[i]) ctx.closePath(); });
+    const hasFill = s.fill && !s.open.every(Boolean);
+    if (hasFill){ ctx.globalAlpha=(alpha??1)*s.fa; ctx.fillStyle = s.suit && suitColor ? suitColor : s.fill; ctx.fill(s.eo?"evenodd":"nonzero"); }
+    if (s.stroke && s.sw>0){ ctx.globalAlpha=(alpha??1)*s.sa; ctx.strokeStyle=s.stroke; ctx.lineWidth=s.sw; ctx.lineJoin="round"; ctx.lineCap="round"; ctx.stroke(); }
+  }
+  ctx.globalAlpha=1;
+}
+function pieceShapes(n){ return P[n] ? baked(n) : baseShapes[n]; }
+
+/* ---------- lista de piezas ---------- */
+const thumbs = {};
+function buildList(){
+  const L=$("list"); L.innerHTML="";
+  for(const n of NAMES){
+    const b=document.createElement("button"); b.className="piece"; b.id="pc-"+n; b.type="button";
+    const cv=document.createElement("canvas"); cv.width=80; cv.height=60; thumbs[n]=cv;
+    const nm=document.createElement("span"); nm.className="nm"; nm.textContent=LABEL[n]||n;
+    const ch=document.createElement("span"); ch.className="chip";
+    b.append(cv,nm,ch); b.onclick=()=>select(n); L.append(b);
+  }
+}
+function refreshList(){
+  for(const n of NAMES){
+    const b=$("pc-"+n); b.classList.toggle("on", n===sel); const ch=b.querySelector(".chip");
+    ch.textContent = "TUYA"; ch.hidden = !P[n]; ch.classList.add("new");
+    const cv=thumbs[n], ctx=cv.getContext("2d"); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,80,60);
+    const sh=pieceShapes(n), bb=bboxOf(sh), w=bb[2]-bb[0]||1, h=bb[3]-bb[1]||1, k=Math.min(70/w,50/h);
+    ctx.setTransform(k,0,0,k,40-(bb[0]+bb[2])/2*k,30-(bb[1]+bb[3])/2*k); drawShapes(ctx,sh,$("suit").value);
+  }
+}
+
+/* ---------- editor de la pieza ---------- */
+const ed=$("ed"), ex=ed.getContext("2d"); let view={k:20,ox:450,oy:280};
+function fitView(){
+  const sh=[...baseShapes[sel], ...(P[sel]?baked(sel):[])], bb=bboxOf(sh);
+  const a=Math.min(bb[0],-1), b=Math.min(bb[1],-1), c=Math.max(bb[2],1), d=Math.max(bb[3],1), w=c-a, h=d-b;
+  const k=Math.min(ed.width*.8/w, ed.height*.8/h); view={k, ox:ed.width/2-(a+c)/2*k, oy:ed.height/2-(b+d)/2*k};
+}
+function drawEditor(){
+  ex.setTransform(1,0,0,1,0,0); ex.fillStyle="#0c1024"; ex.fillRect(0,0,ed.width,ed.height);
+  const {k,ox,oy}=view;
+  // grilla: 1 unidad del juego por línea, más marcada cada 5
+  const x0=Math.floor(-ox/k), x1=Math.ceil((ed.width-ox)/k), y0=Math.floor(-oy/k), y1=Math.ceil((ed.height-oy)/k);
+  ex.lineWidth=1;
+  for(let x=x0;x<=x1;x++){ ex.strokeStyle = x%5? "#161d3d":"#26315f"; ex.beginPath(); ex.moveTo(ox+x*k+.5,0); ex.lineTo(ox+x*k+.5,ed.height); ex.stroke(); }
+  for(let y=y0;y<=y1;y++){ ex.strokeStyle = y%5? "#161d3d":"#26315f"; ex.beginPath(); ex.moveTo(0,oy+y*k+.5); ex.lineTo(ed.width,oy+y*k+.5); ex.stroke(); }
+  ex.setTransform(k,0,0,k,ox,oy);
+  drawShapes(ex, baseShapes[sel], "#5f574e", P[sel]?.35:1);
+  if(P[sel]) drawShapes(ex, baked(sel), $("suit").value);
+  ex.setTransform(1,0,0,1,0,0);
+  // articulación
+  ex.strokeStyle="#ffc94a"; ex.lineWidth=2; ex.beginPath(); ex.moveTo(ox-14,oy); ex.lineTo(ox+14,oy); ex.moveTo(ox,oy-14); ex.lineTo(ox,oy+14); ex.stroke();
+  ex.fillStyle="#ffc94a"; ex.font="12px Silkscreen, monospace"; ex.fillText("articulación", ox+8, oy-8);
+  ex.fillStyle="#9aa3cf"; ex.font="12px Inter, sans-serif"; ex.fillText("1 cuadro = 1 unidad del juego (el personaje mide ~52)", 10, ed.height-10);
+}
+function syncCtrls(){
+  const c=P[sel]; $("pname").textContent=LABEL[sel]||sel; $("ctrls").hidden=!c; $("resetBtn").disabled=!c;
+  if(!c){ $("sw").innerHTML=""; return; }
+  $("s").value=Math.log2(c.s); $("vs").textContent=c.s.toFixed(3); $("r").value=c.rot; $("vr").textContent=Math.round(c.rot)+"°"; $("t").value=c.tol; $("vt").textContent=c.tol.toFixed(2);
+  const cols=new Map(); for(const s of c.shapes) if(s.fill && !s.open.every(Boolean)){ const e=cols.get(s.fill)||{n:0,suit:true}; e.n++; e.suit=e.suit&&s.suit; cols.set(s.fill,e); }
+  const W=$("sw"); W.innerHTML="";
+  for(const [col,e] of cols){ const b=document.createElement("button"); b.type="button"; b.className=e.suit?"suit":""; const i=document.createElement("i"); i.style.background=col;
+    b.append(i, document.createTextNode(col.toUpperCase()+" ×"+e.n)); b.title="Tocar para marcar o desmarcar como color del traje";
+    b.onclick=()=>{ const on=!e.suit; for(const s of c.shapes) if(s.fill===col) s.suit=on; changed(false); }; W.append(b); }
+}
+function changed(refit){ if(refit) fitView(); save(); render(); }
+function render(){ drawEditor(); syncCtrls(); refreshList(); updateMeter(); }
+function select(n){ sel=n; fitView(); render(); setStatus(P[n]? "Pieza importada. Ajústala sobre la original." : "Pieza original. Importa un dibujo para reemplazarla.", ""); }
+function setStatus(t,cls){ const s=$("status"); s.textContent=t; s.className="status "+(cls||""); }
+function updateMeter(){ const n=totalPoints(); $("pts").textContent=n; const m=$("meter"); m.querySelector("i").style.width=Math.min(100,n/MAX_POINTS*100)+"%"; m.className="meter"+(n>MAX_POINTS?" bad":n>GOOD_POINTS?" warn":""); $("exportBtn").disabled = n>MAX_POINTS; }
+
+// arrastrar / girar / escalar
+let drag=null;
+ed.addEventListener("pointerdown",e=>{ if(!P[sel]) return; ed.setPointerCapture(e.pointerId); ed.classList.add("drag"); const r=ed.getBoundingClientRect(), f=ed.width/r.width;
+  drag={x:e.clientX,y:e.clientY,f,tx:P[sel].tx,ty:P[sel].ty,rot:P[sel].rot,shift:e.shiftKey}; });
+ed.addEventListener("pointermove",e=>{ if(!drag) return; const c=P[sel], dx=(e.clientX-drag.x)*drag.f/view.k, dy=(e.clientY-drag.y)*drag.f/view.k;
+  if(drag.shift){ c.rot=Math.max(-180,Math.min(180,drag.rot+(e.clientX-drag.x)*.5)); } else { c.tx=drag.tx+dx; c.ty=drag.ty+dy; } drawEditor(); refreshList(); syncCtrls(); });
+const endDrag=()=>{ if(drag){ drag=null; ed.classList.remove("drag"); save(); render(); } };
+ed.addEventListener("pointerup",endDrag); ed.addEventListener("pointercancel",endDrag);
+ed.addEventListener("wheel",e=>{ if(!P[sel]) return; e.preventDefault(); P[sel].s*=Math.pow(1.0015,-e.deltaY); P[sel].s=Math.min(8,Math.max(.125,P[sel].s)); render(); save(); },{passive:false});
+ed.tabIndex=0;
+ed.addEventListener("keydown",e=>{ const c=P[sel]; if(!c) return; const d=e.shiftKey?1:.1; const m={ArrowLeft:[-d,0],ArrowRight:[d,0],ArrowUp:[0,-d],ArrowDown:[0,d]}[e.key]; if(m){ e.preventDefault(); c.tx+=m[0]; c.ty+=m[1]; changed(false); } });
+$("s").oninput=e=>{ P[sel].s=Math.pow(2,+e.target.value); changed(false); };
+$("r").oninput=e=>{ P[sel].rot=+e.target.value; changed(false); };
+$("t").oninput=e=>{ P[sel].tol=+e.target.value; changed(false); };
+$("fxBtn").onclick=()=>{ P[sel].fx*=-1; changed(false); };
+$("fyBtn").onclick=()=>{ P[sel].fy*=-1; changed(false); };
+$("fitBtn").onclick=()=>{ fitTo(sel); changed(true); };
+$("resetBtn").onclick=()=>{ delete P[sel]; changed(true); setStatus("Volvió la pieza original.",""); };
+function fitTo(n){
+  const c=P[n], bb=bboxOf(baseShapes[n]); c.rot=0;
+  const save={tol:c.tol}; c.tol=0; c.s=1; c.tx=0; c.ty=0; delete bakedCache[n];
+  const ib=bboxOf(baked(n)); c.tol=save.tol;
+  const k=Math.min((bb[2]-bb[0])/((ib[2]-ib[0])||1),(bb[3]-bb[1])/((ib[3]-ib[1])||1));
+  c.s=k; c.tx=(bb[0]+bb[2])/2; c.ty=(bb[1]+bb[3])/2; delete bakedCache[n];
+}
+
+/* ---------- importar ---------- */
+$("importBtn").onclick=()=>$("file").click();
+$("file").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) importFile(f); };
+const stage=$("stage");
+stage.addEventListener("dragover",e=>{ e.preventDefault(); stage.classList.add("over"); });
+stage.addEventListener("dragleave",()=>stage.classList.remove("over"));
+stage.addEventListener("drop",e=>{ e.preventDefault(); stage.classList.remove("over"); const f=e.dataTransfer.files[0]; if(f) importFile(f); });
+
+async function importFile(f){
+  setStatus("Leyendo "+f.name+"…","");
+  try{
+    const buf=new Uint8Array(await f.arrayBuffer()); let shapes, kind;
+    const head=new TextDecoder("latin1").decode(buf.subarray(0,Math.min(buf.length,4096)));
+    if(head.startsWith("%PDF") || head.includes("%PDF-")){ kind="PDF"; shapes=await readPDF(buf); }
+    else if(/<svg[\s>]/i.test(head) || /\.svg$/i.test(f.name)){ kind="SVG"; shapes=readSVG(new TextDecoder().decode(buf)); }
+    else { kind = /\.ai$/i.test(f.name)?"AI":"EPS"; shapes=readPS(buf); }
+    shapes = shapes.filter(s=>s.polys.length && (s.fill || s.stroke));
+    if(!shapes.length) throw new Error("no encontré formas vectoriales en el archivo. Si es texto, conviértelo a contornos antes de exportar.");
+    const bb=bboxOf(shapes);
+    for(const s of shapes) s.suit = s.suit || false;
+    P[sel]={shapes, cx:(bb[0]+bb[2])/2, cy:(bb[1]+bb[3])/2, tx:0, ty:0, s:1, rot:0, fx:1, fy:1, tol:.06};
+    fitTo(sel); changed(true);
+    const pts=pointsOf(baked(sel));
+    setStatus(kind+": "+shapes.length+" formas, "+pts+" puntos. Ya está sobre la original; ajústala si hace falta y marca el color del traje.","ok");
+  }catch(err){ console.error(err); setStatus("No pude leer "+f.name+": "+(err.message||err),"err"); }
+}
+
+/* curvas a puntos */
+function cubic(o,x0,y0,x1,y1,x2,y2,x3,y3){ const n=Math.max(4,Math.min(48,Math.ceil((Math.hypot(x1-x0,y1-y0)+Math.hypot(x2-x1,y2-y1)+Math.hypot(x3-x2,y3-y2))/ (curveStep||1)))); for(let i=1;i<=n;i++){ const t=i/n,u=1-t; o.push(u*u*u*x0+3*u*u*t*x1+3*u*t*t*x2+t*t*t*x3, u*u*u*y0+3*u*u*t*y1+3*u*t*t*y2+t*t*t*y3); } }
+let curveStep=1;
+
+/* ---- SVG ---- */
+function readSVG(text){
+  const doc=new DOMParser().parseFromString(text,"image/svg+xml"); const root=doc.documentElement;
+  if(root.nodeName.toLowerCase()!=="svg") throw new Error("el SVG no se pudo interpretar");
+  const host=document.createElement("div"); host.style.cssText="position:absolute;left:-99999px;top:0;width:10px;height:10px;overflow:hidden";
+  const svg=document.importNode(root,true); host.append(svg); document.body.append(host);
+  try{
+    const vb=svg.viewBox&&svg.viewBox.baseVal; curveStep=vb&&vb.width? Math.max(vb.width,vb.height)/400 : 1;
+    const out=[];
+    for(const el of svg.querySelectorAll("path,rect,circle,ellipse,line,polyline,polygon")){
+      if(el.closest("defs,clipPath,mask,symbol,pattern,marker")) continue;
+      const cs=getComputedStyle(el); if(cs.display==="none"||cs.visibility==="hidden") continue;
+      const m=el.getCTM(); if(!m) continue;
+      const subs=svgGeom(el); if(!subs.length) continue;
+      const polys=[], open=[];
+      for(const s of subs){ const q=[]; for(let i=0;i<s.p.length;i+=2){ const x=s.p[i],y=s.p[i+1]; q.push(m.a*x+m.c*y+m.e, m.b*x+m.d*y+m.f); } if(q.length>=4){ polys.push(q); open.push(!s.closed); } }
+      const op=+cs.opacity||1, fill=paint(cs.fill,svg), stroke=paint(cs.stroke,svg), sc=Math.sqrt(Math.abs(m.a*m.d-m.b*m.c));
+      const sw=parseFloat(cs.strokeWidth)||0;
+      out.push({polys, open, fill:fill&&fill.c, fa:fill?fill.a*(+cs.fillOpacity||1)*op:1, stroke:stroke&&sw>0?stroke.c:null, sa:stroke?stroke.a*(+cs.strokeOpacity||1)*op:1, sw:sw*sc, eo:cs.fillRule==="evenodd"});
+    }
+    return out;
+  } finally { host.remove(); }
+}
+function paint(v,svg){
+  if(!v||v==="none") return null;
+  let m=v.match(/url\(["']?#([^"')]+)/); if(m){ const g=svg.querySelector("#"+CSS.escape(m[1])); const st=g&&g.querySelector("stop"); if(!st) return null; return color(getComputedStyle(st).stopColor); }
+  return color(v);
+}
+function color(v){ const m=v.match(/rgba?\(([^)]+)\)/); if(!m) return null; const p=m[1].split(/[ ,\/]+/).filter(Boolean).map(Number); return {c:"#"+p.slice(0,3).map(x=>Math.round(x).toString(16).padStart(2,"0")).join(""), a:p.length>3?p[3]:1}; }
+function svgGeom(el){
+  const n=el.nodeName.toLowerCase(), A=k=>parseFloat(el.getAttribute(k))||0;
+  if(n==="rect"){ const x=A("x"),y=A("y"),w=A("width"),h=A("height"); let rx=A("rx"),ry=A("ry"); if(!el.hasAttribute("ry")) ry=rx; if(!el.hasAttribute("rx")) rx=ry; rx=Math.min(rx,w/2); ry=Math.min(ry,h/2);
+    if(!rx) return [{p:[x,y,x+w,y,x+w,y+h,x,y+h],closed:true}];
+    const p=[]; [[x+w-rx,y+ry,-90],[x+w-rx,y+h-ry,0],[x+rx,y+h-ry,90],[x+rx,y+ry,180]].forEach(([cx,cy,a])=>{ for(let i=0;i<=6;i++){ const t=(a+i*15)*Math.PI/180; p.push(cx+Math.cos(t)*rx, cy+Math.sin(t)*ry); } }); return [{p,closed:true}]; }
+  if(n==="circle"||n==="ellipse"){ const cx=A("cx"),cy=A("cy"),rx=n==="circle"?A("r"):A("rx"),ry=n==="circle"?A("r"):A("ry"),p=[]; for(let i=0;i<40;i++){ const t=i*Math.PI/20; p.push(cx+Math.cos(t)*rx, cy+Math.sin(t)*ry); } return [{p,closed:true}]; }
+  if(n==="line") return [{p:[A("x1"),A("y1"),A("x2"),A("y2")],closed:false}];
+  if(n==="polyline"||n==="polygon"){ const p=(el.getAttribute("points")||"").trim().split(/[\s,]+/).map(Number).filter(x=>!isNaN(x)); return [{p,closed:n==="polygon"}]; }
+  return parsePath(el.getAttribute("d")||"");
+}
+function parsePath(d){
+  const tk=d.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g)||[]; let i=0, cmd="", x=0,y=0, sx=0,sy=0, lcx=0,lcy=0, lq=null;
+  const subs=[]; let cur=null; const num=()=>parseFloat(tk[i++]);
+  const start=(nx,ny)=>{ cur={p:[nx,ny],closed:false}; subs.push(cur); sx=nx; sy=ny; };
+  while(i<tk.length){
+    if(/[a-zA-Z]/.test(tk[i])) cmd=tk[i++]; else if(!cmd) { i++; continue; }
+    const rel=cmd===cmd.toLowerCase(), C=cmd.toUpperCase(), ox=rel?x:0, oy=rel?y:0;
+    if(C==="Z"){ if(cur){ cur.closed=true; } x=sx; y=sy; cur=null; lcx=x; lcy=y; lq=null; continue; }
+    if(i>=tk.length || /[a-zA-Z]/.test(tk[i])) { if(C!=="Z") continue; }
+    if(!cur && C!=="M") start(x,y);
+    switch(C){
+      case "M": { const nx=num()+ox, ny=num()+oy; start(nx,ny); x=nx; y=ny; cmd=rel?"l":"L"; lcx=x; lcy=y; lq=null; break; }
+      case "L": x=num()+ox; y=num()+oy; cur.p.push(x,y); lcx=x; lcy=y; lq=null; break;
+      case "H": x=num()+(rel?x:0); cur.p.push(x,y); lcx=x; lcy=y; lq=null; break;
+      case "V": y=num()+(rel?y:0); cur.p.push(x,y); lcx=x; lcy=y; lq=null; break;
+      case "C": { const a=num()+ox,b=num()+oy,c=num()+ox,e=num()+oy,f=num()+ox,g=num()+oy; cubic(cur.p,x,y,a,b,c,e,f,g); lcx=c; lcy=e; x=f; y=g; lq=null; break; }
+      case "S": { const a=2*x-lcx,b=2*y-lcy,c=num()+ox,e=num()+oy,f=num()+ox,g=num()+oy; cubic(cur.p,x,y,a,b,c,e,f,g); lcx=c; lcy=e; x=f; y=g; lq=null; break; }
+      case "Q": { const a=num()+ox,b=num()+oy,f=num()+ox,g=num()+oy; cubic(cur.p,x,y,x+2/3*(a-x),y+2/3*(b-y),f+2/3*(a-f),g+2/3*(b-g),f,g); lq=[a,b]; x=f; y=g; lcx=x; lcy=y; break; }
+      case "T": { const a=lq?2*x-lq[0]:x, b=lq?2*y-lq[1]:y, f=num()+ox, g=num()+oy; cubic(cur.p,x,y,x+2/3*(a-x),y+2/3*(b-y),f+2/3*(a-f),g+2/3*(b-g),f,g); lq=[a,b]; x=f; y=g; lcx=x; lcy=y; break; }
+      case "A": { const rx=num(),ry=num(),rot=num(),la=num(),sw=num(),f=num()+ox,g=num()+oy; arc(cur.p,x,y,rx,ry,rot,la,sw,f,g); x=f; y=g; lcx=x; lcy=y; lq=null; break; }
+      default: i++;
+    }
+  }
+  return subs.filter(s=>s.p.length>=4);
+}
+function arc(o,x1,y1,rx,ry,phi,fa,fs,x2,y2){
+  if(!rx||!ry){ o.push(x2,y2); return; } rx=Math.abs(rx); ry=Math.abs(ry); const ph=phi*Math.PI/180, c=Math.cos(ph), s=Math.sin(ph);
+  const dx=(x1-x2)/2, dy=(y1-y2)/2, x1p=c*dx+s*dy, y1p=-s*dx+c*dy; let l=x1p*x1p/(rx*rx)+y1p*y1p/(ry*ry); if(l>1){ rx*=Math.sqrt(l); ry*=Math.sqrt(l); }
+  const sg=(fa===fs?-1:1), num=rx*rx*ry*ry-rx*rx*y1p*y1p-ry*ry*x1p*x1p, den=rx*rx*y1p*y1p+ry*ry*x1p*x1p, co=sg*Math.sqrt(Math.max(0,num/den));
+  const cxp=co*rx*y1p/ry, cyp=-co*ry*x1p/rx, cx=c*cxp-s*cyp+(x1+x2)/2, cy=s*cxp+c*cyp+(y1+y2)/2;
+  const ang=(ux,uy,vx,vy)=>Math.atan2(ux*vy-uy*vx, ux*vx+uy*vy);
+  const t1=ang(1,0,(x1p-cxp)/rx,(y1p-cyp)/ry); let dt=ang((x1p-cxp)/rx,(y1p-cyp)/ry,(-x1p-cxp)/rx,(-y1p-cyp)/ry);
+  if(!fs&&dt>0) dt-=2*Math.PI; else if(fs&&dt<0) dt+=2*Math.PI;
+  const n=Math.max(4,Math.ceil(Math.abs(dt)/(Math.PI/18)));
+  for(let i=1;i<=n;i++){ const t=t1+dt*i/n; o.push(cx+rx*Math.cos(t)*c-ry*Math.sin(t)*s, cy+rx*Math.cos(t)*s+ry*Math.sin(t)*c); }
+}
+
+/* ---- PDF (también AI modernos), con pdf.js ---- */
+const PDFJS="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+function loadScript(src){ return new Promise((ok,ko)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=()=>ko(new Error("no se pudo cargar el lector de PDF")); document.head.append(s); }); }
+async function pdfLib(){ if(!window.pdfjsLib){ await loadScript(PDFJS+"pdf.min.js"); await loadScript(PDFJS+"pdf.worker.min.js"); } return window.pdfjsLib; }
+async function readPDF(buf){
+  const lib=await pdfLib(); const doc=await lib.getDocument({data:buf, isEvalSupported:false}).promise; const page=await doc.getPage(1);
+  const ops=await page.getOperatorList(); const O=lib.OPS, R={}; for(const k in O) R[O[k]]=k;
+  const vp=page.view; curveStep=Math.max(vp[2]-vp[0],vp[3]-vp[1])/400;
+  let ctm=[1,0,0,1,0,0], gs={fill:"#000000",fa:1,stroke:"#000000",sa:1,lw:1}; const st=[]; let path=[], cur=null, cx=0, cy=0; const out=[];
+  const T=(x,y)=>[ctm[0]*x+ctm[2]*y+ctm[4], -(ctm[1]*x+ctm[3]*y+ctm[5])];
+  const mul=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
+  const hex=(r,g,b)=>"#"+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,"0")).join("");
+  const paintPath=(fill,stroke,eo,close)=>{ if(close&&cur) cur.closed=true; const sub=path.filter(s=>s.p.length>=4);
+    if(sub.length&&(fill||stroke)){ const sc=Math.sqrt(Math.abs(ctm[0]*ctm[3]-ctm[1]*ctm[2]));
+      out.push({polys:sub.map(s=>s.p), open:sub.map(s=>!s.closed&&!fill), fill:fill?gs.fill:null, fa:gs.fa, stroke:stroke?gs.stroke:null, sa:gs.sa, sw:Math.max(gs.lw,0.01)*sc, eo}); }
+    path=[]; cur=null; };
+  for(let i=0;i<ops.fnArray.length;i++){
+    const fn=R[ops.fnArray[i]], a=ops.argsArray[i];
+    switch(fn){
+      case "save": st.push([ctm.slice(),{...gs}]); break;
+      case "restore": if(st.length){ const s=st.pop(); ctm=s[0]; gs=s[1]; } break;
+      case "transform": ctm=mul(ctm,a); break;
+      case "paintFormXObjectBegin": st.push([ctm.slice(),{...gs}]); if(a&&a[0]) ctm=mul(ctm,a[0]); break;
+      case "paintFormXObjectEnd": if(st.length){ const s=st.pop(); ctm=s[0]; gs=s[1]; } break;
+      case "setLineWidth": gs.lw=a[0]; break;
+      case "setGState": for(const [k,v] of a[0]){ if(k==="LW") gs.lw=v; else if(k==="CA") gs.sa=v; else if(k==="ca") gs.fa=v; } break;
+      case "setFillRGBColor": gs.fill=hex(a[0],a[1],a[2]); break;
+      case "setStrokeRGBColor": gs.stroke=hex(a[0],a[1],a[2]); break;
+      case "constructPath": { const [pops,args]=a; let k=0;
+        for(const op of pops){ const nm=R[op];
+          if(nm==="moveTo"){ const [x,y]=T(args[k],args[k+1]); cx=args[k]; cy=args[k+1]; k+=2; cur={p:[x,y],closed:false}; path.push(cur); }
+          else if(nm==="lineTo"){ if(!cur){ cur={p:T(cx,cy),closed:false}; path.push(cur);} cur.p.push(...T(args[k],args[k+1])); cx=args[k]; cy=args[k+1]; k+=2; }
+          else if(nm==="curveTo"||nm==="curveTo2"||nm==="curveTo3"){ if(!cur){ cur={p:T(cx,cy),closed:false}; path.push(cur);}
+            let x1,y1,x2,y2,x3,y3; if(nm==="curveTo"){ [x1,y1,x2,y2,x3,y3]=args.slice(k,k+6); k+=6; } else if(nm==="curveTo2"){ x1=cx; y1=cy; [x2,y2,x3,y3]=args.slice(k,k+4); k+=4; } else { [x1,y1,x3,y3]=args.slice(k,k+4); x2=x3; y2=y3; k+=4; }
+            const p0=T(cx,cy),p1=T(x1,y1),p2=T(x2,y2),p3=T(x3,y3); cubic(cur.p,p0[0],p0[1],p1[0],p1[1],p2[0],p2[1],p3[0],p3[1]); cx=x3; cy=y3; }
+          else if(nm==="closePath"){ if(cur) cur.closed=true; cur=null; }
+          else if(nm==="rectangle"){ const [x,y,w,h]=args.slice(k,k+4); k+=4; cur={p:[...T(x,y),...T(x+w,y),...T(x+w,y+h),...T(x,y+h)],closed:true}; path.push(cur); cur=null; cx=x; cy=y; }
+        } break; }
+      case "fill": paintPath(true,false,false,false); break;
+      case "eoFill": paintPath(true,false,true,false); break;
+      case "stroke": paintPath(false,true,false,false); break;
+      case "closeStroke": paintPath(false,true,false,true); break;
+      case "fillStroke": paintPath(true,true,false,false); break;
+      case "eoFillStroke": paintPath(true,true,true,false); break;
+      case "closeFillStroke": paintPath(true,true,false,true); break;
+      case "closeEOFillStroke": paintPath(true,true,true,true); break;
+      case "endPath": path=[]; cur=null; break;
+    }
+  }
+  return out;
+}
+
+/* ---- EPS / AI (formato PostScript de Illustrator, como lo exporta FreeHand) ---- */
+function readPS(buf){
+  let start=0, end=buf.length;
+  if(buf[0]===0xC5&&buf[1]===0xD0&&buf[2]===0xD3&&buf[3]===0xC6){ const dv=new DataView(buf.buffer,buf.byteOffset); start=dv.getUint32(4,true); end=start+dv.getUint32(8,true); }
+  let text=new TextDecoder("latin1").decode(buf.subarray(start,end));
+  if(text.includes("%PDF-")) throw new Error("este AI es de los nuevos (por dentro es PDF): expórtalo como PDF o como Illustrator 7 o anterior");
+  // el dibujo empieza después de la configuración; lo anterior son definiciones
+  for(const mk of ["%%EndSetup","%%EndProlog"]){ const k=text.indexOf(mk); if(k>=0){ text=text.slice(k+mk.length); break; } }
+  const tr=text.search(/%%PageTrailer|%%Trailer/); if(tr>0) text=text.slice(0,tr);
+  // dialecto: en el formato de Illustrator g/k/Xa pintan el relleno y G/K/XA el contorno; en PostScript genérico un color sirve para ambos
+  const AI=/Adobe.?Illustrator|%AI\d|Adobe_Illustrator/.test(new TextDecoder("latin1").decode(buf.subarray(start,Math.min(end,start+20000))));
+  const both=c=>{ gs.fill=c; if(!AI) gs.stroke=c; };
+  const out=[]; let stack=[], path=[], cur=null, cx=0, cy=0, gs={fill:"#000000",fa:1,stroke:"#000000",sa:1,lw:1,eo:false,ctm:[1,0,0,1,0,0]}; const st=[];
+  let compound=null, last=null; curveStep=1;
+  const T=(x,y)=>{ const m=gs.ctm; return [m[0]*x+m[2]*y+m[4], -(m[1]*x+m[3]*y+m[5])]; };
+  const mul=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
+  const hex=(r,g,b)=>"#"+[r,g,b].map(v=>Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,"0")).join("");
+  const cmyk=(c,m,y,k)=>hex((1-c)*(1-k),(1-m)*(1-k),(1-y)*(1-k));
+  const nums=n=>{ const r=[]; while(r.length<n&&stack.length){ const v=stack.pop(); if(typeof v==="number") r.unshift(v); else break; } return r.length===n?r:null; };
+  const pt=(x,y)=>{ if(!cur){ cur={p:T(cx,cy),closed:false}; path.push(cur); } cur.p.push(...T(x,y)); cx=x; cy=y; };
+  const finish=(fill,stroke,close,eo)=>{
+    if(close&&cur) cur.closed=true;
+    const sub=path.filter(s=>s.p.length>=4); path=[]; cur=null;
+    if(compound){ compound.subs.push(...sub); if(fill||stroke) compound.style={fill,stroke}; return; }
+    if(sub.length&&(fill||stroke)){ const sc=Math.sqrt(Math.abs(gs.ctm[0]*gs.ctm[3]-gs.ctm[1]*gs.ctm[2]));
+      out.push({polys:sub.map(s=>s.p), open:sub.map(s=>!s.closed&&!fill), fill:fill?gs.fill:null, fa:1, stroke:stroke?gs.stroke:null, sa:1, sw:Math.max(gs.lw,.01)*sc, eo:eo||gs.eo}); }
+  };
+  // tokens de PostScript: números, nombres, cadenas (se saltan), procedimientos {…} (se saltan), comentarios
+  const re=/%[^\r\n]*|\((?:\\.|[^\\)])*\)|<[0-9a-fA-F\s]*>|[{}\[\]]|\/?[^\s()<>\[\]{}\/%]+/g; let m, depth=0;
+  while((m=re.exec(text))){
+    const t=m[0]; if(t[0]==="%") continue;
+    if(t==="{"){ depth++; continue; } if(t==="}"){ depth=Math.max(0,depth-1); if(!depth) stack.push("proc"); continue; } if(depth) continue;
+    if(t[0]==="("||t[0]==="<"){ stack.push("str"); continue; }
+    if(t==="["||t==="]"){ stack.push(t); continue; }
+    if(t[0]==="/"){ stack.push("name"); continue; }
+    const v=Number(t); if(!isNaN(v)&&/^[-+.\d]/.test(t)){ stack.push(v); continue; }
+    let a;
+    switch(t){
+      case "m": case "moveto": if((a=nums(2))){ cur={p:T(a[0],a[1]),closed:false}; path.push(cur); cx=a[0]; cy=a[1]; } break;
+      case "l": case "L": case "lineto": if((a=nums(2))) pt(a[0],a[1]); break;
+      case "c": case "C": case "curveto": if((a=nums(6))){ const p0=T(cx,cy),p1=T(a[0],a[1]),p2=T(a[2],a[3]),p3=T(a[4],a[5]); if(!cur){cur={p:p0,closed:false};path.push(cur);} cubic(cur.p,...p0,...p1,...p2,...p3); cx=a[4]; cy=a[5]; } break;
+      case "v": case "V": if((a=nums(4))){ const p0=T(cx,cy),p2=T(a[0],a[1]),p3=T(a[2],a[3]); if(!cur){cur={p:p0,closed:false};path.push(cur);} cubic(cur.p,...p0,...p0,...p2,...p3); cx=a[2]; cy=a[3]; } break;
+      case "y": case "Y": if((a=nums(4))){ const p0=T(cx,cy),p1=T(a[0],a[1]),p3=T(a[2],a[3]); if(!cur){cur={p:p0,closed:false};path.push(cur);} cubic(cur.p,...p0,...p1,...p3,...p3); cx=a[2]; cy=a[3]; } break;
+      case "re": if((a=nums(4))){ const [x,y,w,h]=a; path.push({p:[...T(x,y),...T(x+w,y),...T(x+w,y+h),...T(x,y+h)],closed:true}); cur=null; } break;
+      case "h": case "closepath": if(cur){ cur.closed=true; } cur=null; break;
+      case "N": case "n": finish(false,false,t==="n",false); break;
+      case "F": case "fill": finish(true,false,false,false); break;
+      case "f": finish(true,false,true,false); break;
+      case "f*": case "eofill": finish(true,false,false,true); break;
+      case "S": case "stroke": finish(false,true,false,false); break;
+      case "s": finish(false,true,true,false); break;
+      case "B": finish(true,true,false,false); break;
+      case "b": finish(true,true,true,false); break;
+      case "B*": finish(true,true,false,true); break;
+      case "b*": finish(true,true,true,true); break;
+      case "W": case "W*": case "clip": case "eoclip": break;
+      case "g": case "setgray": if((a=nums(1))) { both(hex(a[0],a[0],a[0])); if(t==="setgray") gs.stroke=gs.fill; } break;
+      case "G": if((a=nums(1))) gs.stroke=hex(a[0],a[0],a[0]); break;
+      case "k": case "setcmykcolor": if((a=nums(4))) { both(cmyk(...a)); if(t==="setcmykcolor") gs.stroke=gs.fill; } break;
+      case "K": if((a=nums(4))) gs.stroke=cmyk(...a); break;
+      case "rg": case "setrgbcolor": if((a=nums(3))) { both(hex(...a)); if(t==="setrgbcolor") gs.stroke=gs.fill; } break;
+      case "RG": if((a=nums(3))) gs.stroke=hex(...a); break;
+      case "Xa": if((a=nums(3))) gs.fill=hex(...a); break;
+      case "XA": if((a=nums(3))) gs.stroke=hex(...a); break;
+      case "x": case "X": { // c m y k (nombre) tinte [tipo] x
+        const s=stack; let j=s.lastIndexOf("str"); if(j>=4){ const [c,mm,yy,kk]=s.slice(j-4,j); const tint=typeof s[j+1]==="number"?s[j+1]:0; const col=cmyk(c*(1-tint),mm*(1-tint),yy*(1-tint),kk*(1-tint)); if(t==="x") gs.fill=col; else gs.stroke=col; } break; }
+      case "XR": if((a=nums(1))) gs.eo=a[0]===1; break;
+      case "w": case "setlinewidth": if((a=nums(1))) gs.lw=a[0]; break;
+      case "q": case "gsave": st.push({...gs, ctm:gs.ctm.slice()}); break;
+      case "Q": case "grestore": if(st.length) gs=st.pop(); break;
+      case "cm": if((a=nums(6))) gs.ctm=mul(gs.ctm,a); break;
+      case "concat": { const k=stack.lastIndexOf("["); if(k>=0){ const arr=stack.slice(k+1).filter(x=>typeof x==="number"); if(arr.length===6) gs.ctm=mul(gs.ctm,arr); } break; }
+      case "translate": if((a=nums(2))) gs.ctm=mul(gs.ctm,[1,0,0,1,a[0],a[1]]); break;
+      case "scale": if((a=nums(2))) gs.ctm=mul(gs.ctm,[a[0],0,0,a[1],0,0]); break;
+      case "rotate": if((a=nums(1))){ const r=a[0]*Math.PI/180; gs.ctm=mul(gs.ctm,[Math.cos(r),Math.sin(r),-Math.sin(r),Math.cos(r),0,0]); } break;
+      case "*u": compound={subs:[],style:null}; break;
+      case "*U": if(compound){ const c=compound; compound=null; const sub=c.subs; if(sub.length&&c.style){ const sc=Math.sqrt(Math.abs(gs.ctm[0]*gs.ctm[3]-gs.ctm[1]*gs.ctm[2]));
+          out.push({polys:sub.map(s=>s.p), open:sub.map(s=>!s.closed&&!c.style.fill), fill:c.style.fill?gs.fill:null, fa:1, stroke:c.style.stroke?gs.stroke:null, sa:1, sw:Math.max(gs.lw,.01)*sc, eo:true}); } } break;
+    }
+    if(!(t in KEEP)) stack=[];
+  }
+  return out;
+}
+const KEEP={}; // los operadores siempre vacían la pila de operandos
+
+/* ---------- personaje.txt ---------- */
+function argb(hex,a){ return Math.round(Math.max(0,Math.min(1,a))*255).toString(16).padStart(2,"0").toUpperCase()+hex.slice(1).toUpperCase(); }
+function f3(v){ let s=v.toFixed(3); s=s.replace(/0+$/,"").replace(/\.$/,""); return s==="-0"?"0":s; }
+function exportText(){
+  const L=["# personaje.txt de WAP, hecho con el Taller de piezas","# pieza: nombre de la pieza; forma: colores AARRGGBB; p: contorno en unidades del juego",""];
+  for(const n of NAMES){ if(!P[n]) continue; L.push("pieza "+n);
+    for(const s of baked(n)){
+      const polys=[]; s.polys.forEach((p,i)=>{ if(p.length<4) return; if(s.open[i]){ const back=[]; for(let k=p.length-4;k>=2;k-=2) back.push(p[k],p[k+1]); polys.push(p.concat(back)); } else if(p.length>=6) polys.push(p); });
+      if(!polys.length) continue;
+      const fill=s.fill&&!s.open.every(Boolean)?argb(s.fill,s.fa):"00000000", stroke=s.stroke&&s.sw>0?argb(s.stroke,s.sa):"00000000";
+      L.push("forma relleno="+fill+" contorno="+stroke+" grosor="+f3(s.sw)+" parimpar="+(s.eo?1:0)+" traje="+(s.suit?1:0));
+      for(const p of polys) L.push("p "+p.map(f3).join(" "));
+    }
+    L.push("");
+  }
+  return L.join("\n");
+}
+function importText(text){
+  const res={}; let cur=null, sh=null;
+  for(const raw of text.split(/\r?\n/)){ const l=raw.trim(); if(!l||l[0]==="#") continue; const t=l.split(/\s+/);
+    if(t[0]==="pieza"){ if(!BASE.pieces[t[1]]) { cur=null; continue; } cur=res[t[1]]={shapes:[],cx:0,cy:0,tx:0,ty:0,s:1,rot:0,fx:1,fy:1,tol:0}; }
+    else if(t[0]==="forma"&&cur){ const kv={}; t.slice(1).forEach(x=>{ const [k,v]=x.split("="); kv[k]=v; });
+      const f=kv.relleno||"00000000", k=kv.contorno||"00000000"; const fa=parseInt(f.slice(0,2),16)/255, sa=parseInt(k.slice(0,2),16)/255;
+      sh={polys:[],open:[],fill:fa?"#"+f.slice(2).toLowerCase():null,fa:fa||1,stroke:sa?"#"+k.slice(2).toLowerCase():null,sa:sa||1,sw:parseFloat(kv.grosor)||0,eo:kv.parimpar==="1",suit:kv.traje==="1"}; cur.shapes.push(sh); }
+    else if(t[0]==="p"&&sh){ sh.polys.push(t.slice(1).map(Number)); sh.open.push(false); }
+  }
+  return res;
+}
+$("exportBtn").onclick=()=>{ $("out").value=exportText(); $("copyMsg").textContent=""; $("dlg").showModal(); };
+$("closeDlg").onclick=()=>$("dlg").close();
+$("copyBtn").onclick=()=>{ const t=$("out").value; navigator.clipboard.writeText(t).then(()=>{ $("copyMsg").textContent="Copiado."; },()=>{ $("out").select(); $("copyMsg").textContent="Selecciona todo y copia con Ctrl+C."; }); };
+$("openTxt").onclick=()=>$("txtFile").click();
+$("txtFile").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return; const r=importText(await f.text()); const n=Object.keys(r).length;
+  if(!n){ setStatus("Ese archivo no tiene piezas de WAP.","err"); return; } P={...P,...r}; changed(true); setStatus("Abrí "+n+" piezas de "+f.name+".","ok"); };
+
+/* ---------- vista previa ---------- */
+const pv=$("pv"), px=pv.getContext("2d"); let animI=0, t0=performance.now(), playing=true;
+ANIMS.forEach(([nm],i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=nm; $("anim").append(o); });
+$("anim").onchange=e=>{ animI=+e.target.value; t0=performance.now(); };
+$("playBtn").onclick=()=>{ playing=!playing; $("playBtn").textContent=playing?"Pausa":"Seguir"; };
+$("suit").oninput=()=>{ render(); };
+function frameAt(ms){ const seq=ANIMS[animI][1], total=seq.reduce((a,b)=>a+b[1],0); let t=Math.floor(ms/1000*60)%total; for(const [f,d] of seq){ if(t<d) return f; t-=d; } return seq[0][0]; }
+let frozen=0;
+function drawPreview(now){
+  const ms=playing?now-t0:frozen; if(playing) frozen=ms; const fr=frameAt(ms);
+  px.setTransform(1,0,0,1,0,0); px.fillStyle="#0c1024"; px.fillRect(0,0,pv.width,pv.height);
+  const k=10, ox=320, oy=640; px.strokeStyle="#26315f"; px.lineWidth=2; px.beginPath(); px.moveTo(0,oy+1); px.lineTo(pv.width,oy+1); px.stroke();
+  for(const it of BASE.poses[fr]){ const m=it.m; px.setTransform(k*m[0],k*m[1],k*m[2],k*m[3],ox+k*m[4],oy+k*m[5]);
+    drawShapes(px, pieceShapes(it.n), it.ink? "#141414" : $("suit").value);
+    if(it.n===sel){ px.globalAlpha=.9; px.strokeStyle="#ffc94a"; px.lineWidth=.5; const bb=bboxOf(pieceShapes(it.n)); px.strokeRect(bb[0],bb[1],bb[2]-bb[0],bb[3]-bb[1]); px.globalAlpha=1; } }
+  px.setTransform(1,0,0,1,0,0); px.fillStyle="#9aa3cf"; px.font="16px Silkscreen, monospace"; px.fillText(fr.replace(/_/g," ").toUpperCase(),14,28);
+  requestAnimationFrame(drawPreview);
+}
+
+/* ---------- arranque ---------- */
+load(); buildList(); $("maxp").textContent=MAX_POINTS; select(sel); requestAnimationFrame(drawPreview);
+window.__taller={P:()=>P,select,importFile,exportText,importText,totalPoints};
+</script>
