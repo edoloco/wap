@@ -214,6 +214,9 @@ public class Sim {
         BufferedImage both=new BufferedImage(800,500,BufferedImage.TYPE_INT_RGB);both.getGraphics().drawImage(im[0],0,0,null);both.getGraphics().drawImage(im[1],400,0,null);ImageIO.write(both,"png",new File(out,"piezas_personaje_txt.png"));
         StringBuilder big=new StringBuilder("pieza pecho\nforma relleno=FF000000\n");for(int i=0;i<4000;i++)big.append("p 0 0 1 0 1 1\n");Pieces.load(big.toString());
         check(Pieces.error!=null&&Pieces.pieces==0,"un personaje.txt demasiado pesado se ignora ("+Pieces.error+")");
-        Pieces.load("pieza pecho\np 1 2\n");check(Pieces.error!=null,"un archivo mal escrito avisa el error ("+Pieces.error+")");Pieces.clear();}
+        Pieces.load("pieza pecho\np 1 2\n");check(Pieces.error!=null,"un archivo mal escrito avisa el error ("+Pieces.error+")");
+        Pieces.load("pose disparo 11 -4 -10 -4 -90 -90 -6 4 -20 4\n");check(Pieces.poses==1&&RobotArt.poseValues("disparo")[4]==-90,"personaje.txt cambia una pose (brazo arriba al disparar)");
+        Pieces.clear();check(RobotArt.poseValues("disparo")[4]==0,"sin archivo, las poses vuelven a las de siempre");
+        Pieces.load("pose disparo 1 2 3\n");check(Pieces.error!=null&&RobotArt.poseValues("disparo")[4]==0,"una pose mal escrita se ignora ("+Pieces.error+")");Pieces.clear();}
     public static void main(String[] a)throws Exception{piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

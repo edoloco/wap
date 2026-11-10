@@ -58,6 +58,8 @@ public class BasePiezas {
             RobotArt.drawPose(r, v, (1 << com.wap.core.Robot.PIECES) - 1, SUIT, 0);
             o.append(f ? "" : ",").append('"').append(fr).append("\":[").append(r.out).append(']'); f = false;
         }
+        o.append("},\"poseDefs\":{"); f = true;
+        for (String n : RobotArt.POSE_NAMES) { float[] q = RobotArt.poseValues(n); o.append(f ? "" : ",").append('"').append(n).append("\":["); for (int i = 0; i < 10; i++) o.append(i > 0 ? "," : "").append(n(q[i])); o.append(']'); f = false; }
         o.append("}}"); System.out.println(o);
     }
 }

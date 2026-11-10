@@ -11,6 +11,7 @@
   color-scheme:dark;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{height:100%}
 body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--ui);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px}
 h1,h2,.pix{font-family:var(--pix);font-weight:400;letter-spacing:.04em}
@@ -67,12 +68,21 @@ dialog{background:var(--panel);color:var(--fg);border:2px solid var(--gold);bord
 dialog::backdrop{background:rgba(8,10,24,.7)}
 textarea{width:100%;height:260px;background:var(--navy);color:var(--fg);border:2px solid var(--line);border-radius:3px;font:12px ui-monospace,monospace;padding:8px}
 ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(--fg)}
+.tabs{display:flex;gap:4px;margin-bottom:10px}
+.tabs button{flex:1;background:var(--panel2);color:var(--dim);box-shadow:none;font:12px var(--pix);padding:8px 6px}
+.tabs button[aria-selected="true"]{background:var(--gold);color:var(--navy)}
+#pe{cursor:default;touch-action:none}
+.nums{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 12px;margin-top:10px}
+.nums label{display:grid;grid-template-columns:1fr 70px;align-items:center;gap:6px;font-size:12px;color:var(--dim)}
+.nums input{width:70px;background:var(--panel2);color:var(--fg);border:2px solid var(--line);border-radius:3px;padding:4px 6px;font:13px var(--ui);font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--dim);margin-top:8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
 <header>
   <h1>TALLER DE PIEZAS</h1>
-  <div class="sub">Reemplaza las piezas del personaje de WAP con tus dibujos (PDF, EPS, AI o SVG) y exporta <b>personaje.txt</b> para el juego.</div>
+  <div class="sub">Reemplaza las piezas del personaje de WAP con tus dibujos (PDF, EPS, AI o SVG), ajusta las poses de las animaciones y exporta <b>personaje.txt</b> para el juego.</div>
   <button class="sec" id="openTxt">Abrir personaje.txt</button>
   <button id="exportBtn">Exportar personaje.txt</button>
   <input type="file" id="txtFile" accept=".txt,text/plain" hidden>
@@ -80,11 +90,34 @@ ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(-
 
 <div class="grid">
   <section class="card" aria-label="Piezas">
-    <h2>Piezas</h2>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" id="tabPieces" aria-selected="true">PIEZAS</button>
+      <button type="button" role="tab" id="tabPoses" aria-selected="false">POSES</button>
+    </div>
     <div class="list" id="list"></div>
+    <div class="list" id="plist" hidden></div>
   </section>
 
-  <section class="card" aria-label="Pieza seleccionada">
+  <section class="card" aria-label="Pose seleccionada" id="modePoses" hidden>
+    <div class="row" style="margin-top:0;justify-content:space-between">
+      <h2 id="posename" style="margin:0">de pie 1</h2>
+      <div class="row" style="margin-top:0">
+        <select id="copyFrom" aria-label="Copiar los valores de otra pose"><option value="">Copiar de otra pose…</option></select>
+        <button class="sec" id="poseReset">Usar la original</button>
+      </div>
+    </div>
+    <div class="stage" style="margin-top:10px"><canvas id="pe" width="900" height="620" aria-label="Pose en grande: arrastra los puntos de colores para moverla"></canvas></div>
+    <div class="legend">
+      <span><i style="background:#ffc94a"></i>pies</span><span><i style="background:#6ee2b4"></i>cadera (altura)</span><span><i style="background:#ff6f9c"></i>pecho (inclinación)</span>
+      <span><i style="background:#7fc8ff"></i>codo y mano del brazo cercano</span><span><i style="background:#b9a7ff"></i>codo y mano del brazo lejano</span>
+    </div>
+    <p class="hint">Arrastra los puntos. En gris se ve la pose anterior de la animación. La línea es el suelo. La pierna se dobla sola para llegar al pie.</p>
+    <p class="hint" id="poseNote"></p>
+    <div class="nums" id="nums"></div>
+    <div class="status" id="pstatus" role="status"></div>
+  </section>
+
+  <section class="card" aria-label="Pieza seleccionada" id="modePieces">
     <div class="row" style="margin-top:0;justify-content:space-between">
       <h2 id="pname" style="margin:0">cabeza</h2>
       <div class="row" style="margin-top:0">
@@ -134,6 +167,7 @@ ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(-
 
 <dialog id="dlg">
   <h2>personaje.txt</h2>
+  <p class="small" style="margin:0">Incluye tus piezas y las poses que cambiaste.</p>
   <ol class="steps">
     <li>Copia el texto con el botón.</li>
     <li>En Android Studio, en <b>app/src/main/assets/</b>, crea o abre <b>personaje.txt</b> y pega todo.</li>
@@ -166,8 +200,9 @@ const LABEL = {hueso_brazo:"hueso brazo",hueso_antebrazo:"hueso antebrazo",mano_
 // P[nombre] = {shapes:[{polys,open,fill,fa,stroke,sa,sw,eo,suit}], cx, cy, tx, ty, s, rot, fx, fy, tol}
 let P = {}, sel = "cabeza";
 const $ = id => document.getElementById(id);
-function save(){ try{ localStorage.setItem("wap-taller", JSON.stringify(P)); }catch(e){} }
-function load(){ try{ const t = localStorage.getItem("wap-taller"); if(t) P = JSON.parse(t) || {}; }catch(e){ P = {}; } }
+let Q = {}; // poses cambiadas: nombre -> 10 números
+function save(){ try{ localStorage.setItem("wap-taller", JSON.stringify({P,Q})); }catch(e){} }
+function load(){ try{ const t = localStorage.getItem("wap-taller"); if(t){ const d=JSON.parse(t)||{}; if(d.P||d.Q){ P=d.P||{}; Q=d.Q||{}; } else P=d; } }catch(e){ P = {}; Q = {}; } }
 
 /* ---------- formas base (las del juego) ---------- */
 function hexA(h){ return {c:"#"+h.slice(2), a:parseInt(h.slice(0,2),16)/255}; }
@@ -227,6 +262,60 @@ function drawShapes(ctx, shapes, suitColor, alpha){
   ctx.globalAlpha=1;
 }
 function pieceShapes(n){ return P[n] ? baked(n) : baseShapes[n]; }
+
+/* ---------- esqueleto: el mismo cálculo que RobotArt.drawPose del juego ---------- */
+const SK={TH:10,SH:10,UA:6,FA:6.5,TORSO:15,SHOULDER:11};
+const POSE_NAMES=Object.keys(BASE.poseDefs);
+const FIELDS=[["fx","pie lejano x"],["fy","pie lejano y"],["bx","pie cercano x"],["by","pie cercano y"],["a1","brazo cercano: hombro °"],["a2","brazo cercano: codo °"],["b1","brazo lejano: hombro °"],["b2","brazo lejano: codo °"],["pel","altura de la cadera"],["lean","inclinación °"]];
+const POSE_LABEL={de_pie_1:"de pie 1",de_pie_2:"de pie 2",correr_1:"correr 1",correr_2:"correr 2",correr_3:"correr 3",correr_4:"correr 4",preparar_1:"preparar disparo 1",preparar_2:"preparar disparo 2",disparo:"disparo",salto_subir:"salto (subiendo)",salto_caer:"salto (cayendo)",barrida_1:"barrida 1",barrida_2:"barrida 2",pared:"pared",gancho:"gancho",estirar:"estirarse (tras doble salto)"};
+const POSE_NOTE={gancho:"En el juego, los dos brazos del gancho apuntan siempre hacia la cuerda; aquí solo cuentan piernas, cadera e inclinación.",disparo:"Esta pose usa la mano abierta.",salto_subir:"Si dispara en el aire, el juego pone los brazos al frente (salto disparando).",salto_caer:"También se usa cuando un golpe lanza al personaje (el juego lo hace girar)."};
+function poseOf(n){ return Q[n] ? Q[n].slice() : BASE.poseDefs[n].slice(); }
+const D2R=d=>d*Math.PI/180;
+const mm=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
+const TR=(x,y)=>[1,0,0,1,x,y], RO=r=>[Math.cos(r),Math.sin(r),-Math.sin(r),Math.cos(r),0,0], SC=k=>[k,0,0,k,0,0];
+/** Piezas con su matriz y articulaciones, a partir de los 10 números de una pose. */
+function skeleton(F, open){
+  const [fx,fy,bx,by,a1,a2,b1,b2,pel,lean]=F, out=[], J={};
+  const px=0, py=pel, lr=D2R(lean), sn=Math.sin(lr), cs=Math.cos(lr);
+  const cx=px+sn*SK.SHOULDER, cy=py-cs*SK.SHOULDER;
+  const ffx=cx+cs*4.6, ffy=cy+sn*4.6+1, nx=cx-cs*4.6, ny=cy-sn*4.6+1;
+  const arm=(sx,sy,d1,d2,op,key)=>{ const ex=sx+Math.cos(D2R(d1))*SK.UA, ey=sy+Math.sin(D2R(d1))*SK.UA;
+    out.push({n:"hueso_brazo",m:mm(TR(sx,sy),RO(D2R(d1)))}); const M=mm(TR(ex,ey),RO(D2R(d2)));
+    out.push({n:"hueso_antebrazo",m:M}); out.push({n:op?"mano_abierta":"mano",m:mm(M,TR(SK.FA,0))}); out.push({n:"guantelete",m:M});
+    J[key+"S"]=[sx,sy]; J[key+"E"]=[ex,ey]; J[key+"H"]=[ex+Math.cos(D2R(d2))*SK.FA, ey+Math.sin(D2R(d2))*SK.FA]; };
+  const shoulder=(x,y,r)=>out.push({n:"hombro",m:mm(TR(x,y),SC(r/3.6))});
+  const leg=(hx,hy,ax,ay)=>{ let dx=ax-hx, dy=ay-hy, d=Math.hypot(dx,dy); const max=SK.TH+SK.SH-.1;
+    if(d>max){ dx*=max/d; dy*=max/d; d=max; ax=hx+dx; ay=hy+dy; }
+    const a=(d*d+SK.TH*SK.TH-SK.SH*SK.SH)/(2*d), h2=SK.TH*SK.TH-a*a, h=h2>0?Math.sqrt(h2):0;
+    let kx=hx+dx/d*a+dy/d*h, ky=hy+dy/d*a-dx/d*h;
+    if(kx<hx+dx/d*a){ kx=hx+dx/d*a-dy/d*h; ky=hy+dy/d*a+dx/d*h; }
+    const t=Math.atan2(ky-hy,kx-hx)*180/Math.PI, s=Math.atan2(ay-ky,ax-kx)*180/Math.PI;
+    out.push({n:"bota",m:mm(TR(ax,ay),RO(D2R(ay<-6.5?Math.max(-10,Math.min(55,(s-90)*-.9+28)):0)))});
+    const MS=mm(TR(kx,ky),RO(D2R(s))), MT=mm(TR(hx,hy),RO(D2R(t)));
+    out.push({n:"hueso_canilla",m:MS},{n:"canilla",m:MS},{n:"hueso_muslo",m:MT},{n:"muslo",m:MT},{n:"rodilla",m:MS}); };
+  arm(ffx,ffy,b1,b2,false,"b"); shoulder(ffx,ffy,3);
+  leg(px+2,py+1,fx,fy-1);
+  const M0=mm(mm(TR(px,py),RO(lr)),TR(0,-SK.TORSO));
+  out.push({n:"torso",m:M0},{n:"abdomen",m:M0},{n:"pecho",m:M0},{n:"cabeza",m:mm(M0,RO(-lr*.8))});
+  leg(px-2,py+1,bx,by);
+  out.push({n:"pelvis",m:mm(TR(px,py),RO(lr))});
+  arm(nx,ny,a1,a2,open,"a"); shoulder(nx,ny,3.6);
+  J.hip=[px,py]; J.chest=[cx,cy]; J.ff=[fx,fy-1]; J.bf=[bx,by];
+  return {parts:out, J};
+}
+/** Cuadro de animación → piezas: las poses editables usan el esqueleto; la bola, lo que exportó el juego. */
+function frameParts(fr){
+  if(fr==="doble_salto") return BASE.poses[fr];
+  if(fr==="lanzado") return skeleton(poseOf("salto_caer"),false).parts;
+  if(fr==="salto_disparo"){ const F=poseOf("salto_subir"); F[4]=0; F[5]=0; F[6]=105; F[7]=95; return skeleton(F,true).parts; }
+  return skeleton(poseOf(fr), fr==="disparo").parts;
+}
+function drawCharacter(ctx, parts, k, ox, oy, suit, alpha, hiPiece){
+  for(const it of parts){ const m=it.m; ctx.setTransform(k*m[0],k*m[1],k*m[2],k*m[3],ox+k*m[4],oy+k*m[5]);
+    drawShapes(ctx, pieceShapes(it.n), it.ink?"#141414":suit, alpha);
+    if(hiPiece && it.n===hiPiece){ ctx.globalAlpha=.9; ctx.strokeStyle="#ffc94a"; ctx.lineWidth=.5; const bb=bboxOf(pieceShapes(it.n)); ctx.strokeRect(bb[0],bb[1],bb[2]-bb[0],bb[3]-bb[1]); ctx.globalAlpha=1; } }
+  ctx.setTransform(1,0,0,1,0,0);
+}
 
 /* ---------- lista de piezas ---------- */
 const thumbs = {};
@@ -575,25 +664,29 @@ function exportText(){
     }
     L.push("");
   }
+  const changedPoses=POSE_NAMES.filter(n=>Q[n] && Q[n].some((v,i)=>Math.abs(v-BASE.poseDefs[n][i])>1e-6));
+  if(changedPoses.length){ L.push("# poses: fx fy bx by a1 a2 b1 b2 pel lean (pies, brazos cercano y lejano, cadera, inclinación)");
+    for(const n of changedPoses) L.push("pose "+n+" "+Q[n].map(f3).join(" ")); L.push(""); }
   return L.join("\n");
 }
 function importText(text){
-  const res={}; let cur=null, sh=null;
+  const res={}, poses={}; let cur=null, sh=null;
   for(const raw of text.split(/\r?\n/)){ const l=raw.trim(); if(!l||l[0]==="#") continue; const t=l.split(/\s+/);
     if(t[0]==="pieza"){ if(!BASE.pieces[t[1]]) { cur=null; continue; } cur=res[t[1]]={shapes:[],cx:0,cy:0,tx:0,ty:0,s:1,rot:0,fx:1,fy:1,tol:0}; }
     else if(t[0]==="forma"&&cur){ const kv={}; t.slice(1).forEach(x=>{ const [k,v]=x.split("="); kv[k]=v; });
       const f=kv.relleno||"00000000", k=kv.contorno||"00000000"; const fa=parseInt(f.slice(0,2),16)/255, sa=parseInt(k.slice(0,2),16)/255;
       sh={polys:[],open:[],fill:fa?"#"+f.slice(2).toLowerCase():null,fa:fa||1,stroke:sa?"#"+k.slice(2).toLowerCase():null,sa:sa||1,sw:parseFloat(kv.grosor)||0,eo:kv.parimpar==="1",suit:kv.traje==="1"}; cur.shapes.push(sh); }
     else if(t[0]==="p"&&sh){ sh.polys.push(t.slice(1).map(Number)); sh.open.push(false); }
+    else if(t[0]==="pose"&&BASE.poseDefs[t[1]]&&t.length===12){ const v=t.slice(2).map(Number); if(v.every(x=>isFinite(x))) poses[t[1]]=v; }
   }
-  return res;
+  return {pieces:res, poses};
 }
 $("exportBtn").onclick=()=>{ $("out").value=exportText(); $("copyMsg").textContent=""; $("dlg").showModal(); };
 $("closeDlg").onclick=()=>$("dlg").close();
 $("copyBtn").onclick=()=>{ const t=$("out").value; navigator.clipboard.writeText(t).then(()=>{ $("copyMsg").textContent="Copiado."; },()=>{ $("out").select(); $("copyMsg").textContent="Selecciona todo y copia con Ctrl+C."; }); };
 $("openTxt").onclick=()=>$("txtFile").click();
-$("txtFile").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return; const r=importText(await f.text()); const n=Object.keys(r).length;
-  if(!n){ setStatus("Ese archivo no tiene piezas de WAP.","err"); return; } P={...P,...r}; changed(true); setStatus("Abrí "+n+" piezas de "+f.name+".","ok"); };
+$("txtFile").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return; const r=importText(await f.text()); const n=Object.keys(r.pieces).length, np=Object.keys(r.poses).length;
+  if(!n&&!np){ setStatus("Ese archivo no tiene piezas ni poses de WAP.","err"); return; } P={...P,...r.pieces}; Q={...Q,...r.poses}; changed(true); refreshPoses(); setStatus("Abrí "+n+" piezas y "+np+" poses de "+f.name+".","ok"); };
 
 /* ---------- vista previa ---------- */
 const pv=$("pv"), px=pv.getContext("2d"); let animI=0, t0=performance.now(), playing=true;
@@ -607,14 +700,80 @@ function drawPreview(now){
   const ms=playing?now-t0:frozen; if(playing) frozen=ms; const fr=frameAt(ms);
   px.setTransform(1,0,0,1,0,0); px.fillStyle="#0c1024"; px.fillRect(0,0,pv.width,pv.height);
   const k=10, ox=320, oy=640; px.strokeStyle="#26315f"; px.lineWidth=2; px.beginPath(); px.moveTo(0,oy+1); px.lineTo(pv.width,oy+1); px.stroke();
-  for(const it of BASE.poses[fr]){ const m=it.m; px.setTransform(k*m[0],k*m[1],k*m[2],k*m[3],ox+k*m[4],oy+k*m[5]);
-    drawShapes(px, pieceShapes(it.n), it.ink? "#141414" : $("suit").value);
-    if(it.n===sel){ px.globalAlpha=.9; px.strokeStyle="#ffc94a"; px.lineWidth=.5; const bb=bboxOf(pieceShapes(it.n)); px.strokeRect(bb[0],bb[1],bb[2]-bb[0],bb[3]-bb[1]); px.globalAlpha=1; } }
+  drawCharacter(px, frameParts(fr), k, ox, oy, $("suit").value, 1, mode==="pieces"?sel:null);
   px.setTransform(1,0,0,1,0,0); px.fillStyle="#9aa3cf"; px.font="16px Silkscreen, monospace"; px.fillText(fr.replace(/_/g," ").toUpperCase(),14,28);
   requestAnimationFrame(drawPreview);
 }
 
+/* ---------- poses ---------- */
+let mode="pieces", psel="de_pie_1";
+const pe=$("pe"), pc=pe.getContext("2d"); let pview={k:9,ox:450,oy:520};
+const poseThumbs={};
+function buildPoseList(){
+  const L=$("plist"); L.innerHTML="";
+  for(const n of POSE_NAMES){ const b=document.createElement("button"); b.className="piece"; b.id="po-"+n; b.type="button";
+    const cv=document.createElement("canvas"); cv.width=80; cv.height=60; poseThumbs[n]=cv;
+    const nm=document.createElement("span"); nm.className="nm"; nm.textContent=POSE_LABEL[n]||n;
+    const ch=document.createElement("span"); ch.className="chip new"; ch.textContent="CAMBIADA";
+    b.append(cv,nm,ch); b.onclick=()=>selectPose(n); L.append(b);
+    const o=document.createElement("option"); o.value=n; o.textContent=POSE_LABEL[n]||n; $("copyFrom").append(o); }
+  const N=$("nums"); N.innerHTML="";
+  FIELDS.forEach(([k,lab],i)=>{ const l=document.createElement("label"); l.htmlFor="pv-"+k; l.textContent=lab; const inp=document.createElement("input"); inp.type="number"; inp.step=k==="fx"||k==="fy"||k==="bx"||k==="by"||k==="pel"?"0.5":"1"; inp.id="pv-"+k;
+    inp.oninput=()=>{ const v=parseFloat(inp.value); if(!isFinite(v)) return; const F=poseOf(psel); F[i]=v; Q[psel]=F; poseChanged(false); }; l.append(inp); N.append(l); });
+}
+function isChanged(n){ return !!Q[n] && Q[n].some((v,i)=>Math.abs(v-BASE.poseDefs[n][i])>1e-6); }
+function refreshPoses(){
+  for(const n of POSE_NAMES){ const b=$("po-"+n); if(!b) continue; b.classList.toggle("on", n===psel); b.querySelector(".chip").hidden=!isChanged(n);
+    const ctx=poseThumbs[n].getContext("2d"); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,80,60); drawCharacter(ctx, frameParts(n), 1, 40, 57, $("suit").value); }
+  if(mode!=="poses") return;
+  $("posename").textContent=POSE_LABEL[psel]||psel; $("poseNote").textContent=POSE_NOTE[psel]||""; $("poseReset").disabled=!isChanged(psel);
+  const F=poseOf(psel); FIELDS.forEach(([k],i)=>{ const inp=$("pv-"+k); if(document.activeElement!==inp) inp.value=Math.round(F[i]*10)/10; });
+  drawPoseEditor();
+}
+function prevPoseName(n){ for(const [,seq] of ANIMS){ const i=seq.findIndex(x=>x[0]===n); if(i>=0){ const p=seq[(i-1+seq.length)%seq.length][0]; return p===n?null:p; } } return null; }
+const HANDLES=[["ff","#ffc94a"],["bf","#ffc94a"],["hip","#6ee2b4"],["chest","#ff6f9c"],["aE","#7fc8ff"],["aH","#7fc8ff"],["bE","#b9a7ff"],["bH","#b9a7ff"]];
+function drawPoseEditor(){
+  const {k,ox,oy}=pview; pc.setTransform(1,0,0,1,0,0); pc.fillStyle="#0c1024"; pc.fillRect(0,0,pe.width,pe.height);
+  pc.strokeStyle="#26315f"; pc.lineWidth=1; for(let x=-50;x<=50;x+=5){ pc.beginPath(); pc.moveTo(ox+x*k+.5,0); pc.lineTo(ox+x*k+.5,pe.height); pc.stroke(); } for(let y=-70;y<=10;y+=5){ pc.beginPath(); pc.moveTo(0,oy+y*k+.5); pc.lineTo(pe.width,oy+y*k+.5); pc.stroke(); }
+  pc.strokeStyle="#6ee2b4"; pc.lineWidth=2; pc.beginPath(); pc.moveTo(0,oy); pc.lineTo(pe.width,oy); pc.stroke();
+  const pr=prevPoseName(psel); if(pr){ const prv=pr==="disparo"; drawCharacter(pc, skeleton(poseOf(pr),prv).parts, k, ox, oy, "#9aa3cf", .22); }
+  const sk=skeleton(poseOf(psel), psel==="disparo"); drawCharacter(pc, sk.parts, k, ox, oy, $("suit").value, 1);
+  const J=sk.J; pc.lineWidth=2;
+  for(const [a,b,c] of [["aS","aE","#7fc8ff"],["aE","aH","#7fc8ff"],["bS","bE","#b9a7ff"],["bE","bH","#b9a7ff"],["hip","chest","#ff6f9c"]]){ pc.strokeStyle=c; pc.setLineDash([4,4]); pc.beginPath(); pc.moveTo(ox+J[a][0]*k,oy+J[a][1]*k); pc.lineTo(ox+J[b][0]*k,oy+J[b][1]*k); pc.stroke(); } pc.setLineDash([]);
+  for(const [h,c] of HANDLES){ if(psel==="gancho"&&/^[ab][EH]$/.test(h)) continue; const [x,y]=J[h]; pc.fillStyle=c; pc.strokeStyle="#0c1024"; pc.lineWidth=3; pc.beginPath(); pc.arc(ox+x*k,oy+y*k,hover===h?11:8,0,Math.PI*2); pc.fill(); pc.stroke(); }
+  pc.fillStyle="#9aa3cf"; pc.font="12px Inter, sans-serif"; pc.fillText("suelo", 10, oy-6);
+}
+let pdrag=null, hover=null;
+function pePoint(e){ const r=pe.getBoundingClientRect(), f=pe.width/r.width; return [((e.clientX-r.left)*f-pview.ox)/pview.k, ((e.clientY-r.top)*f-pview.oy)/pview.k]; }
+function hitHandle(p){ const J=skeleton(poseOf(psel),false).J; let best=null, bd=1.6; for(const [h] of HANDLES){ if(psel==="gancho"&&/^[ab][EH]$/.test(h)) continue; const d=Math.hypot(J[h][0]-p[0],J[h][1]-p[1]); if(d<bd){ bd=d; best=h; } } return best; }
+pe.addEventListener("pointerdown",e=>{ const h=hitHandle(pePoint(e)); if(!h) return; pe.setPointerCapture(e.pointerId); pdrag=h; });
+pe.addEventListener("pointermove",e=>{ const p=pePoint(e);
+  if(!pdrag){ const h=hitHandle(p); if(h!==hover){ hover=h; pe.style.cursor=h?"grab":"default"; drawPoseEditor(); } return; }
+  const F=poseOf(psel), sk=skeleton(F,false), J=sk.J, deg=(a,b)=>Math.round(Math.atan2(b[1]-a[1],b[0]-a[0])*180/Math.PI), r1=v=>Math.round(v*2)/2;
+  switch(pdrag){
+    case "ff": F[0]=r1(p[0]); F[1]=r1(p[1]+1); break;
+    case "bf": F[2]=r1(p[0]); F[3]=r1(p[1]); break;
+    case "hip": F[8]=r1(Math.min(-4,p[1])); break;
+    case "chest": F[9]=Math.round(Math.atan2(p[0]-J.hip[0], J.hip[1]-p[1])*180/Math.PI); break;
+    case "aE": F[4]=deg(J.aS,p); break; case "aH": F[5]=deg(J.aE,p); break;
+    case "bE": F[6]=deg(J.bS,p); break; case "bH": F[7]=deg(J.bE,p); break;
+  }
+  Q[psel]=F; poseChanged(false); });
+const endP=()=>{ if(pdrag){ pdrag=null; save(); refreshPoses(); } };
+pe.addEventListener("pointerup",endP); pe.addEventListener("pointercancel",endP);
+function poseChanged(full){ save(); if(full) refreshPoses(); else { drawPoseEditor(); const F=poseOf(psel); FIELDS.forEach(([k],i)=>{ const inp=$("pv-"+k); if(document.activeElement!==inp) inp.value=Math.round(F[i]*10)/10; }); $("poseReset").disabled=!isChanged(psel); clearTimeout(poseChanged.t); poseChanged.t=setTimeout(refreshPoses,120); } }
+function selectPose(n){ psel=n; refreshPoses(); $("pstatus").textContent=""; 
+  // la animación de la derecha muestra la que contiene esta pose
+  const i=ANIMS.findIndex(([,seq])=>seq.some(x=>x[0]===n)); if(i>=0&&i!==animI){ animI=i; $("anim").value=i; t0=performance.now(); } }
+$("poseReset").onclick=()=>{ delete Q[psel]; poseChanged(true); $("pstatus").textContent="Volvió la pose original."; };
+$("copyFrom").onchange=e=>{ const n=e.target.value; e.target.value=""; if(!n||n===psel) return; Q[psel]=poseOf(n); poseChanged(true); $("pstatus").textContent="Copié los valores de "+(POSE_LABEL[n]||n)+"."; };
+function setMode(m){ mode=m; $("tabPieces").setAttribute("aria-selected",m==="pieces"); $("tabPoses").setAttribute("aria-selected",m==="poses");
+  $("list").hidden=m!=="pieces"; $("plist").hidden=m!=="poses"; $("modePieces").hidden=m!=="pieces"; $("modePoses").hidden=m!=="poses";
+  if(m==="poses") refreshPoses(); else render(); }
+$("tabPieces").onclick=()=>setMode("pieces"); $("tabPoses").onclick=()=>setMode("poses");
+
 /* ---------- arranque ---------- */
-load(); buildList(); $("maxp").textContent=MAX_POINTS; select(sel); requestAnimationFrame(drawPreview);
-window.__taller={P:()=>P,select,importFile,exportText,importText,totalPoints};
+load(); buildList(); buildPoseList(); $("maxp").textContent=MAX_POINTS; select(sel); refreshPoses(); requestAnimationFrame(drawPreview);
+$("suit").addEventListener("input",()=>refreshPoses());
+window.__taller={P:()=>P,Q:()=>Q,select,importFile,exportText,importText,totalPoints,skeleton,frameParts,setMode,selectPose,BASE};
 </script>

@@ -9,18 +9,19 @@ import java.util.ArrayList; import java.util.HashMap;
  *   pieza NOMBRE
  *   forma relleno=AARRGGBB contorno=AARRGGBB grosor=0.75 parimpar=0 traje=1
  *   p x y x y x y ...        (un contorno cerrado de la forma anterior)
+ *   pose NOMBRE fx fy bx by a1 a2 b1 b2 pel lean   (una pose de las animaciones; ver RobotArt.POSE_NAMES)
  */
 public final class Pieces {
     static final class Sh { float[][] polys; int fill, stroke; float sw; boolean eo, suit; }
     static final HashMap<String, Sh[]> map = new HashMap<>();
     /** Límite de puntos: un archivo más pesado se ignora para no hacer lento el juego (sobre todo en línea). */
     public static final int MAX_POINTS = 6000;
-    public static int points, pieces; public static String error;
+    public static int points, pieces, poses; public static String error;
 
-    public static void clear() { map.clear(); points = 0; pieces = 0; error = null; }
+    public static void clear() { map.clear(); points = 0; pieces = 0; poses = 0; error = null; RobotArt.resetPoses(); }
     public static void load(String text) {
         clear(); if (text == null) return;
-        HashMap<String, ArrayList<Sh>> m = new HashMap<>(); ArrayList<Sh> cur = null; Sh sh = null; ArrayList<float[]> ps = new ArrayList<>(); int pts = 0, line = 0;
+        HashMap<String, float[]> pz = new HashMap<>(); HashMap<String, ArrayList<Sh>> m = new HashMap<>(); ArrayList<Sh> cur = null; Sh sh = null; ArrayList<float[]> ps = new ArrayList<>(); int pts = 0, line = 0;
         try {
             for (String raw : text.split("\n")) {
                 line++; String l = raw.trim(); if (l.isEmpty() || l.startsWith("#")) continue;
@@ -44,6 +45,10 @@ public final class Pieces {
                         if (sh == null) throw new IllegalArgumentException("contorno sin forma");
                         float[] p = new float[t.length - 1]; for (int i = 1; i < t.length; i++) p[i - 1] = Float.parseFloat(t[i]);
                         if (p.length >= 4 && p.length % 2 == 0) { ps.add(p); pts += p.length / 2; } break; }
+                    case "pose": {
+                        if (t.length != 12 || RobotArt.poseValues(t[1]) == null) throw new IllegalArgumentException("pose mal escrita");
+                        float[] f = new float[10]; for (int i = 0; i < 10; i++) { f[i] = Float.parseFloat(t[i + 2]); if (Float.isNaN(f[i]) || Math.abs(f[i]) > 1000) throw new IllegalArgumentException("número fuera de rango"); }
+                        pz.put(t[1], f); break; }
                     default:
                 }
             }
@@ -51,7 +56,8 @@ public final class Pieces {
         } catch (RuntimeException e) { error = "línea " + line + ": " + e.getMessage(); return; }
         if (pts > MAX_POINTS) { error = "demasiados puntos (" + pts + ", máximo " + MAX_POINTS + ")"; return; }
         for (java.util.Map.Entry<String, ArrayList<Sh>> e : m.entrySet()) { ArrayList<Sh> a = e.getValue(); a.removeIf(x -> x.polys == null || x.polys.length == 0); if (!a.isEmpty()) map.put(e.getKey(), a.toArray(new Sh[0])); }
-        points = pts; pieces = map.size();
+        for (java.util.Map.Entry<String, float[]> e : pz.entrySet()) RobotArt.setPose(e.getKey(), e.getValue());
+        points = pts; pieces = map.size(); poses = pz.size();
     }
     private static void close(Sh sh, ArrayList<float[]> ps) { if (sh != null && sh.polys == null) sh.polys = ps.toArray(new float[0][]); }
     /** Dibuja la pieza del usuario; false si no hay, para usar la de siempre. */

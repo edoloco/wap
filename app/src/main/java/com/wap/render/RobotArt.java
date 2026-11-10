@@ -98,6 +98,21 @@ public final class RobotArt {
     static final float[] WALL_F = {7,-10,5,-4,-8,-8,160,110,-23.5f,-7}, HOOK_F = {6,-6,-5,-2,-60,-60,120,60,-24,4};
     /** Tras el doble salto, el robot se estira: piernas abajo y brazos arriba. */
     static final float[] STRETCH_F = {2,-5,-1,-4.5f, -96,-92,-84,-88,-25,0};
+    /** Poses que se pueden cambiar desde personaje.txt (líneas "pose NOMBRE fx fy bx by a1 a2 b1 b2 pel lean"). */
+    public static final String[] POSE_NAMES = {"de_pie_1", "de_pie_2", "correr_1", "correr_2", "correr_3", "correr_4", "preparar_1", "preparar_2", "disparo",
+        "salto_subir", "salto_caer", "barrida_1", "barrida_2", "pared", "gancho", "estirar"};
+    private static float[][] poseArrays() { return new float[][]{IDLE_A, IDLE_B, RUN_F[0], RUN_F[1], RUN_F[2], RUN_F[3], MID_F, MID2_F, STANCE_F, UP_F, DOWN_F, SLIDE_A, SLIDE_B, WALL_F, HOOK_F, STRETCH_F}; }
+    private static final float[][] POSE_DEFAULTS; static { float[][] a = poseArrays(); POSE_DEFAULTS = new float[a.length][]; for (int i = 0; i < a.length; i++) POSE_DEFAULTS[i] = a[i].clone(); }
+    /** Los 10 números de una pose (copia), o null si no existe. */
+    public static float[] poseValues(String n) { for (int i = 0; i < POSE_NAMES.length; i++) if (POSE_NAMES[i].equals(n)) return poseArrays()[i].clone(); return null; }
+    /** Cambia una pose; devuelve false si el nombre no existe o no son 10 números. */
+    public static boolean setPose(String n, float[] f) {
+        if (f == null || f.length != 10) return false;
+        for (int i = 0; i < POSE_NAMES.length; i++) if (POSE_NAMES[i].equals(n)) { System.arraycopy(f, 0, poseArrays()[i], 0, 10); return true; }
+        return false;
+    }
+    /** Vuelve todas las poses a las de siempre. */
+    public static void resetPoses() { float[][] a = poseArrays(); for (int i = 0; i < a.length; i++) System.arraycopy(POSE_DEFAULTS[i], 0, a[i], 0, 10); }
     private static float ground(Terrain t, int x, int y) {
         for (int k = -11; k < 13; k++) if (t.solid(x, y + k)) return k;
         return 0;
