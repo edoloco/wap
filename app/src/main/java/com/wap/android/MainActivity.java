@@ -39,6 +39,11 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
                 });
             }
         };
+        // piezas del personaje hechas en el editor de piezas (assets/personaje.txt); si no está, el personaje de siempre
+        try (java.io.InputStream in = getAssets().open("personaje.txt")) {
+            com.wap.render.Pieces.load(new String(readAll(in), java.nio.charset.StandardCharsets.UTF_8));
+            if (com.wap.render.Pieces.error != null) android.util.Log.w("WAP", "personaje.txt: " + com.wap.render.Pieces.error);
+        } catch (java.io.IOException e) { /* sin archivo: personaje de siempre */ }
         app.files = new DiskFiles(new java.io.File(getFilesDir(), "niveles"));
         app.up = new AppUpdater(this); ((AppUpdater) app.up).check();
         view = new GameView(this, app); setContentView(view); view.requestFocus();
@@ -103,5 +108,9 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
         if (hy < -T || y < -T) m |= Input.UP; if (hy > T || y > T) m |= Input.DOWN;
         if (m != 0 && app.pad.visible) synchronized (app) { app.pad.visible = false; app.padSeen = true; }
         axisMask = m; push(); return true;
+    }
+    static byte[] readAll(java.io.InputStream in) throws java.io.IOException {
+        java.io.ByteArrayOutputStream o = new java.io.ByteArrayOutputStream(); byte[] b = new byte[8192]; int n;
+        while ((n = in.read(b)) > 0) o.write(b, 0, n); return o.toByteArray();
     }
 }

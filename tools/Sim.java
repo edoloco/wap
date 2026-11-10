@@ -204,5 +204,16 @@ public class Sim {
             if(app.screen!=App.PLAY)break;if(i==700){for(int q=0;q<14;q++){app.keys=Input.X|Input.UP;app.tick();}app.draw(g);ImageIO.write(b,"png",new File(out,"3b_mira.png"));}if(i>120&&i%(190)==0&&app.w.robots[0].alive()){app.draw(g);ImageIO.write(b,"png",new File(out,"j_"+(s++)+".png"));}}
     }
     static void Editor_test(App q){q.editorTool(0);q.editorApply(300,300);q.editorApply(310,305);q.editorTool(14);q.editorApply(500,640);q.editorTool(9);q.editorApply(700,200);}
-    public static void main(String[] a)throws Exception{fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void piezas(String out)throws Exception{
+        RobotArt.View v=RobotArt.poster();BufferedImage[] im=new BufferedImage[2];
+        for(int k=0;k<2;k++){if(k==1)Pieces.load("# prueba\npieza pecho\nforma relleno=FF5F574E contorno=FF000000 grosor=0.75 traje=1\np -6 -6 6 -6 6 6 -6 6\npieza cabeza\nforma relleno=FFFFD040 contorno=FF000000 grosor=0.5\np -6 -14 6 -14 0 -2\n");
+          im[k]=new BufferedImage(400,500,BufferedImage.TYPE_INT_RGB);J g=new J(im[k]);g.clear(0xFFC7D2E0);g.save();g.translate(200,470);g.scale(8,8);RobotArt.drawPose(g,v,(1<<Robot.PIECES)-1,0xFF2050E0,0);g.restore();}
+        check(Pieces.pieces==2&&Pieces.error==null,"personaje.txt: se leen las piezas ("+Pieces.pieces+", "+Pieces.points+" puntos)");
+        int blue=0,yel=0;for(int y=0;y<500;y++)for(int x=0;x<400;x++){int c=im[1].getRGB(x,y)&0xFFFFFF;if(c==0x2050E0)blue++;if(c==0xFFD040)yel++;}
+        check(yel>500,"la pieza nueva se dibuja con su color ("+yel+")");check(blue>500,"traje=1 toma el color del jugador ("+blue+")");
+        BufferedImage both=new BufferedImage(800,500,BufferedImage.TYPE_INT_RGB);both.getGraphics().drawImage(im[0],0,0,null);both.getGraphics().drawImage(im[1],400,0,null);ImageIO.write(both,"png",new File(out,"piezas_personaje_txt.png"));
+        StringBuilder big=new StringBuilder("pieza pecho\nforma relleno=FF000000\n");for(int i=0;i<4000;i++)big.append("p 0 0 1 0 1 1\n");Pieces.load(big.toString());
+        check(Pieces.error!=null&&Pieces.pieces==0,"un personaje.txt demasiado pesado se ignora ("+Pieces.error+")");
+        Pieces.load("pieza pecho\np 1 2\n");check(Pieces.error!=null,"un archivo mal escrito avisa el error ("+Pieces.error+")");Pieces.clear();}
+    public static void main(String[] a)throws Exception{piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }
