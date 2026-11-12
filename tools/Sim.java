@@ -234,6 +234,11 @@ public class Sim {
         Wpn.load("arma BAZOOKA dano=5\narma PISTOLA dano=3\n");check(Wpn.error!=null&&bz.dmg==d0&&Wpn.signature==0,"un armas.txt con errores se ignora entero ("+Wpn.error+")");
         Wpn.load("arma BAZOOKA cargador=-50 velocidad=999\n");check(bz.clip==1&&bz.speed==60,"los valores se limitan a rangos seguros");
         StringBuilder all=new StringBuilder();for(Wpn x:Wpn.ALL)all.append("quitar ").append(x.name.replace(' ','_')).append('\n');Wpn.load(all.toString());check(Wpn.error!=null,"no se pueden quitar todas las armas");
-        Wpn.reset();check(bz.dmg==d0&&bz.label.equals("BAZOOKA")&&Wpn.enabled().length==Wpn.ALL.length&&World.rules()==World.RULES,"sin armas.txt, todo vuelve a como era");}
+        int n0=Wpn.ALL.length;Wpn.load("arma SUPER_COHETE dano=70\nnueva SUPER_COHETE BAZOOKA\nnombre SUPER_COHETE SUPER COHETE\n");Wpn sc=Wpn.ALL[Wpn.index("SUPER COHETE")];
+        check(Wpn.error==null&&Wpn.ALL.length==n0+1&&sc.dmg==70&&sc.accel==bz.accel&&sc.smoke&&sc.base.equals("BAZOOKA")&&bz.dmg==d0,"armas.txt crea un arma nueva copiando otra ("+Wpn.error+")");
+        {World w=flat();Robot r=w.robots[0];for(int i=0;i<Robot.SLOTS;i++){r.loadout[i]=sc;r.ammo[i]=3;}w.robots[1].px=r.px+120;float hp=w.robots[1].hp;run(w,0,1);run(w,Input.A,1);run(w,0,90);check(w.robots[1].hp<hp-30,"el arma nueva funciona en la partida");}
+        Wpn.load("nueva BAZOOKA UZI\n");check(Wpn.error!=null&&Wpn.ALL.length==n0,"no se puede crear un arma con un nombre que ya existe");
+        Wpn.load("nueva X PISTOLA\n");check(Wpn.error!=null,"la base del arma nueva debe existir");
+        Wpn.reset();check(bz.dmg==d0&&bz.label.equals("BAZOOKA")&&Wpn.enabled().length==Wpn.ALL.length&&World.rules()==World.RULES,"sin armas.txt, todo vuelve a como era");Wpn.load("nueva OTRA UZI\n");Wpn.reset();check(Wpn.ALL.length==n0,"al volver a lo de siempre se quitan las armas creadas");}
     public static void main(String[] a)throws Exception{armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

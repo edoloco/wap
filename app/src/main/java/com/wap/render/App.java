@@ -421,7 +421,7 @@ public final class App {
     void sounds() {
         for (Fx f : w.fx) switch (f.type) {
             case Fx.EXPLODE: au.play(f.a > 50 ? Audio.BIG : Audio.BOOM); break;
-            case Fx.FLASH: { String n = Wpn.ALL[(int) f.b].name; au.play(n.endsWith("SHOTGUN") ? Audio.BLAST : Audio.SHOT); break; }
+            case Fx.FLASH: { String n = Wpn.ALL[(int) f.b].base; au.play(n.endsWith("SHOTGUN") ? Audio.BLAST : Audio.SHOT); break; }
             case Fx.ARMOR: au.play(Audio.ARMOR); break;
             case Fx.HIT: au.play(Audio.HURT); break;
             case Fx.STOMP: case Fx.SLAM: au.play(Audio.BOOM); break;
@@ -767,7 +767,7 @@ public final class App {
             float y = 4, h = 27, cx = x + i * cw; Wpn wp = me.loadout[i];
             box(g, cx + 1, y, cw - 2, h, 0xE61B1F4A, BLUE, DEEP);
             combo(g, i, cx + 4, y + 6, 8, GOLD);
-            int fit = Math.max(3, (int) ((cw - 6) / 6)); String nm = wp.name;
+            int fit = Math.max(3, (int) ((cw - 6) / 6)); String nm = wp.label;
             if (nm.length() > fit && nm.indexOf(' ') > 0) nm = nm.charAt(0) + "." + nm.substring(nm.indexOf(' ') + 1); // PLASMA CANNON → P.CANNON
             if (nm.length() > fit) nm = nm.substring(0, fit);
             txt(g, nm, cx + 4, y + 17, 8, CREAM, -1);

@@ -4,6 +4,8 @@ public final class Wpn {
     public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12, GREEN = 13, BLASER = 14, LIGHT = 15, RAY = 16, GAS = 17, WIND = 18, GLOVE = 19, PROTON = 20, TRAP = 21;
     /** name: identificador (no cambia; con él se guardan las armas elegidas). label: nombre que se muestra. */
     public String name, desc = "", label;
+    /** Arma original de la que viene (para las creadas en armas.txt; decide, por ejemplo, el sonido). */
+    public String base;
     /** Quitada del juego con armas.txt: no aparece para elegir ni al azar. */
     public boolean off;
     public int charge, clip = 1, delay = 20, reload = 100, parts = 1, fuse = 0, look = BULLET;
@@ -11,7 +13,14 @@ public final class Wpn {
     public int radius, dig;          // radio de explosión (0 = sin explosión) y radio de excavación
     public boolean punch, infinite, lasso, trap, beam, pierce, sticky, burn, impact = true, smoke, fan;
     public Wpn splinter; public int nSplinter, dropEvery, hops, addDirt, trigger, maxBounce, stagger, boomStyle; public float angle;
-    Wpn(String n, String d) { name = n; desc = d; label = n; }
+    Wpn(String n, String d) { name = n; desc = d; label = n; base = n; }
+    /** Copia completa (mismo comportamiento) con otro nombre: así se crean armas nuevas. */
+    Wpn copy(String n) {
+        Wpn c = new Wpn(n, desc);
+        try { for (java.lang.reflect.Field f : Wpn.class.getDeclaredFields()) if (!java.lang.reflect.Modifier.isStatic(f.getModifiers())) { f.setAccessible(true); f.set(c, f.get(this)); } }
+        catch (IllegalAccessException e) { throw new IllegalStateException(e); }
+        c.name = n; c.label = n; c.base = base; c.off = false; return c;
+    }
     Wpn mag(int c, int dl, int rl) { clip = c; delay = dl; reload = rl; return this; }
     Wpn shot(int p, float sp, float v) { parts = p; spread = sp; speed = v; return this; }
     Wpn phys(float g, float b, float dr) { grav = g; bounce = b; drag = dr; return this; }
@@ -24,7 +33,9 @@ public final class Wpn {
     Wpn split(Wpn w, int n) { splinter = w; nSplinter = n; return this; }
 
     private static Wpn sub(String n) { return new Wpn(n, ""); }
-    public static final Wpn[] ALL;
+    /** Todas las armas: las de siempre y, al final, las creadas en armas.txt. */
+    public static Wpn[] ALL;
+    static int BASE_COUNT;
     static {
         Wpn frag = sub("frag").shot(1, 180, 5).phys(.14f, .4f, 1).boom(14, 7, 12, 1.4f).fuse(50).look(GRENADE);
         Wpn shrap = sub("shrap").shot(1, 180, 8).phys(.08f, 0, .98f).hit(6, 5, 1).fuse(34);
@@ -122,6 +133,7 @@ public final class Wpn {
     private static float[][] DEFAULTS; private static String[][] DEF_TEXT;
     private static void snapshot() {
         DEFAULTS = new float[ALL.length][KEYS.length]; DEF_TEXT = new String[ALL.length][];
+        BASE_COUNT = ALL.length;
         for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) DEFAULTS[i][k] = ALL[i].get(KEYS[k]); DEF_TEXT[i] = new String[]{ALL[i].label, ALL[i].desc}; }
     }
     /** Huella de las armas: 0 si son las de siempre. Se compara en línea para que ambos teléfonos jueguen con las mismas. */
@@ -129,6 +141,7 @@ public final class Wpn {
     public static String error;
     /** Vuelve a las armas de siempre. */
     public static void reset() {
+        if (ALL.length != BASE_COUNT) ALL = java.util.Arrays.copyOf(ALL, BASE_COUNT); // quita las armas creadas
         for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) ALL[i].set(KEYS[k], DEFAULTS[i][k]); ALL[i].label = DEF_TEXT[i][0]; ALL[i].desc = DEF_TEXT[i][1]; ALL[i].off = false; }
         signature = 0; error = null;
     }
@@ -138,14 +151,28 @@ public final class Wpn {
      *   nombre NOMBRE texto que se muestra
      *   descripcion NOMBRE texto de ayuda
      *   quitar NOMBRE
+     *   nueva NOMBRE_NUEVO NOMBRE_BASE   (crea un arma copiando otra; después se cambia con las líneas de arriba)
      * Si hay un error, se deja todo como siempre y se avisa en error.
      */
     public static void load(String text) {
         reset(); if (text == null || text.trim().isEmpty()) return;
-        int line = 0; StringBuilder sig = new StringBuilder();
+        int line = 0; StringBuilder sig = new StringBuilder(); String[] lines = text.split("\n");
         try {
-            for (String raw : text.split("\n")) {
-                line++; String l = raw.trim(); if (l.isEmpty() || l.startsWith("#")) continue;
+            // primero se crean las armas nuevas, para que las demás líneas las puedan cambiar
+            java.util.ArrayList<Wpn> extra = new java.util.ArrayList<>(java.util.Arrays.asList(ALL));
+            for (String raw : lines) {
+                line++; String l = raw.trim(); if (!l.startsWith("nueva")) continue;
+                String[] t = l.split("\\s+"); if (t.length != 3) throw new IllegalArgumentException("se esperaba: nueva NOMBRE BASE");
+                String n = t[1].replace('_', ' ').toUpperCase(), b = t[2].replace('_', ' ');
+                if (!n.matches("[A-Z0-9ÁÉÍÓÚÑ ]{1,18}")) throw new IllegalArgumentException("nombre inválido: " + t[1]);
+                Wpn from = null; for (Wpn w : extra) { if (w.name.equals(n)) throw new IllegalArgumentException("ya existe el arma " + n); if (w.name.equals(b)) from = w; }
+                if (from == null) throw new IllegalArgumentException("no existe el arma base " + t[2]);
+                if (extra.size() >= BASE_COUNT + 40) throw new IllegalArgumentException("demasiadas armas nuevas");
+                extra.add(from.copy(n)); sig.append(l).append('\n');
+            }
+            ALL = extra.toArray(new Wpn[0]); line = 0;
+            for (String raw : lines) {
+                line++; String l = raw.trim(); if (l.isEmpty() || l.startsWith("#") || l.startsWith("nueva")) continue;
                 String[] t = l.split("\\s+", 3); if (t.length < 2) throw new IllegalArgumentException("falta el nombre del arma");
                 int i = find(t[1].replace('_', ' ')); if (i < 0) throw new IllegalArgumentException("no existe el arma " + t[1]);
                 Wpn w = ALL[i]; sig.append(l).append('\n');

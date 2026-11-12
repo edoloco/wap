@@ -111,7 +111,7 @@ ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(-
       <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="freeMove"> Arrastrar mueve libre (sin doblar)</label>
       <span class="small" id="jsel">Toca una articulación para elegirla.</span>
     </div>
-    <p class="hint">Arrastra un punto: el codo, la mano, la rodilla y el pie <b>doblan</b> la parte de arriba hacia el dedo; los demás se <b>mueven</b>. Para <b>girar</b>, arrastra la perilla del anillo de la articulación elegida (o usa la rueda del mouse sobre ella). Lo que cuelga de una articulación la sigue. En gris, la pose anterior de la animación.</p>
+    <p class="hint">Arrastra un punto. La <b>mano</b> y el <b>pie</b> van a donde los lleves (el brazo o la pierna se doblan solos). El <b>codo</b> y la <b>rodilla</b> giran la parte de arriba. Los demás se <b>mueven</b>. Para <b>girar</b> cualquier articulación, elígela y arrastra la perilla blanca de su anillo (o usa la rueda del mouse). Lo que cuelga de una articulación la sigue. En gris, la pose anterior.</p>
     <p class="hint" id="poseNote"></p>
     <div class="nums" id="jnums">
       <label for="j-dx">mover x<input type="number" step="0.5" id="j-dx"></label>
@@ -312,13 +312,14 @@ function skeleton(F, open, A){
     let t=Math.atan2(ky-hy,kx-hx)*180/Math.PI, s=Math.atan2(ay-ky,ax-kx)*180/Math.PI, foot=0;
     if(A[mu]||A[ro]||A[pi]){ const tr=aj(mu,2); t+=tr; s+=tr;
       kx=hx+Math.cos(D2R(t))*SK.TH+aj(ro,0); ky=hy+Math.sin(D2R(t))*SK.TH+aj(ro,1); s+=aj(ro,2);
-      ax=kx+Math.cos(D2R(s))*SK.SH+aj(pi,0); ay=ky+Math.sin(D2R(s))*SK.SH+aj(pi,1); foot=aj(pi,2); }
+      ax=kx+Math.cos(D2R(s))*SK.SH+aj(pi,0); ay=ky+Math.sin(D2R(s))*SK.SH+aj(pi,1); foot=aj(pi,2)+tr+aj(ro,2); }
     const ba=(ay<-6.5?Math.max(-10,Math.min(55,(s-90)*-.9+28)):0)+foot;
     out.push({n:"bota",m:mm(TR(ax,ay),RO(D2R(ba)))});
     const MS=mm(TR(kx,ky),RO(D2R(s))), MT=mm(TR(hx,hy),RO(D2R(t)));
     out.push({n:"hueso_canilla",m:MS},{n:"canilla",m:MS},{n:"hueso_muslo",m:MT},{n:"muslo",m:MT},{n:"rodilla",m:MS});
     J[mu]=[hx,hy]; J[ro]=[kx,ky]; J[pi]=[ax,ay]; P[mu]={a:t,child:ro}; P[ro]={a:s,child:pi}; P[pi]={a:ba}; };
-  arm(ffx,ffy,b1+aj("brazo_lejano",2),b2,false,"lejano"); shoulder(ffx,ffy,3);
+  const tRot=aj("torso",2);
+  arm(ffx,ffy,b1+tRot+aj("brazo_lejano",2),b2+tRot+aj("brazo_lejano",2),false,"lejano"); shoulder(ffx,ffy,3);
   leg(px+2,py+1,fx,fy-1,"lejana");
   const M0=mm(mm(TR(ux,uy),RO(ulr)),TR(0,-SK.TORSO));
   const MA=local(M0,"abdomen",0,9.7,ulr), MP=local(M0,"pecho",0,4.8,ulr), MC=mm(local(M0,"cabeza",0,0,ulr),RO(-lr*.8));
@@ -326,7 +327,7 @@ function skeleton(F, open, A){
   leg(px-2,py+1,bx,by,"cercana");
   const MPe=local(mm(TR(px,py),RO(lr)),"pelvis",0,-1,lr);
   out.push({n:"pelvis",m:MPe});
-  arm(nx,ny,a1+aj("brazo_cercano",2),a2,open,"cercano"); shoulder(nx,ny,3.6);
+  arm(nx,ny,a1+tRot+aj("brazo_cercano",2),a2+tRot+aj("brazo_cercano",2),open,"cercano"); shoulder(nx,ny,3.6);
   // dónde se dibuja cada punto en el editor (algunos se separan un poco para que no se tapen)
   J.torso=ap(mm(TR(ux,uy),RO(ulr)),0,-3); J.cabeza=ap(local(M0,"cabeza",0,0,ulr),0,0); J.pecho=ap(MP,0,4.8); J.abdomen=ap(MA,0,9.7); J.pelvis=ap(MPe,0,-1);
   P.torso={a:ulr*180/Math.PI-90}; P.cabeza={a:-90}; P.pecho={a:-90}; P.abdomen={a:-90}; P.pelvis={a:90};
@@ -791,23 +792,41 @@ function drawPoseEditor(){
 }
 let pdrag=null, hover=null;
 function pePoint(e){ const r=pe.getBoundingClientRect(), f=pe.width/r.width; return [((e.clientX-r.left)*f-pview.ox)/pview.k, ((e.clientY-r.top)*f-pview.oy)/pview.k]; }
-function hitHandle(p){ const sk=curSk(); if(jsel){ const kp=knobPos(sk,jsel); if(Math.hypot(kp[0]-p[0],kp[1]-p[1])<1.3) return "@knob"; }
-  let best=null, bd=1.3; for(const j of JOINTS){ const q=sk.J[j], d=Math.hypot(q[0]-p[0],q[1]-p[1]); if(d<bd){ bd=d; best=j; } } return best; }
+function hitHandle(p){ const sk=curSk(); if(jsel){ const kp=knobPos(sk,jsel); if(Math.hypot(kp[0]-p[0],kp[1]-p[1])<1.5) return "@knob"; }
+  let best=null, bd=1.8; for(const j of JOINTS){ const q=sk.J[j], d=Math.hypot(q[0]-p[0],q[1]-p[1]); if(d<bd){ bd=d; best=j; } } return best; }
 const ang=(a,b)=>Math.atan2(b[1]-a[1],b[0]-a[0])*180/Math.PI;
 const wrap=d=>{ while(d>180) d-=360; while(d<-180) d+=360; return d; };
+const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+function addRot(j,d){ const g=getAdj(j); g[2]=Math.round((g[2]+d)*10)/10; setAdj(j,g); }
+/** La mano o el pie siguen al dedo: se doblan el hombro y el codo (o la cadera y la rodilla) para alcanzarlo. */
+function reach(end, T){
+  const mid=PARENT[end], root=PARENT[mid];
+  for(let it=0; it<4; it++){
+    let sk=curSk(); const S=sk.J[root], E=sk.J[mid], H=sk.J[end], L1=dist(S,E), L2=dist(E,H);
+    if(L1<1e-6||L2<1e-6) return;
+    const d=Math.max(Math.abs(L1-L2)+1e-3, Math.min(L1+L2-1e-3, dist(S,T))), base=Math.atan2(T[1]-S[1],T[0]-S[0]);
+    const A=Math.acos(Math.max(-1,Math.min(1,(L1*L1+d*d-L2*L2)/(2*L1*d))));
+    const cr=(E[0]-S[0])*(H[1]-S[1])-(E[1]-S[1])*(H[0]-S[0]); // de qué lado se dobla ahora; se mantiene
+    let best=null; for(const sg of [1,-1]){ const a=base+sg*A, Ex=S[0]+Math.cos(a)*L1, Ey=S[1]+Math.sin(a)*L1, c2=(Ex-S[0])*(T[1]-S[1])-(Ey-S[1])*(T[0]-S[0]); if(best===null||Math.sign(c2)===Math.sign(cr)) { best=a; if(Math.sign(c2)===Math.sign(cr)) break; } }
+    addRot(root, wrap((best-Math.atan2(E[1]-S[1],E[0]-S[0]))*180/Math.PI));
+    sk=curSk(); const E2=sk.J[mid], H2=sk.J[end];
+    addRot(mid, wrap(ang(E2,T)-ang(E2,H2)));
+  }
+}
 pe.addEventListener("pointerdown",e=>{ const p=pePoint(e), h=hitHandle(p); if(!h){ return; } pe.setPointerCapture(e.pointerId); const sk=curSk();
   if(h==="@knob"){ pdrag={kind:"rot", j:jsel, a0:ang(sk.J[jsel],p), g0:getAdj(jsel)}; return; }
-  jsel=h; const par=PARENT[h];
-  if(par && !$("freeMove").checked) pdrag={kind:"aim", j:par, a0:ang(sk.J[par],sk.J[h]), g0:getAdj(par)};
+  jsel=h; const free=$("freeMove").checked;
+  if(!free && /^(mano|pie)_/.test(h)) pdrag={kind:"reach", j:h};
+  else if(!free && PARENT[h]) pdrag={kind:"aim", j:h};
   else pdrag={kind:"move", j:h, p0:p, g0:getAdj(h)};
   refreshJoint(); drawPoseEditor(); });
 pe.addEventListener("pointermove",e=>{ const p=pePoint(e);
   if(!pdrag){ const h=hitHandle(p); if(h!==hover){ hover=h; pe.style.cursor=h?"grab":"default"; drawPoseEditor(); } return; }
-  const g=pdrag.g0.slice(), sk=curSk();
-  if(pdrag.kind==="move"){ g[0]=pdrag.g0[0]+Math.round((p[0]-pdrag.p0[0])*4)/4; g[1]=pdrag.g0[1]+Math.round((p[1]-pdrag.p0[1])*4)/4; }
-  else if(pdrag.kind==="rot"){ g[2]=Math.round(pdrag.g0[2]+wrap(ang(sk.J[pdrag.j],p)-pdrag.a0)); }
-  else { const child=Object.keys(PARENT).find(c=>PARENT[c]===pdrag.j && c===jsel); g[2]=Math.round(pdrag.g0[2]+wrap(ang(sk.J[pdrag.j],p)-pdrag.a0)); }
-  setAdj(pdrag.j,g); poseChanged(false); });
+  if(pdrag.kind==="move"){ const g=pdrag.g0.slice(); g[0]=Math.round((pdrag.g0[0]+p[0]-pdrag.p0[0])*4)/4; g[1]=Math.round((pdrag.g0[1]+p[1]-pdrag.p0[1])*4)/4; setAdj(pdrag.j,g); }
+  else if(pdrag.kind==="rot"){ const sk=curSk(), g=pdrag.g0.slice(); g[2]=Math.round(pdrag.g0[2]+wrap(ang(sk.J[pdrag.j],p)-pdrag.a0)); setAdj(pdrag.j,g); }
+  else if(pdrag.kind==="aim"){ const sk=curSk(), par=PARENT[pdrag.j]; addRot(par, wrap(ang(sk.J[par],p)-ang(sk.J[par],sk.J[pdrag.j]))); }
+  else reach(pdrag.j, p);
+  poseChanged(false); });
 const endP=()=>{ if(pdrag){ pdrag=null; save(); refreshPoses(); } };
 pe.addEventListener("pointerup",endP); pe.addEventListener("pointercancel",endP);
 pe.addEventListener("wheel",e=>{ if(!jsel) return; const p=pePoint(e), q=curSk().J[jsel]; if(Math.hypot(q[0]-p[0],q[1]-p[1])>KNOB+1) return; e.preventDefault();

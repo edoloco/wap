@@ -52,8 +52,13 @@ input[type=text],input[type=number]{background:var(--panel2);color:var(--fg);bor
 .f input[type=range]{width:100%;accent-color:var(--gold)}
 .f .help{font-size:11px;color:var(--dim)}
 .f .orig{font-size:11px;color:var(--dim)}
-.toggle{display:flex;gap:8px;align-items:center;font-size:13px}
-.toggle input{width:18px;height:18px;accent-color:var(--mint)}
+button.danger{background:var(--pink);box-shadow:0 3px 0 #a83a5e;color:var(--navy)}
+button.ok{background:var(--mint);box-shadow:0 3px 0 #2f9c78;color:var(--navy)}
+.newf{display:grid;gap:8px;margin-bottom:12px;padding:10px;border:2px dashed var(--gold);border-radius:4px}
+.newf label{display:grid;gap:3px;font-size:12px;color:var(--dim)}
+select{background:var(--panel2);color:var(--fg);border:2px solid var(--line);border-radius:3px;padding:6px;font:13px var(--ui);width:100%}
+.chip.new{background:var(--gold)}
+.offnote{margin-top:10px;padding:8px 10px;border-radius:3px;background:rgba(255,111,156,.15);color:var(--pink);font-size:13px}
 .stage{background:var(--navy);border-radius:3px;overflow:hidden}
 .stage canvas{display:block;width:100%;height:auto}
 .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
@@ -73,7 +78,7 @@ ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(-
 
 <header>
   <h1>TALLER DE ARMAS</h1>
-  <div class="sub">Cambia los valores, el nombre y la descripción de las armas de WAP, o quítalas del juego. Exporta <b>armas.txt</b> para el juego.</div>
+  <div class="sub">Crea armas nuevas, cambia valores, nombre y descripción, o quita armas del juego. Exporta <b>armas.txt</b> para el juego.</div>
   <button class="sec" id="openTxt">Abrir armas.txt</button>
   <button id="exportBtn">Exportar armas.txt</button>
   <input type="file" id="txtFile" accept=".txt,text/plain" hidden>
@@ -83,6 +88,13 @@ ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(-
   <section class="card" aria-label="Armas">
     <h2>Armas</h2>
     <div class="count" id="count"></div>
+    <button id="newBtn" type="button" style="width:100%;margin-bottom:10px">+ Nueva arma</button>
+    <form id="newForm" hidden class="newf">
+      <label for="newName">Nombre de la nueva arma<input type="text" id="newName" maxlength="18" autocomplete="off" placeholder="SUPER COHETE"></label>
+      <label for="newBase">Copiar de<select id="newBase"></select></label>
+      <div class="row" style="margin-top:4px"><button type="submit">Crear</button><button type="button" class="sec" id="newCancel">Cancelar</button></div>
+      <div class="small" id="newMsg"></div>
+    </form>
     <div class="list" id="list"></div>
   </section>
 
@@ -90,14 +102,16 @@ ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(-
     <div class="top">
       <h2 id="wname" style="margin:0">ARMA</h2>
       <div class="row" style="margin-top:0">
-        <label class="toggle"><input type="checkbox" id="inGame"> En el juego</label>
+        <button type="button" id="offBtn" class="danger">Quitar del juego</button>
         <button class="sec" id="resetBtn">Usar la original</button>
+        <button type="button" class="danger" id="delBtn" hidden>Borrar arma</button>
       </div>
     </div>
     <div class="texts">
       <label for="label">Nombre que se ve<input type="text" id="label" maxlength="20" autocomplete="off"></label>
       <label for="desc">Descripción (se ve al elegir armas)<input type="text" id="desc" maxlength="70" autocomplete="off"></label>
     </div>
+    <div class="offnote" id="offNote" hidden>Esta arma está fuera del juego: no se puede elegir ni les toca a los rivales al azar.</div>
     <p class="note" id="special"></p>
     <div id="groups"></div>
     <div class="status" id="status" role="status"></div>
@@ -162,7 +176,10 @@ const GROUPS = [
   ["Vuelo", ["gravedad","roce","rebote","rebotes","saltos","zigzag","mecha"]],
   ["Golpe", ["dano","explosion","excavar","empuje","retroceso","pedazos","sensor"]],
 ];
-const W = BASE.weapons, byName = Object.fromEntries(W.map((w,i)=>[w.name,i]));
+const BASEW = BASE.weapons; let W = [], byName = {};
+let N = []; // armas creadas: {name, base}
+function rebuild(){ W = BASEW.concat(N.map(n=>{ const b=BASEW.find(x=>x.name===n.base)||BASEW[0]; return {...b, v:{...b.v}, name:n.name, label:n.name, created:true, base:b.name}; })); byName=Object.fromEntries(W.map((w,i)=>[w.name,i])); }
+rebuild();
 // qué valores importan en cada arma (los demás se esconden para no confundir)
 function relevant(w,k){
   if(k==="carga") return w.v.carga>0; if(k==="pedazos") return w.splinter; if(k==="sensor") return w.sticky&&w.v.sensor>0;
@@ -177,10 +194,10 @@ const SPECIAL = {"PROTON RAY":"Rayo continuo: el cargador es cuántos cuadros du
 
 /* estado: E[nombre] = {v:{clave:valor}, label, desc, off} solo con lo cambiado */
 let E = {}, sel = W[0].name;
-function save(){ try{ localStorage.setItem("wap-armas", JSON.stringify(E)); }catch(e){} }
-function load(){ try{ const t=localStorage.getItem("wap-armas"); if(t) E=JSON.parse(t)||{}; }catch(e){ E={}; } }
+function save(){ try{ localStorage.setItem("wap-armas", JSON.stringify({E,N})); }catch(e){} }
+function load(){ try{ const t=localStorage.getItem("wap-armas"); if(t){ const d=JSON.parse(t)||{}; if(d.E||d.N){ E=d.E||{}; N=d.N||[]; } else E=d; } }catch(e){ E={}; N=[]; } rebuild(); }
 function cur(n){ const w=W[byName[n]], e=E[n]||{}; return {w, v:{...w.v,...(e.v||{})}, label:e.label??w.label, desc:e.desc??w.desc, off:!!e.off}; }
-function isChanged(n){ const e=E[n]; if(!e) return false; return e.off || (e.label!=null&&e.label!==W[byName[n]].label) || (e.desc!=null&&e.desc!==W[byName[n]].desc) || Object.keys(e.v||{}).length>0; }
+function isChanged(n){ const e=E[n]; if(W[byName[n]]&&W[byName[n]].created) return true; if(!e) return false; return e.off || (e.label!=null&&e.label!==W[byName[n]].label) || (e.desc!=null&&e.desc!==W[byName[n]].desc) || Object.keys(e.v||{}).length>0; }
 function tidy(n){ const e=E[n]; if(!e) return; const w=W[byName[n]]; for(const k in (e.v||{})) if(Math.abs(e.v[k]-w.v[k])<1e-9) delete e.v[k];
   if(e.label===w.label) delete e.label; if(e.desc===w.desc) delete e.desc; if(!e.off) delete e.off; if(e.v&&!Object.keys(e.v).length) delete e.v; if(!Object.keys(e).length) delete E[n]; }
 function edit(n){ return E[n]=E[n]||{}; }
@@ -194,8 +211,8 @@ function buildList(){
 function refreshList(){
   let on=0; for(const w of W){ const c=cur(w.name), b=$("w-"+w.name.replace(/ /g,"_")); if(!c.off) on++;
     b.classList.toggle("on", w.name===sel); b.classList.toggle("off", c.off); b.querySelector(".nm").textContent=c.label;
-    const ch=b.querySelector(".chip"); ch.hidden=!isChanged(w.name); ch.textContent=c.off?"FUERA":"CAMBIADA"; ch.classList.toggle("out", c.off); }
-  $("count").textContent=on+" de "+W.length+" armas en el juego";
+    const ch=b.querySelector(".chip"); ch.hidden=!isChanged(w.name); ch.textContent=c.off?"FUERA":w.created?"NUEVA":"CAMBIADA"; ch.classList.toggle("out", c.off); ch.classList.toggle("new", !c.off&&!!w.created); }
+  $("count").textContent=on+" de "+W.length+" armas en el juego"+(N.length?" ("+N.length+" nuevas)":"");
 }
 
 /* ficha */
@@ -203,7 +220,7 @@ function fmt(k,v){ return INT.has(k)? String(Math.round(v)) : String(Math.round(
 function step(k){ if(INT.has(k)) return 1; const [a,b]=LIM[k]; return (b-a)<=3?0.01:0.1; }
 function buildForm(){
   const c=cur(sel), G=$("groups"); G.innerHTML="";
-  $("wname").textContent=c.w.name; $("inGame").checked=!c.off; $("label").value=c.label; $("desc").value=c.desc; $("special").textContent=SPECIAL[c.w.name]||""; $("special").hidden=!SPECIAL[c.w.name];
+  $("wname").textContent=c.w.name+(c.w.created?" (nueva, copia de "+c.w.base+")":""); $("label").value=c.label; $("desc").value=c.desc; $("special").textContent=SPECIAL[c.w.name]||""; $("special").hidden=!SPECIAL[c.w.name];
   for(const [title,keys] of GROUPS){ const ks=keys.filter(k=>relevant(c.w,k)); if(!ks.length) continue;
     const h=document.createElement("h3"); h.textContent=title.toUpperCase(); G.append(h); const box=document.createElement("div"); box.className="fields"; G.append(box);
     for(const k of ks){ const [lab,help]=INFO[k], [lo,hi]=LIM[k], f=document.createElement("div"); f.className="f"; f.id="f-"+k;
@@ -216,13 +233,29 @@ function buildForm(){
       r.oninput=()=>set(parseFloat(r.value)); nb.onchange=()=>{ const v=parseFloat(nb.value); if(isFinite(v)) set(v); };
       refreshField(k); }
   }
-  $("resetBtn").disabled=!isChanged(sel);
+  refreshTop();
 }
 function refreshField(k){ const c=cur(sel), v=c.v[k], o=c.w.v[k], f=$("f-"+k); if(!f) return;
   $("r-"+k).value=v; if(document.activeElement!==$("n-"+k)) $("n-"+k).value=fmt(k,v); f.querySelector(".lab b").textContent=fmt(k,v);
-  f.classList.toggle("changed", Math.abs(v-o)>1e-9); f.querySelector(".orig").textContent=Math.abs(v-o)>1e-9?"Original: "+fmt(k,o):""; $("resetBtn").disabled=!isChanged(sel); }
-$("inGame").onchange=()=>{ const on=$("inGame").checked; if(!on){ const others=W.filter(w=>w.name!==sel&&!cur(w.name).off).length; if(!others){ $("inGame").checked=true; setStatus("Tiene que quedar al menos un arma en el juego.","err"); return; } }
-  edit(sel).off=!on; tidy(sel); save(); refreshList(); $("resetBtn").disabled=!isChanged(sel); setStatus(on?"El arma vuelve al juego.":"El arma ya no se podrá elegir (ni le tocará a los rivales al azar).", ""); };
+  f.classList.toggle("changed", Math.abs(v-o)>1e-9); f.querySelector(".orig").textContent=Math.abs(v-o)>1e-9?(c.w.created?"En "+c.w.base+": ":"Original: ")+fmt(k,o):""; refreshTop(); }
+function refreshTop(){ const c=cur(sel); $("offBtn").textContent=c.off?"Volver a ponerla":"Quitar del juego"; $("offBtn").className=c.off?"ok":"danger"; $("offNote").hidden=!c.off;
+  $("delBtn").hidden=!c.w.created; $("resetBtn").hidden=!!c.w.created; $("resetBtn").disabled=!isChanged(sel); }
+$("offBtn").onclick=()=>{ const on=cur(sel).off; if(!on){ const others=W.filter(w=>w.name!==sel&&!cur(w.name).off).length; if(!others){ setStatus("Tiene que quedar al menos un arma en el juego.","err"); return; } }
+  edit(sel).off=!on; tidy(sel); save(); refreshList(); refreshTop(); setStatus(on?"El arma vuelve al juego.":"Quitada: ya no se podrá elegir ni les tocará a los rivales al azar.", ""); };
+$("delBtn").onclick=()=>{ if($("delBtn").dataset.sure!=="1"){ $("delBtn").dataset.sure="1"; $("delBtn").textContent="¿Seguro? Toca otra vez"; setTimeout(()=>{ $("delBtn").dataset.sure=""; $("delBtn").textContent="Borrar arma"; },3000); return; }
+  const n=sel; N=N.filter(x=>x.name!==n); delete E[n]; for(const x of N) if(x.base===n) x.base=BASEW[0].name; rebuild(); save(); $("delBtn").dataset.sure=""; $("delBtn").textContent="Borrar arma"; buildList(); select(W[0].name); setStatus("Borré el arma "+n+".","ok"); };
+// nueva arma
+function fillBases(){ const s=$("newBase"); s.innerHTML=""; for(const w of W){ const o=document.createElement("option"); o.value=w.name; o.textContent=cur(w.name).label+(w.created?" (nueva)":""); s.append(o); } }
+$("newBtn").onclick=()=>{ fillBases(); $("newBase").value=sel; $("newName").value=""; $("newMsg").textContent=""; $("newForm").hidden=false; $("newBtn").hidden=true; $("newName").focus(); };
+$("newCancel").onclick=()=>{ $("newForm").hidden=true; $("newBtn").hidden=false; };
+$("newForm").onsubmit=e=>{ e.preventDefault(); const n=$("newName").value.toUpperCase().replace(/\s+/g," ").trim();
+  if(!/^[A-Z0-9ÁÉÍÓÚÑ ]{1,18}$/.test(n)){ $("newMsg").textContent="Usa letras, números y espacios (hasta 18)."; return; }
+  if(W.some(w=>w.name===n)){ $("newMsg").textContent="Ya hay un arma con ese nombre."; return; }
+  const from=$("newBase").value, src=W[byName[from]];
+  // si copia de otra arma cambiada o nueva, se copian también sus cambios
+  N.push({name:n, base:src.created?src.base:src.name}); rebuild(); const fc=cur(from), bw=W[byName[n]];
+  const v={}; for(const k in fc.v) if(Math.abs(fc.v[k]-bw.v[k])>1e-9) v[k]=fc.v[k]; E[n]={desc:fc.desc}; if(Object.keys(v).length) E[n].v=v; tidy(n);
+  save(); $("newForm").hidden=true; $("newBtn").hidden=false; buildList(); select(n); setStatus("Creé "+n+" copiando "+fc.label+". Cámbiale lo que quieras.","ok"); };
 $("label").oninput=()=>{ edit(sel).label=$("label").value.toUpperCase().replace(/\s+/g," ").trimStart(); tidy(sel); save(); refreshList(); };
 $("desc").oninput=()=>{ edit(sel).desc=$("desc").value.replace(/\s+/g," "); tidy(sel); save(); refreshList(); };
 $("resetBtn").onclick=()=>{ delete E[sel]; save(); buildForm(); refreshList(); drawRange(); stats(); setStatus("Volvió el arma original.",""); };
@@ -296,6 +329,7 @@ const id=n=>n.replace(/ /g,"_");
 function f4(v){ let s=(Math.round(v*10000)/10000).toString(); return s; }
 function exportText(){
   const L=["# armas.txt de WAP, hecho con el Taller de armas","# arma NOMBRE clave=valor ... | nombre NOMBRE texto | descripcion NOMBRE texto | quitar NOMBRE (en los nombres, espacios como _)",""];
+  if(N.length){ for(const n of N) L.push("nueva "+id(n.name)+" "+id(n.base)); L.push(""); }
   for(const w of W){ const e=E[w.name]; if(!e) continue;
     if(e.v&&Object.keys(e.v).length) L.push("arma "+id(w.name)+" "+Object.keys(e.v).map(k=>k+"="+f4(e.v[k])).join(" "));
     if(e.label!=null&&e.label.trim()&&e.label!==w.label) L.push("nombre "+id(w.name)+" "+e.label.trim());
@@ -304,20 +338,22 @@ function exportText(){
   return L.join("\n")+"\n";
 }
 function importText(text){
-  const res={}; let bad=0;
-  for(const raw of text.split(/\r?\n/)){ const l=raw.trim(); if(!l||l[0]==="#") continue; const m=l.match(/^(\S+)\s+(\S+)\s*(.*)$/); if(!m){ bad++; continue; }
-    const n=m[2].replace(/_/g," "); if(!(n in byName)){ bad++; continue; } const e=res[n]=res[n]||{};
+  const res={}, news=[]; let bad=0;
+  for(const raw of text.split(/\r?\n/)){ const m=raw.trim().match(/^nueva\s+(\S+)\s+(\S+)$/); if(m){ const n=m[1].replace(/_/g," ").toUpperCase(), b=m[2].replace(/_/g," "); if(BASEW.some(w=>w.name===b)&&!BASEW.some(w=>w.name===n)) news.push({name:n,base:b}); else bad++; } }
+  const known=new Set([...BASEW.map(w=>w.name),...news.map(x=>x.name)]);
+  for(const raw of text.split(/\r?\n/)){ const l=raw.trim(); if(!l||l[0]==="#"||l.startsWith("nueva")) continue; const m=l.match(/^(\S+)\s+(\S+)\s*(.*)$/); if(!m){ bad++; continue; }
+    const n=m[2].replace(/_/g," "); if(!known.has(n)){ bad++; continue; } const e=res[n]=res[n]||{};
     if(m[1]==="arma"){ e.v=e.v||{}; for(const kv of m[3].split(/\s+/)){ const [k,v]=kv.split("="); if(k in LIM&&isFinite(+v)) e.v[k]=+v; else if(kv) bad++; } }
     else if(m[1]==="nombre") e.label=m[3].toUpperCase(); else if(m[1]==="descripcion") e.desc=m[3]; else if(m[1]==="quitar") e.off=true; else bad++; }
-  return {res,bad};
+  return {res,bad,news};
 }
 $("exportBtn").onclick=()=>{ $("out").value=exportText(); $("copyMsg").textContent=""; $("dlg").showModal(); };
 $("closeDlg").onclick=()=>$("dlg").close();
 $("copyBtn").onclick=()=>{ navigator.clipboard.writeText($("out").value).then(()=>{ $("copyMsg").textContent="Copiado."; },()=>{ $("out").select(); $("copyMsg").textContent="Selecciona todo y copia con Ctrl+C."; }); };
 $("openTxt").onclick=()=>$("txtFile").click();
-$("txtFile").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return; const {res,bad}=importText(await f.text()); const n=Object.keys(res).length;
-  if(!n){ setStatus("Ese archivo no tiene armas de WAP.","err"); return; } E=res; for(const k in E) tidy(k); save(); select(sel); setStatus("Abrí "+n+" armas de "+f.name+(bad?" ("+bad+" líneas no se entendieron)":"")+".", bad?"err":"ok"); };
+$("txtFile").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return; const {res,bad,news}=importText(await f.text()); const n=Object.keys(res).length+news.length;
+  if(!n){ setStatus("Ese archivo no tiene armas de WAP.","err"); return; } N=news; rebuild(); E=res; for(const k in E) tidy(k); save(); buildList(); select(W[0].name); setStatus("Abrí "+n+" armas de "+f.name+(bad?" ("+bad+" líneas no se entendieron)":"")+".", bad?"err":"ok"); };
 
 load(); buildList(); select(sel);
-window.__armas={E:()=>E,select,exportText,importText,simulate,cur};
+window.__armas={E:()=>E,N:()=>N,select,exportText,importText,simulate,cur};
 </script>

@@ -236,7 +236,7 @@ public final class RobotArt {
             kx = hx + (float) Math.cos(Math.toRadians(t)) * TH + aj(J, jb + 1, 0); ky = hy + (float) Math.sin(Math.toRadians(t)) * TH + aj(J, jb + 1, 1);
             s += aj(J, jb + 1, 2);
             ax = kx + (float) Math.cos(Math.toRadians(s)) * SH + aj(J, jb + 2, 0); ay = ky + (float) Math.sin(Math.toRadians(s)) * SH + aj(J, jb + 2, 1);
-            foot = aj(J, jb + 2, 2);
+            foot = aj(J, jb + 2, 2) + tr + aj(J, jb + 1, 2); // el pie sigue los giros del muslo y la rodilla
         }
         g.layer("bota_" + side); bone(g, ax, ay, (ay < -6.5f ? Math.max(-10, Math.min(55, (s - 90) * -.9f + 28)) : 0) + foot); part(g, "bota", c, false); g.restore();
         g.layer("hueso_canilla_" + side); bone(g, kx, ky, s); part(g, "hueso_canilla", c, false); if (sn) { g.layer("canilla_" + side); part(g, "canilla", c, false); } g.restore();
@@ -288,7 +288,8 @@ public final class RobotArt {
         float ux = px + aj(J, 0, 0), uy = py + aj(J, 0, 1), ulr = lr + (float) Math.toRadians(aj(J, 0, 2)), sn = (float) Math.sin(ulr), cs = (float) Math.cos(ulr);
         float cx = ux + sn * SHOULDER, cy = uy - cs * SHOULDER, sp = e * 16;
         float ffx = cx + cs * 4.6f + aj(J, 8, 0), ffy = cy + sn * 4.6f + 1 + aj(J, 8, 1), nx = cx - cs * 4.6f + aj(J, 5, 0), ny = cy - sn * 4.6f + 1 + aj(J, 5, 1);
-        arm(g, ffx, ffy, v.b1 + aj(J, 8, 2), v.b2, (ar >> Robot.BR_F & 1) != 0 && on, false, false, "lejano", c, J, 8);
+        float tRot = aj(J, 0, 2); // girar el torso o el hombro gira el brazo entero (el antebrazo y la mano lo siguen)
+        arm(g, ffx, ffy, v.b1 + tRot + aj(J, 8, 2), v.b2 + tRot + aj(J, 8, 2), (ar >> Robot.BR_F & 1) != 0 && on, false, false, "lejano", c, J, 8);
         if ((ar >> Robot.SH_F & 1) != 0) { g.layer("hombro_lejano"); shoulder(g, ffx + sp * .8f, ffy, 3, c); g.endLayer(); }
         leg(g, px + 2, py + 1, v.fx, v.fy - 1 + v.gFront, (ar >> Robot.TH_F & 1) != 0 && on, (ar >> Robot.SN_F & 1) != 0 && on, c, "lejana", J, 14);
         g.save(); g.translate(ux, uy); g.rotate(ulr); g.translate(0, -TORSO_LEN);
@@ -301,7 +302,7 @@ public final class RobotArt {
         g.endLayer(); g.restore();
         leg(g, px - 2, py + 1, v.bx, v.by + v.gBack, (ar >> Robot.TH_B & 1) != 0 && on, (ar >> Robot.SN_B & 1) != 0 && on, c, "cercana", J, 11);
         if ((ar >> Robot.HIP & 1) != 0) { g.layer("pelvis"); g.save(); g.translate(px, py); g.rotate(lr); g.translate(0, sp * .5f); local(g, J, 4, 0, -1, lr); part(g, "pelvis", c, false); g.restore(); g.endLayer(); }
-        arm(g, nx, ny, v.a1 + aj(J, 5, 2), v.a2, (ar >> Robot.BR_B & 1) != 0 && on, v.open, glow, "cercano", c, J, 5);
+        arm(g, nx, ny, v.a1 + tRot + aj(J, 5, 2), v.a2 + tRot + aj(J, 5, 2), (ar >> Robot.BR_B & 1) != 0 && on, v.open, glow, "cercano", c, J, 5);
         if ((ar >> Robot.SH_B & 1) != 0) { g.layer("hombro_cercano"); shoulder(g, nx - sp * .8f, ny, 3.6f, c); g.endLayer(); }
         if (exportAll && v.open) { float d = UA + FA + 5; g.layer("punto_disparo"); g.circle(nx + (float) Math.cos(Math.toRadians(v.a1)) * d, ny + (float) Math.sin(Math.toRadians(v.a1)) * d, 1.2f, 0xFF00E5FF, 0, 0); g.endLayer(); }
         if (v.shotT > 0 && v.open) { float d = UA + FA + 7; muzzle(g, nx + (float) Math.cos(Math.toRadians(v.a1)) * d, ny + (float) Math.sin(Math.toRadians(v.a1)) * d, 2 - (v.shotT - 1) / 4); }
