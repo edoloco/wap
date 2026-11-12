@@ -39,6 +39,11 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
                 });
             }
         };
+        // armas cambiadas en el Taller de armas (assets/armas.txt); si no está, las de siempre
+        try (java.io.InputStream in = getAssets().open("armas.txt")) {
+            com.wap.core.Wpn.load(new String(readAll(in), java.nio.charset.StandardCharsets.UTF_8));
+            if (com.wap.core.Wpn.error != null) android.util.Log.w("WAP", "armas.txt: " + com.wap.core.Wpn.error);
+        } catch (java.io.IOException e) { /* sin archivo: armas de siempre */ }
         // piezas del personaje hechas en el editor de piezas (assets/personaje.txt); si no está, el personaje de siempre
         try (java.io.InputStream in = getAssets().open("personaje.txt")) {
             com.wap.render.Pieces.load(new String(readAll(in), java.nio.charset.StandardCharsets.UTF_8));

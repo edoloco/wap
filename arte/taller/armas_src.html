@@ -1,0 +1,323 @@
+<title>Taller de armas WAP</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Mesa de trabajo con los colores del menú de WAP: lista de armas | ficha del arma | campo de tiro */
+:root{
+  --bg:#121831; --panel:#1b2348; --panel2:#232d5c; --line:#33407a; --fg:#eef0fa; --dim:#9aa3cf;
+  --gold:#ffc94a; --sky:#7fc8ff; --mint:#6ee2b4; --pink:#ff6f9c; --navy:#0c1024;
+  --pix:"Silkscreen",ui-monospace,monospace; --ui:"Inter",system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 var(--ui);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px}
+h1,h2{font-family:var(--pix);font-weight:400;letter-spacing:.04em}
+h1{font-size:20px;margin:0;color:var(--gold)}
+h2{font-size:13px;margin:0 0 8px;color:var(--sky);text-transform:uppercase}
+h3{font:12px var(--pix);color:var(--gold);margin:14px 0 6px;letter-spacing:.04em}
+header{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-bottom:12px}
+header .sub{color:var(--dim);flex:1 1 260px;min-width:0}
+button{font:600 13px var(--ui);color:var(--navy);background:var(--gold);border:0;border-radius:3px;padding:8px 12px;cursor:pointer;box-shadow:0 3px 0 #b8862a}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 #b8862a}
+button.sec{background:var(--panel2);color:var(--fg);box-shadow:0 3px 0 var(--navy)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,input:focus-visible,.wp:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
+.grid{display:grid;grid-template-columns:240px minmax(0,1fr) minmax(0,380px);gap:12px;align-items:start}
+@media (max-width:1150px){.grid{grid-template-columns:210px minmax(0,1fr)}.range{grid-column:1/-1}}
+@media (max-width:720px){.grid{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:2px solid var(--line);border-radius:4px;padding:12px;min-width:0}
+.list{display:grid;gap:3px;max-height:78vh;overflow:auto;padding-right:2px}
+@media (max-width:720px){.list{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));max-height:none}}
+.wp{display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:3px;cursor:pointer;border:2px solid transparent;background:transparent;color:var(--fg);font:500 13px var(--ui);text-align:left;box-shadow:none;width:100%}
+.wp:hover{background:var(--panel2)} .wp.on{border-color:var(--gold);background:var(--panel2)}
+.wp .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wp.off .nm{color:var(--dim);text-decoration:line-through}
+.chip{font:400 9px var(--pix);padding:2px 4px;border-radius:2px;background:var(--mint);color:var(--navy)}
+.chip.out{background:var(--pink)}
+.count{font-size:12px;color:var(--dim);margin-bottom:8px}
+.top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}
+.texts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px 12px;margin-top:10px}
+@media (max-width:520px){.texts{grid-template-columns:minmax(0,1fr)}}
+.texts label{display:grid;gap:3px;font-size:12px;color:var(--dim)}
+input[type=text],input[type=number]{background:var(--panel2);color:var(--fg);border:2px solid var(--line);border-radius:3px;padding:6px 8px;font:13px var(--ui);width:100%;font-variant-numeric:tabular-nums}
+.fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px 16px}
+.f{display:grid;gap:3px;min-width:0}
+.f .lab{display:flex;justify-content:space-between;gap:6px;font-size:12px;color:var(--dim)}
+.f .lab b{color:var(--fg);font-weight:600}
+.f.changed .lab b{color:var(--gold)}
+.f .ctl{display:grid;grid-template-columns:minmax(0,1fr) 78px;gap:8px;align-items:center}
+.f input[type=range]{width:100%;accent-color:var(--gold)}
+.f .help{font-size:11px;color:var(--dim)}
+.f .orig{font-size:11px;color:var(--dim)}
+.toggle{display:flex;gap:8px;align-items:center;font-size:13px}
+.toggle input{width:18px;height:18px;accent-color:var(--mint)}
+.stage{background:var(--navy);border-radius:3px;overflow:hidden}
+.stage canvas{display:block;width:100%;height:auto}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--panel2);border-radius:3px;padding:8px}
+.stat .k{font-size:11px;color:var(--dim)} .stat .v{font:600 16px var(--ui);font-variant-numeric:tabular-nums}
+.note{font-size:12px;color:var(--dim);margin-top:8px}
+.status{margin-top:8px;font-size:13px;color:var(--dim);min-height:1.4em}
+.status.err{color:var(--pink)} .status.ok{color:var(--mint)}
+dialog{background:var(--panel);color:var(--fg);border:2px solid var(--gold);border-radius:4px;max-width:min(760px,92vw);width:100%;padding:16px}
+dialog::backdrop{background:rgba(8,10,24,.7)}
+textarea{width:100%;height:240px;background:var(--navy);color:var(--fg);border:2px solid var(--line);border-radius:3px;font:12px ui-monospace,monospace;padding:8px}
+ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(--fg)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.small{font-size:12px;color:var(--dim)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header>
+  <h1>TALLER DE ARMAS</h1>
+  <div class="sub">Cambia los valores, el nombre y la descripción de las armas de WAP, o quítalas del juego. Exporta <b>armas.txt</b> para el juego.</div>
+  <button class="sec" id="openTxt">Abrir armas.txt</button>
+  <button id="exportBtn">Exportar armas.txt</button>
+  <input type="file" id="txtFile" accept=".txt,text/plain" hidden>
+</header>
+
+<div class="grid">
+  <section class="card" aria-label="Armas">
+    <h2>Armas</h2>
+    <div class="count" id="count"></div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <section class="card" aria-label="Arma seleccionada">
+    <div class="top">
+      <h2 id="wname" style="margin:0">ARMA</h2>
+      <div class="row" style="margin-top:0">
+        <label class="toggle"><input type="checkbox" id="inGame"> En el juego</label>
+        <button class="sec" id="resetBtn">Usar la original</button>
+      </div>
+    </div>
+    <div class="texts">
+      <label for="label">Nombre que se ve<input type="text" id="label" maxlength="20" autocomplete="off"></label>
+      <label for="desc">Descripción (se ve al elegir armas)<input type="text" id="desc" maxlength="70" autocomplete="off"></label>
+    </div>
+    <p class="note" id="special"></p>
+    <div id="groups"></div>
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <section class="card range" aria-label="Campo de tiro">
+    <h2>Campo de tiro</h2>
+    <div class="stage"><canvas id="cv" width="760" height="460" aria-label="Recorrido aproximado del disparo"></canvas></div>
+    <p class="note">Recorrido aproximado sobre suelo plano, disparando hacia la derecha desde la mano. El círculo es la explosión. El personaje mide 52.</p>
+    <div class="stats" id="stats"></div>
+  </section>
+</div>
+
+<dialog id="dlg">
+  <h2>armas.txt</h2>
+  <p class="small" style="margin:0">Solo incluye lo que cambiaste.</p>
+  <ol class="steps">
+    <li>Copia el texto con el botón.</li>
+    <li>En Android Studio, en <b>app/src/main/assets/</b>, crea o abre <b>armas.txt</b> y pega todo.</li>
+    <li>Aprieta ▶ con el teléfono conectado, o haz commit y push para que GitHub arme el APK.</li>
+    <li>Para jugar en línea, instala el mismo APK en los dos teléfonos: con armas distintas no se conectan.</li>
+  </ol>
+  <textarea id="out" readonly aria-label="Contenido de armas.txt"></textarea>
+  <div class="row"><button id="copyBtn">Copiar</button><button class="sec" id="closeDlg">Cerrar</button><span class="small" id="copyMsg"></span></div>
+</dialog>
+
+<script>
+"use strict";
+const BASE = __ARMAS__;
+const $ = id => document.getElementById(id);
+// límites como en Wpn.LIMITS del juego
+const LIM = {cargador:[1,999],cadencia:[1,600],recarga:[0,3000],carga:[0,3000],proyectiles:[1,60],dispersion:[0,180],velocidad:[0,60],gravedad:[-1,2],rebote:[0,1.2],roce:[.5,1.05],aceleracion:[0,2],dano:[0,500],excavar:[0,200],empuje:[0,30],explosion:[0,250],mecha:[0,3000],retroceso:[0,20],arco:[-90,90],pedazos:[0,60],zigzag:[0,2],rebotes:[0,100],angulo:[-90,90],saltos:[0,50],sensor:[0,200]};
+const INT = new Set(["cargador","cadencia","recarga","carga","proyectiles","excavar","explosion","mecha","pedazos","rebotes","saltos","sensor"]);
+const INFO = {
+  cargador:["Balas por cargador","Cuántas veces dispara antes de recargar."],
+  cadencia:["Espera entre disparos","En cuadros: 60 = 1 segundo."],
+  recarga:["Tiempo de recarga","En cuadros: 60 = 1 segundo."],
+  carga:["Tiempo de carga","Cuadros que hay que cargar antes de lanzar."],
+  proyectiles:["Proyectiles por disparo","Más de 1 = abanico, como la escopeta."],
+  dispersion:["Dispersión","Grados hacia arriba y abajo que se puede desviar cada proyectil."],
+  velocidad:["Velocidad","Unidades por cuadro al salir."],
+  aceleracion:["Aceleración","Cohetes: cuánto acelera cada cuadro."],
+  gravedad:["Gravedad","Cuánto cae cada cuadro. Negativo: sube, como el fuego."],
+  roce:["Roce del aire","1 = sin roce; menos de 1 = se frena."],
+  rebote:["Rebote","0 = no rebota; 1 = rebota con la misma fuerza."],
+  rebotes:["Rebotes antes de explotar","0 = sin límite."],
+  saltos:["Saltos explotando","Como el Grasshopper: explota en cada salto."],
+  angulo:["Ángulo de salida","Grados hacia arriba (rebota en diagonal)."],
+  zigzag:["Zigzag","Cuánto cambia de rumbo al azar."],
+  mecha:["Mecha o duración","Cuadros hasta explotar o desaparecer. 0 = sin mecha."],
+  dano:["Daño","Al golpear, o en el centro de la explosión. La vida es 100."],
+  explosion:["Radio de explosión","0 = no explota."],
+  excavar:["Hoyo en la tierra","Radio del hoyo que hace."],
+  empuje:["Empuje","Cuánto lanza al que recibe el golpe."],
+  retroceso:["Retroceso","Cuánto empuja hacia atrás al que dispara."],
+  pedazos:["Pedazos al explotar","Fragmentos que suelta."],
+  sensor:["Distancia del sensor","Minas: a qué distancia explotan."],
+};
+const GROUPS = [
+  ["Cargador", ["cargador","cadencia","recarga","carga"]],
+  ["Disparo", ["proyectiles","dispersion","velocidad","aceleracion","angulo"]],
+  ["Vuelo", ["gravedad","roce","rebote","rebotes","saltos","zigzag","mecha"]],
+  ["Golpe", ["dano","explosion","excavar","empuje","retroceso","pedazos","sensor"]],
+];
+const W = BASE.weapons, byName = Object.fromEntries(W.map((w,i)=>[w.name,i]));
+// qué valores importan en cada arma (los demás se esconden para no confundir)
+function relevant(w,k){
+  if(k==="carga") return w.v.carga>0; if(k==="pedazos") return w.splinter; if(k==="sensor") return w.sticky&&w.v.sensor>0;
+  if(k==="rebotes") return w.v.rebotes>0||w.v.rebote>0; if(k==="saltos") return w.v.saltos>0; if(k==="aceleracion") return w.v.aceleracion>0;
+  if(k==="zigzag") return w.v.zigzag>0; if(k==="angulo") return w.v.angulo!==0||w.v.rebote>0;
+  if(w.lasso) return ["cargador","recarga"].includes(k);
+  if(w.beam) return ["cargador","cadencia","recarga","dano","excavar","empuje"].includes(k);
+  if(w.fan) return ["proyectiles","dispersion","velocidad","roce","mecha","empuje"].includes(k);
+  return true;
+}
+const SPECIAL = {"PROTON RAY":"Rayo continuo: el cargador es cuántos cuadros dura el rayo; atrapa al rival.","LASER":"Rayo instantáneo: el cargador es cuántos cuadros dura.","ROBOT TRAP":"Trampa: la cruceta elige dónde cae; la velocidad y la física de vuelo no aplican igual.","FAN":"No daña: desvía balas y empuja. Nunca se acaba.","CANNON PUNCH":"El guante lanza al rival y le quita entre 12 % y 25 % de vida al chocar; el daño aquí es el golpe directo.","PLASMA CANNON":"Se carga con un comando y se lanza con otro.","DEATH RAY":"Cinco cargas que salen escalonadas.","MINE":"Se pega al suelo y explota cuando alguien se acerca.","TRAP":"Se pega al suelo y explota cuando alguien se acerca."};
+
+/* estado: E[nombre] = {v:{clave:valor}, label, desc, off} solo con lo cambiado */
+let E = {}, sel = W[0].name;
+function save(){ try{ localStorage.setItem("wap-armas", JSON.stringify(E)); }catch(e){} }
+function load(){ try{ const t=localStorage.getItem("wap-armas"); if(t) E=JSON.parse(t)||{}; }catch(e){ E={}; } }
+function cur(n){ const w=W[byName[n]], e=E[n]||{}; return {w, v:{...w.v,...(e.v||{})}, label:e.label??w.label, desc:e.desc??w.desc, off:!!e.off}; }
+function isChanged(n){ const e=E[n]; if(!e) return false; return e.off || (e.label!=null&&e.label!==W[byName[n]].label) || (e.desc!=null&&e.desc!==W[byName[n]].desc) || Object.keys(e.v||{}).length>0; }
+function tidy(n){ const e=E[n]; if(!e) return; const w=W[byName[n]]; for(const k in (e.v||{})) if(Math.abs(e.v[k]-w.v[k])<1e-9) delete e.v[k];
+  if(e.label===w.label) delete e.label; if(e.desc===w.desc) delete e.desc; if(!e.off) delete e.off; if(e.v&&!Object.keys(e.v).length) delete e.v; if(!Object.keys(e).length) delete E[n]; }
+function edit(n){ return E[n]=E[n]||{}; }
+
+/* lista */
+function buildList(){
+  const L=$("list"); L.innerHTML="";
+  for(const w of W){ const b=document.createElement("button"); b.type="button"; b.className="wp"; b.id="w-"+w.name.replace(/ /g,"_");
+    const nm=document.createElement("span"); nm.className="nm"; const ch=document.createElement("span"); ch.className="chip"; b.append(nm,ch); b.onclick=()=>select(w.name); L.append(b); }
+}
+function refreshList(){
+  let on=0; for(const w of W){ const c=cur(w.name), b=$("w-"+w.name.replace(/ /g,"_")); if(!c.off) on++;
+    b.classList.toggle("on", w.name===sel); b.classList.toggle("off", c.off); b.querySelector(".nm").textContent=c.label;
+    const ch=b.querySelector(".chip"); ch.hidden=!isChanged(w.name); ch.textContent=c.off?"FUERA":"CAMBIADA"; ch.classList.toggle("out", c.off); }
+  $("count").textContent=on+" de "+W.length+" armas en el juego";
+}
+
+/* ficha */
+function fmt(k,v){ return INT.has(k)? String(Math.round(v)) : String(Math.round(v*1000)/1000); }
+function step(k){ if(INT.has(k)) return 1; const [a,b]=LIM[k]; return (b-a)<=3?0.01:0.1; }
+function buildForm(){
+  const c=cur(sel), G=$("groups"); G.innerHTML="";
+  $("wname").textContent=c.w.name; $("inGame").checked=!c.off; $("label").value=c.label; $("desc").value=c.desc; $("special").textContent=SPECIAL[c.w.name]||""; $("special").hidden=!SPECIAL[c.w.name];
+  for(const [title,keys] of GROUPS){ const ks=keys.filter(k=>relevant(c.w,k)); if(!ks.length) continue;
+    const h=document.createElement("h3"); h.textContent=title.toUpperCase(); G.append(h); const box=document.createElement("div"); box.className="fields"; G.append(box);
+    for(const k of ks){ const [lab,help]=INFO[k], [lo,hi]=LIM[k], f=document.createElement("div"); f.className="f"; f.id="f-"+k;
+      const top=document.createElement("div"); top.className="lab"; const l=document.createElement("label"); l.htmlFor="n-"+k; l.textContent=lab; const val=document.createElement("b"); top.append(l,val);
+      const ctl=document.createElement("div"); ctl.className="ctl"; const r=document.createElement("input"); r.type="range"; r.min=lo; r.max=hi; r.step=step(k); r.id="r-"+k; r.setAttribute("aria-label",lab);
+      const nb=document.createElement("input"); nb.type="number"; nb.min=lo; nb.max=hi; nb.step=step(k); nb.id="n-"+k; ctl.append(r,nb);
+      const hp=document.createElement("div"); hp.className="help"; hp.textContent=help; const og=document.createElement("div"); og.className="orig";
+      f.append(top,ctl,hp,og); box.append(f);
+      const set=v=>{ v=Math.max(lo,Math.min(hi,v)); if(INT.has(k)) v=Math.round(v); const e=edit(sel); e.v=e.v||{}; e.v[k]=v; tidy(sel); save(); refreshField(k); refreshList(); drawRange(); stats(); };
+      r.oninput=()=>set(parseFloat(r.value)); nb.onchange=()=>{ const v=parseFloat(nb.value); if(isFinite(v)) set(v); };
+      refreshField(k); }
+  }
+  $("resetBtn").disabled=!isChanged(sel);
+}
+function refreshField(k){ const c=cur(sel), v=c.v[k], o=c.w.v[k], f=$("f-"+k); if(!f) return;
+  $("r-"+k).value=v; if(document.activeElement!==$("n-"+k)) $("n-"+k).value=fmt(k,v); f.querySelector(".lab b").textContent=fmt(k,v);
+  f.classList.toggle("changed", Math.abs(v-o)>1e-9); f.querySelector(".orig").textContent=Math.abs(v-o)>1e-9?"Original: "+fmt(k,o):""; $("resetBtn").disabled=!isChanged(sel); }
+$("inGame").onchange=()=>{ const on=$("inGame").checked; if(!on){ const others=W.filter(w=>w.name!==sel&&!cur(w.name).off).length; if(!others){ $("inGame").checked=true; setStatus("Tiene que quedar al menos un arma en el juego.","err"); return; } }
+  edit(sel).off=!on; tidy(sel); save(); refreshList(); $("resetBtn").disabled=!isChanged(sel); setStatus(on?"El arma vuelve al juego.":"El arma ya no se podrá elegir (ni le tocará a los rivales al azar).", ""); };
+$("label").oninput=()=>{ edit(sel).label=$("label").value.toUpperCase().replace(/\s+/g," ").trimStart(); tidy(sel); save(); refreshList(); };
+$("desc").oninput=()=>{ edit(sel).desc=$("desc").value.replace(/\s+/g," "); tidy(sel); save(); refreshList(); };
+$("resetBtn").onclick=()=>{ delete E[sel]; save(); buildForm(); refreshList(); drawRange(); stats(); setStatus("Volvió el arma original.",""); };
+function select(n){ sel=n; buildForm(); refreshList(); drawRange(); stats(); setStatus("",""); }
+function setStatus(t,c){ const s=$("status"); s.textContent=t; s.className="status "+(c||""); }
+
+/* campo de tiro: misma física por cuadro que el juego (Shot.step), sobre suelo plano */
+const cv=$("cv"), cx=cv.getContext("2d");
+function simulate(v, w, angDeg){
+  let x=10, y=-30, a=(-v.angulo+angDeg)*Math.PI/180, sp=v.velocidad, vx=Math.cos(a)*sp, vy=Math.sin(a)*sp, pts=[[x,y]], hops=0, end=null;
+  const life=v.mecha>0?v.mecha:900;
+  for(let t=1;t<=Math.min(life,900);t++){
+    if(v.aceleracion){ const s=Math.hypot(vx,vy); if(s>.01&&s<14){ vx+=vx/s*v.aceleracion; vy+=vy/s*v.aceleracion; } }
+    vy+=v.gravedad; vx*=v.roce; vy*=v.roce;
+    let nx=x+vx, ny=y+vy;
+    if(ny>=0){ // toca el suelo
+      if(w.sticky){ pts.push([nx,0]); end={x:nx,y:0,kind:"pega"}; break; }
+      if(v.rebote>0){ ny=y; vy=-vy*v.rebote; if(v.saltos>0){ hops++; pts.push([nx,0]); if(v.explosion) drawBoomAt.push([nx,0,v.explosion]); if(hops>=v.saltos){ end={x:nx,y:0,kind:"fin"}; break; } vy=Math.min(vy,-4.5); }
+        if(v.rebotes>0 && ++hops>=v.rebotes){ end={x:nx,y:0,kind:"boom"}; pts.push([nx,0]); break; } if(Math.abs(vy)<.5&&Math.abs(vx)<.3){ vx=vy=0; } }
+      else { pts.push([nx,0]); end={x:nx,y:0,kind:v.explosion>0||w.splinter?"boom":"choca"}; break; }
+    }
+    x=nx; y=ny; pts.push([x,y]); if(x>1200||x<-200||y<-800){ end=null; break; }
+    if(t===life&&v.mecha>0){ end={x,y,kind:v.explosion>0||w.splinter?"boom":"fin"}; }
+  }
+  return {pts,end};
+}
+let drawBoomAt=[];
+function drawRange(){
+  const c=cur(sel), v=c.v, w=c.w, Wd=cv.width;
+  // encuadre: se ajusta al recorrido principal (y su explosión) para que siempre se vea completo
+  drawBoomAt=[]; const main=(w.lasso||w.beam)?null:simulate(v,w,0); let x0=-20, x1=260, y0=-70, y1=10;
+  if(main){ for(const p of main.pts){ x1=Math.max(x1,Math.min(1200,p[0])); y0=Math.min(y0,Math.max(-800,p[1])); } if(main.end&&v.explosion){ x1=Math.max(x1,main.end.x+v.explosion); y0=Math.min(y0,main.end.y-v.explosion); } }
+  else x1=w.lasso?280:460;
+  x1+=20; let k=Math.min((Wd-20)/(x1-x0),(460-20)/(y1-y0));
+  // el alto del campo se ajusta al recorrido: menos cielo vacío
+  const H2=Math.max(220,Math.min(460,Math.round((y1-y0)*k+20))); if(cv.height!==H2){ cv.height=H2; } const Hh=cv.height;
+  cx.setTransform(1,0,0,1,0,0); cx.fillStyle="#0c1024"; cx.fillRect(0,0,Wd,Hh);
+  const ox=10-x0*k, oy=Hh-10-y1*k, S=(x,y)=>[ox+x*k, oy+y*k];
+  const gstep=k>1.2?50:k>.5?100:200;
+  // grilla cada 50 unidades
+  cx.strokeStyle="#1b2348"; cx.lineWidth=1; for(let x=0;x<=1200;x+=gstep){ const [sx]=S(x,0); cx.beginPath(); cx.moveTo(sx+.5,0); cx.lineTo(sx+.5,Hh); cx.stroke(); }
+  for(let y=0;y>=-800;y-=gstep){ const [,sy]=S(0,y); cx.beginPath(); cx.moveTo(0,sy+.5); cx.lineTo(Wd,sy+.5); cx.stroke(); }
+  cx.fillStyle="#26315f"; cx.fillRect(0,oy,Wd,Hh-oy); cx.strokeStyle="#6ee2b4"; cx.lineWidth=2; cx.beginPath(); cx.moveTo(0,oy); cx.lineTo(Wd,oy); cx.stroke();
+  // el personaje, para la escala
+  const [px,py]=S(0,0); cx.fillStyle="#5f574e"; cx.strokeStyle="#000"; cx.lineWidth=2; cx.beginPath(); cx.roundRect(px-8*k,py-52*k,16*k,52*k,6*k); cx.fill(); cx.stroke();
+  cx.fillStyle="#9e9e9e"; cx.beginPath(); cx.arc(px,py-46*k,7*k,0,Math.PI*2); cx.fill(); cx.stroke();
+  cx.fillStyle="#9aa3cf"; cx.font="12px Inter, sans-serif"; for(let x=gstep*2;x<=1200;x+=gstep*2){ const [sx]=S(x,0); cx.fillText(String(x), sx+3, oy+16); }
+  if(w.lasso||w.beam){ // rayos: recto y con alcance
+    const reach=w.lasso?230:420; const a=S(10,-30), b=S(10+reach,-30); cx.strokeStyle=w.lasso?"#ff9a3a":"#7fc8ff"; cx.lineWidth=4; cx.beginPath(); cx.moveTo(...a); cx.lineTo(...b); cx.stroke();
+    cx.fillStyle="#eef0fa"; cx.font="12px Inter, sans-serif"; cx.fillText(w.lasso?"rayo continuo (alcance ~230)":"rayo instantáneo", a[0]+10, a[1]-10); return; }
+  const angs=v.dispersion>0||v.proyectiles>1?[0,-v.dispersion,v.dispersion]:[0];
+  angs.forEach((ad,i)=>{ drawBoomAt=[]; const r=simulate(v,w,ad); cx.strokeStyle=i===0?"#ffc94a":"rgba(255,201,74,.35)"; cx.lineWidth=i===0?2.5:1.5; cx.setLineDash(i===0?[]:[5,5]);
+    cx.beginPath(); r.pts.forEach((p,j)=>{ const q=S(p[0],p[1]); j?cx.lineTo(...q):cx.moveTo(...q); }); cx.stroke(); cx.setLineDash([]);
+    if(i===0){ for(const [bx,by,rr] of drawBoomAt){ const q=S(bx,by); cx.strokeStyle="rgba(255,111,156,.6)"; cx.beginPath(); cx.arc(q[0],q[1],rr*k,0,Math.PI*2); cx.stroke(); }
+      if(r.end){ const q=S(r.end.x,r.end.y); if(r.end.kind==="boom"&&v.explosion>0){ cx.fillStyle="rgba(255,111,156,.25)"; cx.strokeStyle="#ff6f9c"; cx.lineWidth=2; cx.beginPath(); cx.arc(q[0],q[1],v.explosion*k,0,Math.PI*2); cx.fill(); cx.stroke(); }
+        cx.fillStyle="#eef0fa"; cx.font="12px Inter, sans-serif"; const txt={boom:v.explosion>0?"explota":"se parte",choca:"choca",pega:"se pega",fin:"se acaba"}[r.end.kind]; cx.fillText(txt+(w.splinter&&v.pedazos?" en "+v.pedazos+" pedazos":""), q[0]+8, q[1]-8); } } });
+}
+function stats(){
+  const c=cur(sel), v=c.v, w=c.w, s=x=>Math.round(x*10)/10;
+  const items=[
+    ["Disparos por segundo", w.lasso||w.beam? "continuo" : s(60/v.cadencia)],
+    ["Recarga", w.infinite?"nunca":s(v.recarga/60)+" s"],
+    w.lasso? ["Daño", "~9 por segundo atrapado"] : w.beam? ["Daño por cuadro", s(v.dano)] : ["Daño por disparo", w.fan?"0":s(v.dano*v.proyectiles)],
+    ["Daño por cargador", w.fan?"0":w.lasso?"según cuánto lo atrape":s(v.dano*(w.beam?1:v.proyectiles)*v.cargador)],
+  ];
+  $("stats").innerHTML=""; for(const [k,val] of items){ const d=document.createElement("div"); d.className="stat"; d.innerHTML='<div class="k"></div><div class="v"></div>'; d.querySelector(".k").textContent=k; d.querySelector(".v").textContent=val; $("stats").append(d); }
+}
+
+/* armas.txt */
+const id=n=>n.replace(/ /g,"_");
+function f4(v){ let s=(Math.round(v*10000)/10000).toString(); return s; }
+function exportText(){
+  const L=["# armas.txt de WAP, hecho con el Taller de armas","# arma NOMBRE clave=valor ... | nombre NOMBRE texto | descripcion NOMBRE texto | quitar NOMBRE (en los nombres, espacios como _)",""];
+  for(const w of W){ const e=E[w.name]; if(!e) continue;
+    if(e.v&&Object.keys(e.v).length) L.push("arma "+id(w.name)+" "+Object.keys(e.v).map(k=>k+"="+f4(e.v[k])).join(" "));
+    if(e.label!=null&&e.label.trim()&&e.label!==w.label) L.push("nombre "+id(w.name)+" "+e.label.trim());
+    if(e.desc!=null&&e.desc!==w.desc) L.push("descripcion "+id(w.name)+" "+e.desc.trim());
+    if(e.off) L.push("quitar "+id(w.name)); }
+  return L.join("\n")+"\n";
+}
+function importText(text){
+  const res={}; let bad=0;
+  for(const raw of text.split(/\r?\n/)){ const l=raw.trim(); if(!l||l[0]==="#") continue; const m=l.match(/^(\S+)\s+(\S+)\s*(.*)$/); if(!m){ bad++; continue; }
+    const n=m[2].replace(/_/g," "); if(!(n in byName)){ bad++; continue; } const e=res[n]=res[n]||{};
+    if(m[1]==="arma"){ e.v=e.v||{}; for(const kv of m[3].split(/\s+/)){ const [k,v]=kv.split("="); if(k in LIM&&isFinite(+v)) e.v[k]=+v; else if(kv) bad++; } }
+    else if(m[1]==="nombre") e.label=m[3].toUpperCase(); else if(m[1]==="descripcion") e.desc=m[3]; else if(m[1]==="quitar") e.off=true; else bad++; }
+  return {res,bad};
+}
+$("exportBtn").onclick=()=>{ $("out").value=exportText(); $("copyMsg").textContent=""; $("dlg").showModal(); };
+$("closeDlg").onclick=()=>$("dlg").close();
+$("copyBtn").onclick=()=>{ navigator.clipboard.writeText($("out").value).then(()=>{ $("copyMsg").textContent="Copiado."; },()=>{ $("out").select(); $("copyMsg").textContent="Selecciona todo y copia con Ctrl+C."; }); };
+$("openTxt").onclick=()=>$("txtFile").click();
+$("txtFile").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return; const {res,bad}=importText(await f.text()); const n=Object.keys(res).length;
+  if(!n){ setStatus("Ese archivo no tiene armas de WAP.","err"); return; } E=res; for(const k in E) tidy(k); save(); select(sel); setStatus("Abrí "+n+" armas de "+f.name+(bad?" ("+bad+" líneas no se entendieron)":"")+".", bad?"err":"ok"); };
+
+load(); buildList(); select(sel);
+window.__armas={E:()=>E,select,exportText,importText,simulate,cur};
+</script>

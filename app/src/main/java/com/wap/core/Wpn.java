@@ -2,13 +2,16 @@ package com.wap.core;
 /** Definición de un arma: cargador, tiempo de recarga y comportamiento del proyectil, al estilo de la tabla de armas de Liero. */
 public final class Wpn {
     public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12, GREEN = 13, BLASER = 14, LIGHT = 15, RAY = 16, GAS = 17, WIND = 18, GLOVE = 19, PROTON = 20, TRAP = 21;
-    public String name, desc = "";
+    /** name: identificador (no cambia; con él se guardan las armas elegidas). label: nombre que se muestra. */
+    public String name, desc = "", label;
+    /** Quitada del juego con armas.txt: no aparece para elegir ni al azar. */
+    public boolean off;
     public int charge, clip = 1, delay = 20, reload = 100, parts = 1, fuse = 0, look = BULLET;
     public float spread, speed = 10, grav, bounce, drag = 1, accel, dmg, knock = 1, recoil, lob, jitter;
     public int radius, dig;          // radio de explosión (0 = sin explosión) y radio de excavación
     public boolean punch, infinite, lasso, trap, beam, pierce, sticky, burn, impact = true, smoke, fan;
     public Wpn splinter; public int nSplinter, dropEvery, hops, addDirt, trigger, maxBounce, stagger, boomStyle; public float angle;
-    Wpn(String n, String d) { name = n; desc = d; }
+    Wpn(String n, String d) { name = n; desc = d; label = n; }
     Wpn mag(int c, int dl, int rl) { clip = c; delay = dl; reload = rl; return this; }
     Wpn shot(int p, float sp, float v) { parts = p; spread = sp; speed = v; return this; }
     Wpn phys(float g, float b, float dr) { grav = g; bounce = b; drag = dr; return this; }
@@ -88,5 +91,81 @@ public final class Wpn {
     static String rename(String n) {
         switch (n) { case "DROP": return "CANNON PUNCH"; case "CHIQUITA BOMB": return "MINI BOMB"; case "BOOBY TRAP": return "TRAP"; case "GAUSS GUN": return "BOUNCY LASER"; case "LARPA": return "PROTON RAY"; case "BLOWTORCH": return "ROBOT TRAP"; default: return n; }
     }
+    // ---------- armas.txt: cambiar valores, nombres y quitar armas (Taller de armas) ----------
+    /** Valores que se pueden cambiar: clave en armas.txt y límites. */
+    public static final String[] KEYS = {"cargador", "cadencia", "recarga", "carga", "proyectiles", "dispersion", "velocidad", "gravedad", "rebote", "roce", "aceleracion",
+        "dano", "excavar", "empuje", "explosion", "mecha", "retroceso", "arco", "pedazos", "zigzag", "rebotes", "angulo", "saltos", "sensor"};
+    static final float[][] LIMITS = {{1, 999}, {1, 600}, {0, 3000}, {0, 3000}, {1, 60}, {0, 180}, {0, 60}, {-1, 2}, {0, 1.2f}, {.5f, 1.05f}, {0, 2},
+        {0, 500}, {0, 200}, {0, 30}, {0, 250}, {0, 3000}, {0, 20}, {-90, 90}, {0, 60}, {0, 2}, {0, 100}, {-90, 90}, {0, 50}, {0, 200}};
+    public float get(String k) {
+        switch (k) {
+            case "cargador": return clip; case "cadencia": return delay; case "recarga": return reload; case "carga": return charge; case "proyectiles": return parts;
+            case "dispersion": return spread; case "velocidad": return speed; case "gravedad": return grav; case "rebote": return bounce; case "roce": return drag; case "aceleracion": return accel;
+            case "dano": return dmg; case "excavar": return dig; case "empuje": return knock; case "explosion": return radius; case "mecha": return fuse; case "retroceso": return recoil;
+            case "arco": return lob; case "pedazos": return nSplinter; case "zigzag": return jitter; case "rebotes": return maxBounce; case "angulo": return angle; case "saltos": return hops; case "sensor": return trigger;
+            default: throw new IllegalArgumentException("valor desconocido: " + k);
+        }
+    }
+    void set(String k, float v) {
+        int i = java.util.Arrays.asList(KEYS).indexOf(k); if (i < 0) throw new IllegalArgumentException("valor desconocido: " + k);
+        if (Float.isNaN(v)) throw new IllegalArgumentException("número inválido en " + k);
+        v = Math.max(LIMITS[i][0], Math.min(LIMITS[i][1], v)); int n = Math.round(v);
+        switch (k) {
+            case "cargador": clip = n; break; case "cadencia": delay = n; break; case "recarga": reload = n; break; case "carga": charge = n; break; case "proyectiles": parts = n; break;
+            case "dispersion": spread = v; break; case "velocidad": speed = v; break; case "gravedad": grav = v; break; case "rebote": bounce = v; break; case "roce": drag = v; break; case "aceleracion": accel = v; break;
+            case "dano": dmg = v; break; case "excavar": dig = n; break; case "empuje": knock = v; break; case "explosion": radius = n; break; case "mecha": fuse = n; break; case "retroceso": recoil = v; break;
+            case "arco": lob = v; break; case "pedazos": nSplinter = splinter == null ? 0 : n; break; case "zigzag": jitter = v; break; case "rebotes": maxBounce = n; break; case "angulo": angle = v; break;
+            case "saltos": hops = n; break; case "sensor": trigger = n; break;
+            default:
+        }
+    }
+    private static float[][] DEFAULTS; private static String[][] DEF_TEXT;
+    private static void snapshot() {
+        DEFAULTS = new float[ALL.length][KEYS.length]; DEF_TEXT = new String[ALL.length][];
+        for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) DEFAULTS[i][k] = ALL[i].get(KEYS[k]); DEF_TEXT[i] = new String[]{ALL[i].label, ALL[i].desc}; }
+    }
+    /** Huella de las armas: 0 si son las de siempre. Se compara en línea para que ambos teléfonos jueguen con las mismas. */
+    public static int signature;
+    public static String error;
+    /** Vuelve a las armas de siempre. */
+    public static void reset() {
+        for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) ALL[i].set(KEYS[k], DEFAULTS[i][k]); ALL[i].label = DEF_TEXT[i][0]; ALL[i].desc = DEF_TEXT[i][1]; ALL[i].off = false; }
+        signature = 0; error = null;
+    }
+    /**
+     * Lee armas.txt. Una instrucción por línea; en los nombres, los espacios van como _ (BIG_NUKE):
+     *   arma NOMBRE clave=valor clave=valor ...
+     *   nombre NOMBRE texto que se muestra
+     *   descripcion NOMBRE texto de ayuda
+     *   quitar NOMBRE
+     * Si hay un error, se deja todo como siempre y se avisa en error.
+     */
+    public static void load(String text) {
+        reset(); if (text == null || text.trim().isEmpty()) return;
+        int line = 0; StringBuilder sig = new StringBuilder();
+        try {
+            for (String raw : text.split("\n")) {
+                line++; String l = raw.trim(); if (l.isEmpty() || l.startsWith("#")) continue;
+                String[] t = l.split("\\s+", 3); if (t.length < 2) throw new IllegalArgumentException("falta el nombre del arma");
+                int i = find(t[1].replace('_', ' ')); if (i < 0) throw new IllegalArgumentException("no existe el arma " + t[1]);
+                Wpn w = ALL[i]; sig.append(l).append('\n');
+                switch (t[0]) {
+                    case "arma": if (t.length > 2) for (String kv : t[2].trim().split("\\s+")) { String[] p = kv.split("=", 2); if (p.length != 2) throw new IllegalArgumentException("se esperaba clave=valor: " + kv); w.set(p[0], Float.parseFloat(p[1])); } break;
+                    case "nombre": if (t.length > 2) w.label = t[2].trim().toUpperCase(); break;
+                    case "descripcion": w.desc = t.length > 2 ? t[2].trim() : ""; break;
+                    case "quitar": w.off = true; break;
+                    default: throw new IllegalArgumentException("instrucción desconocida: " + t[0]);
+                }
+            }
+            if (enabled().length == 0) throw new IllegalArgumentException("no puedes quitar todas las armas");
+        } catch (RuntimeException e) { reset(); error = "línea " + line + ": " + e.getMessage(); return; }
+        signature = sig.length() == 0 ? 0 : sig.toString().hashCode() | 1;
+    }
+    private static int find(String n) { for (int i = 0; i < ALL.length; i++) if (ALL[i].name.equals(n)) return i; return -1; }
+    /** Índices de las armas que se pueden elegir. */
+    public static int[] enabled() { int n = 0; for (Wpn w : ALL) if (!w.off) n++; int[] r = new int[n]; n = 0; for (int i = 0; i < ALL.length; i++) if (!ALL[i].off) r[n++] = i; return r; }
+    /** Si el arma i fue quitada, la primera que se puede elegir. */
+    public static int usable(int i) { if (i >= 0 && i < ALL.length && !ALL[i].off) return i; int[] e = enabled(); return e.length > 0 ? e[0] : 0; }
     public static int index(String n) { n = rename(n); for (int i = 0; i < ALL.length; i++) if (ALL[i].name.equals(n)) return i; return 0; }
+    static { snapshot(); } // al final: KEYS y LIMITS ya existen
 }

@@ -78,8 +78,8 @@ public final class App {
     public void start() {
         seed = seed * 1103515245 + 12345; Rng r = new Rng(seed ^ 0x5A5A);
         int n = 1 + rivals; Wpn[][] loads = new Wpn[n][SLOTS]; int[] team = new int[n];
-        for (int k = 0; k < SLOTS; k++) loads[0][k] = Wpn.ALL[slots[k]];
-        for (int i = 1; i < n; i++) for (int k = 0; k < SLOTS; k++) loads[i][k] = Wpn.ALL[rRandom[i - 1] ? r.i(Wpn.ALL.length) : rSlots[i - 1][k]];
+        for (int k = 0; k < SLOTS; k++) loads[0][k] = Wpn.ALL[Wpn.usable(slots[k])];
+        int[] en = Wpn.enabled(); for (int i = 1; i < n; i++) for (int k = 0; k < SLOTS; k++) loads[i][k] = Wpn.ALL[rRandom[i - 1] ? en[r.i(en.length)] : Wpn.usable(rSlots[i - 1][k])];
         boolean oneTeam = true; for (int i = 0; i < rivals; i++) oneTeam &= rTeam[i] == myTeam;
         for (int i = 0; i < n; i++) team[i] = !teams ? i : i == 0 ? myTeam : oneTeam ? (myTeam + 1) % 4 : rTeam[i - 1]; // si todos quedan en tu equipo, los rivales pasan al siguiente
         for (int i = 0; i < n; i++) RobotArt.COLOR[i] = teams ? TEAM_COLORS[team[i]] : i == 0 ? myColor : RIVAL_COLORS[rColor[i - 1]];
@@ -292,7 +292,7 @@ public final class App {
     }
     // ---------- Partida en red local
     Link.Hello hello(int seedV, int lives) {
-        Link.Hello h = new Link.Hello(); h.rules = World.RULES; h.seed = seedV; h.lives = lives; h.color = myColor; h.slots = slots.clone();
+        Link.Hello h = new Link.Hello(); h.rules = World.rules(); h.seed = seedV; h.lives = lives; h.color = myColor; h.slots = slots.clone();
         h.name = myName;
         if (seedV != 0 && !levelName.isEmpty()) { Level lv = loadLevel(levelName); if (lv != null) h.level = lv.save(); } // el anfitrión manda su nivel
         return h;
@@ -314,24 +314,24 @@ public final class App {
         new Thread(() -> {
             try {
                 java.net.ServerSocket ss; try { ss = new java.net.ServerSocket(Link.PORT); } catch (Exception e) { ss = new java.net.ServerSocket(0); }
-                server = ss; beacon = new Lan.Beacon(name, ss.getLocalPort(), World.RULES);
+                server = ss; beacon = new Lan.Beacon(name, ss.getLocalPort(), World.rules());
                 netMsg = name + " está abierta. Esperando que el otro teléfono se una...";
                 Link l = Link.accept(ss);
                 seed = seed * 1103515245 + 12345; Link.Hello mine = hello(seed, LIVES[livesIx]); l.send(mine);
                 Link.Hello peer = l.readHello();
-                if (peer.rules != World.RULES) { l.close(); netMsg = "El otro teléfono tiene otra versión. Actualicen ambos y vuelvan a intentar."; busy = false; hosting = false; return; }
+                if (peer.rules != World.rules()) { l.close(); netMsg = "El otro teléfono tiene otra versión o armas distintas (armas.txt). Instalen el mismo APK en ambos."; busy = false; hosting = false; return; }
                 pendHost = mine; pendGuest = peer; pending = l;
             } catch (Exception e) { if (hosting) netMsg = "No se pudo abrir la sala en esta red."; busy = false; hosting = false; }
         }, "sala").start();
     }
     void joinRoom(Lan.Room r) {
         if (busy) return;
-        if (r.rules != World.RULES) { netMsg = "Esa sala usa otra versión del juego. Actualicen ambos teléfonos."; return; }
+        if (r.rules != World.rules()) { netMsg = "Esa sala usa otra versión del juego o armas distintas. Instalen el mismo APK en ambos."; return; }
         busy = true; netMsg = "Conectando con " + r.name + "...";
         new Thread(() -> {
             try {
                 Link l = Link.connect(r.ip, r.port); Link.Hello host = l.readHello(); Link.Hello mine = hello(0, 0); l.send(mine);
-                if (host.rules != World.RULES) { l.close(); netMsg = "Esa sala usa otra versión del juego."; busy = false; return; }
+                if (host.rules != World.rules()) { l.close(); netMsg = "Esa sala usa otra versión del juego o armas distintas."; busy = false; return; }
                 pendHost = host; pendGuest = mine; pending = l;
             } catch (Exception e) { netMsg = "No se pudo conectar con " + r.name + ". Revisa que estén en la misma red."; busy = false; }
         }, "unirse").start();
@@ -543,11 +543,12 @@ public final class App {
     }
     static final int COLS = 3, ROWS = 10;
     void navArms(int p) {
-        int n = Wpn.ALL.length;
-        if ((p & Input.RIGHT) != 0) cur = (cur + 1) % n;
-        if ((p & Input.LEFT) != 0) cur = (cur + n - 1) % n;
-        if ((p & Input.DOWN) != 0) cur = Math.min(n - 1, cur + COLS);
-        if ((p & Input.UP) != 0) cur = Math.max(0, cur - COLS);
+        int[] L = Wpn.enabled(); int n = L.length, q = 0; for (int k = 0; k < n; k++) if (L[k] == cur) q = k;
+        if ((p & Input.RIGHT) != 0) q = (q + 1) % n;
+        if ((p & Input.LEFT) != 0) q = (q + n - 1) % n;
+        if ((p & Input.DOWN) != 0) q = Math.min(n - 1, q + COLS);
+        if ((p & Input.UP) != 0) q = Math.max(0, q - COLS);
+        cur = L[q];
         if ((p & Input.A) != 0) { eslots()[selSlot] = cur; selSlot = (selSlot + 1) % SLOTS; au.play(Audio.PICK); }
         if ((p & Input.B) != 0) back();
     }
@@ -715,7 +716,7 @@ public final class App {
             l.add("CREAR SALA"); a.add(this::hostRoom);
             List<Lan.Room> rooms = browser != null ? browser.rooms() : new ArrayList<>();
             if (rooms.isEmpty() && !busy) txt(g, "BUSCANDO SALAS EN TU RED" + "...".substring(0, (int) (frames / 20 % 4)), W / 2, H - 10 * u, 8, MUTE, 0);
-            for (int i = 0; i < Math.min(4, rooms.size()); i++) { Lan.Room r = rooms.get(i); l.add("UNIRSE A " + r.name.toUpperCase() + (r.rules != World.RULES ? " (OTRA VERSIÓN)" : "")); a.add(() -> joinRoom(r)); }
+            for (int i = 0; i < Math.min(4, rooms.size()); i++) { Lan.Room r = rooms.get(i); l.add("UNIRSE A " + r.name.toUpperCase() + (r.rules != World.rules() ? " (OTRA VERSIÓN O ARMAS)" : "")); a.add(() -> joinRoom(r)); }
         }
         l.add("VOLVER"); a.add(() -> { closeLobby(); go(TITLE); });
         menu(g, W / 2 - 170 * u, 84 * u, 340 * u, l.toArray(new String[0]), a.toArray(new Runnable[0]));
@@ -728,7 +729,7 @@ public final class App {
             boolean sel = i == selSlot; final int ix = i;
             if (sel) box(g, m, y, cw, row - 5 * u, RED, 0xFFFF8A8F, 0xFF8E1520); else box(g, m, y, cw, row - 5 * u, BLUE, SKY, NAVY);
             combo(g, i, m + 6 * u, y + 17 * u, 14 * u, sel ? GOLD : CREAM);
-            txtS(g, Wpn.ALL[eslots()[i]].name, m + 46 * u, y + 23 * u, 8, CREAM, -1);
+            txtS(g, Wpn.ALL[Wpn.usable(eslots()[i])].label, m + 46 * u, y + 23 * u, 8, CREAM, -1);
             btn(m, y, cw, row - 5 * u, () -> selSlot = ix); y += row;
         }
         float bx = m, by = H - 48 * u;
@@ -739,14 +740,15 @@ public final class App {
             box(g, bx + hw + 4 * u, by, hw, 38 * u, PURPLE, 0xFFB46BFF, 0xFF4A00A8); txtS(g, "AL AZAR", bx + hw * 1.5f + 4 * u, by + 24 * u, 12 * u, CREAM, 0);
             btn(bx + hw + 4 * u, by, hw, 38 * u, () -> { rRandom[armsFor] = true; saveRivals(); go(RIVALS); });
         } else btn(bx, by, cw, 38 * u, () -> { save(); go(TITLE); });
-        float gx = m + cw + 10 * u, gw = (W - gx - m) / COLS, gh = 28 * u, gy = 8 * u; int n = Wpn.ALL.length;
-        for (int i = 0; i < n; i++) {
-            final int ix = i; float x = gx + i % COLS * gw, yy = gy + i / COLS * gh;
+        float gx = m + cw + 10 * u, gw = (W - gx - m) / COLS, gh = 28 * u, gy = 8 * u; int[] L = Wpn.enabled(); int n = L.length;
+        if (Wpn.ALL[cur].off) cur = L[0];
+        for (int q = 0; q < n; q++) {
+            final int i = L[q], ix = i; float x = gx + q % COLS * gw, yy = gy + q / COLS * gh;
             boolean c = i == cur, eq = false; for (int s : eslots()) eq |= s == i;
             if (c) box(g, x, yy, gw - u, gh - 2 * u, GOLD, CREAM, 0xFFB8862A);
             else if (eq) box(g, x, yy, gw - u, gh - 2 * u, PURPLE, 0xFFB46BFF, 0xFF4A00A8);
             else box(g, x, yy, gw - u, gh - 2 * u, NAVY, BLUE, DEEP);
-            txt(g, Wpn.ALL[i].name, x + gw / 2, yy + gh / 2 + 3, 8, c ? DEEP : CREAM, 0);
+            txt(g, Wpn.ALL[i].label, x + gw / 2, yy + gh / 2 + 3, 8, c ? DEEP : CREAM, 0);
             btn(x, yy, gw, gh, () -> { cur = ix; eslots()[selSlot] = ix; selSlot = (selSlot + 1) % SLOTS; });
         }
         txt(g, Wpn.ALL[cur].desc, gx + 2, H - 3, 8, SKY, -1);

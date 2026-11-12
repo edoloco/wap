@@ -10,6 +10,7 @@ import java.util.ArrayList; import java.util.HashMap;
  *   forma relleno=AARRGGBB contorno=AARRGGBB grosor=0.75 parimpar=0 traje=1
  *   p x y x y x y ...        (un contorno cerrado de la forma anterior)
  *   pose NOMBRE fx fy bx by a1 a2 b1 b2 pel lean   (una pose de las animaciones; ver RobotArt.POSE_NAMES)
+ *   ajuste POSE ARTICULACIÓN dx dy giro           (mover y girar una articulación; ver RobotArt.JOINTS)
  */
 public final class Pieces {
     static final class Sh { float[][] polys; int fill, stroke; float sw; boolean eo, suit; }
@@ -21,7 +22,7 @@ public final class Pieces {
     public static void clear() { map.clear(); points = 0; pieces = 0; poses = 0; error = null; RobotArt.resetPoses(); }
     public static void load(String text) {
         clear(); if (text == null) return;
-        HashMap<String, float[]> pz = new HashMap<>(); HashMap<String, ArrayList<Sh>> m = new HashMap<>(); ArrayList<Sh> cur = null; Sh sh = null; ArrayList<float[]> ps = new ArrayList<>(); int pts = 0, line = 0;
+        HashMap<String, float[]> pz = new HashMap<>(); ArrayList<String[]> adj = new ArrayList<>(); HashMap<String, ArrayList<Sh>> m = new HashMap<>(); ArrayList<Sh> cur = null; Sh sh = null; ArrayList<float[]> ps = new ArrayList<>(); int pts = 0, line = 0;
         try {
             for (String raw : text.split("\n")) {
                 line++; String l = raw.trim(); if (l.isEmpty() || l.startsWith("#")) continue;
@@ -49,6 +50,10 @@ public final class Pieces {
                         if (t.length != 12 || RobotArt.poseValues(t[1]) == null) throw new IllegalArgumentException("pose mal escrita");
                         float[] f = new float[10]; for (int i = 0; i < 10; i++) { f[i] = Float.parseFloat(t[i + 2]); if (Float.isNaN(f[i]) || Math.abs(f[i]) > 1000) throw new IllegalArgumentException("número fuera de rango"); }
                         pz.put(t[1], f); break; }
+                    case "ajuste": {
+                        if (t.length != 6 || RobotArt.poseValues(t[1]) == null || !java.util.Arrays.asList(RobotArt.JOINTS).contains(t[2])) throw new IllegalArgumentException("ajuste mal escrito");
+                        for (int i = 3; i < 6; i++) { float v = Float.parseFloat(t[i]); if (Float.isNaN(v) || Math.abs(v) > 1000) throw new IllegalArgumentException("número fuera de rango"); }
+                        adj.add(t); break; }
                     default:
                 }
             }
@@ -57,6 +62,7 @@ public final class Pieces {
         if (pts > MAX_POINTS) { error = "demasiados puntos (" + pts + ", máximo " + MAX_POINTS + ")"; return; }
         for (java.util.Map.Entry<String, ArrayList<Sh>> e : m.entrySet()) { ArrayList<Sh> a = e.getValue(); a.removeIf(x -> x.polys == null || x.polys.length == 0); if (!a.isEmpty()) map.put(e.getKey(), a.toArray(new Sh[0])); }
         for (java.util.Map.Entry<String, float[]> e : pz.entrySet()) RobotArt.setPose(e.getKey(), e.getValue());
+        for (String[] t : adj) RobotArt.setAdjust(t[1], t[2], Float.parseFloat(t[3]), Float.parseFloat(t[4]), Float.parseFloat(t[5]));
         points = pts; pieces = map.size(); poses = pz.size();
     }
     private static void close(Sh sh, ArrayList<float[]> ps) { if (sh != null && sh.polys == null) sh.polys = ps.toArray(new float[0][]); }

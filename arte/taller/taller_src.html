@@ -107,13 +107,19 @@ ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(-
       </div>
     </div>
     <div class="stage" style="margin-top:10px"><canvas id="pe" width="900" height="620" aria-label="Pose en grande: arrastra los puntos de colores para moverla"></canvas></div>
-    <div class="legend">
-      <span><i style="background:#ffc94a"></i>pies</span><span><i style="background:#6ee2b4"></i>cadera (altura)</span><span><i style="background:#ff6f9c"></i>pecho (inclinación)</span>
-      <span><i style="background:#7fc8ff"></i>codo y mano del brazo cercano</span><span><i style="background:#b9a7ff"></i>codo y mano del brazo lejano</span>
+    <div class="row" style="margin-top:8px">
+      <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="freeMove"> Arrastrar mueve libre (sin doblar)</label>
+      <span class="small" id="jsel">Toca una articulación para elegirla.</span>
     </div>
-    <p class="hint">Arrastra los puntos. En gris se ve la pose anterior de la animación. La línea es el suelo. La pierna se dobla sola para llegar al pie.</p>
+    <p class="hint">Arrastra un punto: el codo, la mano, la rodilla y el pie <b>doblan</b> la parte de arriba hacia el dedo; los demás se <b>mueven</b>. Para <b>girar</b>, arrastra la perilla del anillo de la articulación elegida (o usa la rueda del mouse sobre ella). Lo que cuelga de una articulación la sigue. En gris, la pose anterior de la animación.</p>
     <p class="hint" id="poseNote"></p>
-    <div class="nums" id="nums"></div>
+    <div class="nums" id="jnums">
+      <label for="j-dx">mover x<input type="number" step="0.5" id="j-dx"></label>
+      <label for="j-dy">mover y<input type="number" step="0.5" id="j-dy"></label>
+      <label for="j-r">girar °<input type="number" step="1" id="j-r"></label>
+      <button class="sec" id="jReset" type="button">Reiniciar articulación</button>
+    </div>
+    <details style="margin-top:10px"><summary class="small">Valores base de la pose (avanzado)</summary><div class="nums" id="nums"></div></details>
     <div class="status" id="pstatus" role="status"></div>
   </section>
 
@@ -201,8 +207,8 @@ const LABEL = {hueso_brazo:"hueso brazo",hueso_antebrazo:"hueso antebrazo",mano_
 let P = {}, sel = "cabeza";
 const $ = id => document.getElementById(id);
 let Q = {}; // poses cambiadas: nombre -> 10 números
-function save(){ try{ localStorage.setItem("wap-taller", JSON.stringify({P,Q})); }catch(e){} }
-function load(){ try{ const t = localStorage.getItem("wap-taller"); if(t){ const d=JSON.parse(t)||{}; if(d.P||d.Q){ P=d.P||{}; Q=d.Q||{}; } else P=d; } }catch(e){ P = {}; Q = {}; } }
+function save(){ try{ localStorage.setItem("wap-taller", JSON.stringify({P,Q,QA})); }catch(e){} }
+function load(){ try{ const t = localStorage.getItem("wap-taller"); if(t){ const d=JSON.parse(t)||{}; if(d.P||d.Q){ P=d.P||{}; Q=d.Q||{}; QA=d.QA||{}; } else P=d; } }catch(e){ P = {}; Q = {}; } }
 
 /* ---------- formas base (las del juego) ---------- */
 function hexA(h){ return {c:"#"+h.slice(2), a:parseInt(h.slice(0,2),16)/255}; }
@@ -270,45 +276,70 @@ const FIELDS=[["fx","pie lejano x"],["fy","pie lejano y"],["bx","pie cercano x"]
 const POSE_LABEL={de_pie_1:"de pie 1",de_pie_2:"de pie 2",correr_1:"correr 1",correr_2:"correr 2",correr_3:"correr 3",correr_4:"correr 4",preparar_1:"preparar disparo 1",preparar_2:"preparar disparo 2",disparo:"disparo",salto_subir:"salto (subiendo)",salto_caer:"salto (cayendo)",barrida_1:"barrida 1",barrida_2:"barrida 2",pared:"pared",gancho:"gancho",estirar:"estirarse (tras doble salto)"};
 const POSE_NOTE={gancho:"En el juego, los dos brazos del gancho apuntan siempre hacia la cuerda; aquí solo cuentan piernas, cadera e inclinación.",disparo:"Esta pose usa la mano abierta.",salto_subir:"Si dispara en el aire, el juego pone los brazos al frente (salto disparando).",salto_caer:"También se usa cuando un golpe lanza al personaje (el juego lo hace girar)."};
 function poseOf(n){ return Q[n] ? Q[n].slice() : BASE.poseDefs[n].slice(); }
+var QA = {}; // ajustes libres: pose -> {articulación: [dx, dy, giro]}
+function adjOf(n){ return QA[n] || {}; }
 const D2R=d=>d*Math.PI/180;
 const mm=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
 const TR=(x,y)=>[1,0,0,1,x,y], RO=r=>[Math.cos(r),Math.sin(r),-Math.sin(r),Math.cos(r),0,0], SC=k=>[k,0,0,k,0,0];
-/** Piezas con su matriz y articulaciones, a partir de los 10 números de una pose. */
-function skeleton(F, open){
-  const [fx,fy,bx,by,a1,a2,b1,b2,pel,lean]=F, out=[], J={};
-  const px=0, py=pel, lr=D2R(lean), sn=Math.sin(lr), cs=Math.cos(lr);
-  const cx=px+sn*SK.SHOULDER, cy=py-cs*SK.SHOULDER;
-  const ffx=cx+cs*4.6, ffy=cy+sn*4.6+1, nx=cx-cs*4.6, ny=cy-sn*4.6+1;
-  const arm=(sx,sy,d1,d2,op,key)=>{ const ex=sx+Math.cos(D2R(d1))*SK.UA, ey=sy+Math.sin(D2R(d1))*SK.UA;
+const JOINTS=["torso","cabeza","pecho","abdomen","pelvis","brazo_cercano","codo_cercano","mano_cercana","brazo_lejano","codo_lejano","mano_lejana","muslo_cercano","rodilla_cercana","pie_cercano","muslo_lejano","rodilla_lejana","pie_lejano"];
+const JOINT_LABEL={torso:"torso",cabeza:"cabeza (cuello)",pecho:"pecho",abdomen:"abdomen",pelvis:"pelvis",brazo_cercano:"hombro cercano",codo_cercano:"codo cercano",mano_cercana:"mano cercana",brazo_lejano:"hombro lejano",codo_lejano:"codo lejano",mano_lejana:"mano lejana",muslo_cercano:"cadera (pierna cercana)",rodilla_cercana:"rodilla cercana",pie_cercano:"pie cercano",muslo_lejano:"cadera (pierna lejana)",rodilla_lejana:"rodilla lejana",pie_lejano:"pie lejano"};
+/** Piezas con su matriz y articulaciones, a partir de los 10 números de una pose y los ajustes libres (A[articulación]=[dx,dy,giro°]). */
+function skeleton(F, open, A){
+  A=A||{}; const aj=(j,k)=>A[j]?A[j][k]:0;
+  const [fx,fy,bx,by,a1,a2,b1,b2,pel,lean]=F, out=[], J={}, P={};
+  const px=0, py=pel, lr=D2R(lean);
+  const ux=px+aj("torso",0), uy=py+aj("torso",1), ulr=lr+D2R(aj("torso",2)), sn=Math.sin(ulr), cs=Math.cos(ulr);
+  const cx=ux+sn*SK.SHOULDER, cy=uy-cs*SK.SHOULDER;
+  const ffx=cx+cs*4.6+aj("brazo_lejano",0), ffy=cy+sn*4.6+1+aj("brazo_lejano",1), nx=cx-cs*4.6+aj("brazo_cercano",0), ny=cy-sn*4.6+1+aj("brazo_cercano",1);
+  // desplazamiento en coordenadas de la pose → dentro de un marco girado "frame" (radianes), girando sobre (pxl,pyl)
+  const local=(M,j,pxl,pyl,frame)=>{ const d=A[j]; if(!d||(!d[0]&&!d[1]&&!d[2])) return M; const c=Math.cos(frame), s=Math.sin(frame);
+    return mm(mm(mm(M,TR(pxl+d[0]*c+d[1]*s, pyl-d[0]*s+d[1]*c)),RO(D2R(d[2]))),TR(-pxl,-pyl)); };
+  const ap=(M,x,y)=>[M[0]*x+M[2]*y+M[4], M[1]*x+M[3]*y+M[5]];
+  const arm=(sx,sy,d1,d2,op,side)=>{ const co="codo_"+side, ma="mano_"+(side==="cercano"?"cercana":"lejana");
+    const ex=sx+Math.cos(D2R(d1))*SK.UA+aj(co,0), ey=sy+Math.sin(D2R(d1))*SK.UA+aj(co,1); d2+=aj(co,2);
     out.push({n:"hueso_brazo",m:mm(TR(sx,sy),RO(D2R(d1)))}); const M=mm(TR(ex,ey),RO(D2R(d2)));
-    out.push({n:"hueso_antebrazo",m:M}); out.push({n:op?"mano_abierta":"mano",m:mm(M,TR(SK.FA,0))}); out.push({n:"guantelete",m:M});
-    J[key+"S"]=[sx,sy]; J[key+"E"]=[ex,ey]; J[key+"H"]=[ex+Math.cos(D2R(d2))*SK.FA, ey+Math.sin(D2R(d2))*SK.FA]; };
+    out.push({n:"hueso_antebrazo",m:M}); const MH=local(mm(M,TR(SK.FA,0)),ma,0,0,D2R(d2)); out.push({n:op?"mano_abierta":"mano",m:MH}); out.push({n:"guantelete",m:M});
+    J["brazo_"+side]=[sx,sy]; J[co]=[ex,ey]; J[ma]=ap(MH,0,0);
+    P["brazo_"+side]={a:d1, child:co}; P[co]={a:d2, child:ma}; P[ma]={a:Math.atan2(MH[1],MH[0])*180/Math.PI}; };
   const shoulder=(x,y,r)=>out.push({n:"hombro",m:mm(TR(x,y),SC(r/3.6))});
-  const leg=(hx,hy,ax,ay)=>{ let dx=ax-hx, dy=ay-hy, d=Math.hypot(dx,dy); const max=SK.TH+SK.SH-.1;
+  const leg=(hx,hy,ax,ay,side)=>{ const mu="muslo_"+(side==="cercana"?"cercano":"lejano"), ro="rodilla_"+side, pi="pie_"+(side==="cercana"?"cercano":"lejano");
+    hx+=aj(mu,0); hy+=aj(mu,1); ax+=aj(mu,0); ay+=aj(mu,1);
+    let dx=ax-hx, dy=ay-hy, d=Math.hypot(dx,dy); const max=SK.TH+SK.SH-.1;
     if(d>max){ dx*=max/d; dy*=max/d; d=max; ax=hx+dx; ay=hy+dy; }
     const a=(d*d+SK.TH*SK.TH-SK.SH*SK.SH)/(2*d), h2=SK.TH*SK.TH-a*a, h=h2>0?Math.sqrt(h2):0;
     let kx=hx+dx/d*a+dy/d*h, ky=hy+dy/d*a-dx/d*h;
     if(kx<hx+dx/d*a){ kx=hx+dx/d*a-dy/d*h; ky=hy+dy/d*a+dx/d*h; }
-    const t=Math.atan2(ky-hy,kx-hx)*180/Math.PI, s=Math.atan2(ay-ky,ax-kx)*180/Math.PI;
-    out.push({n:"bota",m:mm(TR(ax,ay),RO(D2R(ay<-6.5?Math.max(-10,Math.min(55,(s-90)*-.9+28)):0)))});
+    let t=Math.atan2(ky-hy,kx-hx)*180/Math.PI, s=Math.atan2(ay-ky,ax-kx)*180/Math.PI, foot=0;
+    if(A[mu]||A[ro]||A[pi]){ const tr=aj(mu,2); t+=tr; s+=tr;
+      kx=hx+Math.cos(D2R(t))*SK.TH+aj(ro,0); ky=hy+Math.sin(D2R(t))*SK.TH+aj(ro,1); s+=aj(ro,2);
+      ax=kx+Math.cos(D2R(s))*SK.SH+aj(pi,0); ay=ky+Math.sin(D2R(s))*SK.SH+aj(pi,1); foot=aj(pi,2); }
+    const ba=(ay<-6.5?Math.max(-10,Math.min(55,(s-90)*-.9+28)):0)+foot;
+    out.push({n:"bota",m:mm(TR(ax,ay),RO(D2R(ba)))});
     const MS=mm(TR(kx,ky),RO(D2R(s))), MT=mm(TR(hx,hy),RO(D2R(t)));
-    out.push({n:"hueso_canilla",m:MS},{n:"canilla",m:MS},{n:"hueso_muslo",m:MT},{n:"muslo",m:MT},{n:"rodilla",m:MS}); };
-  arm(ffx,ffy,b1,b2,false,"b"); shoulder(ffx,ffy,3);
-  leg(px+2,py+1,fx,fy-1);
-  const M0=mm(mm(TR(px,py),RO(lr)),TR(0,-SK.TORSO));
-  out.push({n:"torso",m:M0},{n:"abdomen",m:M0},{n:"pecho",m:M0},{n:"cabeza",m:mm(M0,RO(-lr*.8))});
-  leg(px-2,py+1,bx,by);
-  out.push({n:"pelvis",m:mm(TR(px,py),RO(lr))});
-  arm(nx,ny,a1,a2,open,"a"); shoulder(nx,ny,3.6);
-  J.hip=[px,py]; J.chest=[cx,cy]; J.ff=[fx,fy-1]; J.bf=[bx,by];
-  return {parts:out, J};
+    out.push({n:"hueso_canilla",m:MS},{n:"canilla",m:MS},{n:"hueso_muslo",m:MT},{n:"muslo",m:MT},{n:"rodilla",m:MS});
+    J[mu]=[hx,hy]; J[ro]=[kx,ky]; J[pi]=[ax,ay]; P[mu]={a:t,child:ro}; P[ro]={a:s,child:pi}; P[pi]={a:ba}; };
+  arm(ffx,ffy,b1+aj("brazo_lejano",2),b2,false,"lejano"); shoulder(ffx,ffy,3);
+  leg(px+2,py+1,fx,fy-1,"lejana");
+  const M0=mm(mm(TR(ux,uy),RO(ulr)),TR(0,-SK.TORSO));
+  const MA=local(M0,"abdomen",0,9.7,ulr), MP=local(M0,"pecho",0,4.8,ulr), MC=mm(local(M0,"cabeza",0,0,ulr),RO(-lr*.8));
+  out.push({n:"torso",m:M0},{n:"abdomen",m:MA},{n:"pecho",m:MP},{n:"cabeza",m:MC});
+  leg(px-2,py+1,bx,by,"cercana");
+  const MPe=local(mm(TR(px,py),RO(lr)),"pelvis",0,-1,lr);
+  out.push({n:"pelvis",m:MPe});
+  arm(nx,ny,a1+aj("brazo_cercano",2),a2,open,"cercano"); shoulder(nx,ny,3.6);
+  // dónde se dibuja cada punto en el editor (algunos se separan un poco para que no se tapen)
+  J.torso=ap(mm(TR(ux,uy),RO(ulr)),0,-3); J.cabeza=ap(local(M0,"cabeza",0,0,ulr),0,0); J.pecho=ap(MP,0,4.8); J.abdomen=ap(MA,0,9.7); J.pelvis=ap(MPe,0,-1);
+  P.torso={a:ulr*180/Math.PI-90}; P.cabeza={a:-90}; P.pecho={a:-90}; P.abdomen={a:-90}; P.pelvis={a:90};
+  // compatibilidad con los puntos de antes
+  J.hip=[px,py]; J.chest=[cx,cy]; J.ff=J.pie_lejano; J.bf=J.pie_cercano;
+  return {parts:out, J, P};
 }
 /** Cuadro de animación → piezas: las poses editables usan el esqueleto; la bola, lo que exportó el juego. */
 function frameParts(fr){
   if(fr==="doble_salto") return BASE.poses[fr];
-  if(fr==="lanzado") return skeleton(poseOf("salto_caer"),false).parts;
-  if(fr==="salto_disparo"){ const F=poseOf("salto_subir"); F[4]=0; F[5]=0; F[6]=105; F[7]=95; return skeleton(F,true).parts; }
-  return skeleton(poseOf(fr), fr==="disparo").parts;
+  if(fr==="lanzado") return skeleton(poseOf("salto_caer"),false,adjOf("salto_caer")).parts;
+  if(fr==="salto_disparo"){ const F=poseOf("salto_subir"); F[4]=0; F[5]=0; F[6]=105; F[7]=95; return skeleton(F,true,adjOf("salto_subir")).parts; }
+  return skeleton(poseOf(fr), fr==="disparo", adjOf(fr)).parts;
 }
 function drawCharacter(ctx, parts, k, ox, oy, suit, alpha, hiPiece){
   for(const it of parts){ const m=it.m; ctx.setTransform(k*m[0],k*m[1],k*m[2],k*m[3],ox+k*m[4],oy+k*m[5]);
@@ -667,10 +698,13 @@ function exportText(){
   const changedPoses=POSE_NAMES.filter(n=>Q[n] && Q[n].some((v,i)=>Math.abs(v-BASE.poseDefs[n][i])>1e-6));
   if(changedPoses.length){ L.push("# poses: fx fy bx by a1 a2 b1 b2 pel lean (pies, brazos cercano y lejano, cadera, inclinación)");
     for(const n of changedPoses) L.push("pose "+n+" "+Q[n].map(f3).join(" ")); L.push(""); }
+  const adjPoses=POSE_NAMES.filter(n=>QA[n]&&Object.keys(QA[n]).length);
+  if(adjPoses.length){ L.push("# ajustes libres: pose, articulación, mover x, mover y, girar (grados)");
+    for(const n of adjPoses) for(const j of JOINTS) if(QA[n][j]) L.push("ajuste "+n+" "+j+" "+QA[n][j].map(f3).join(" ")); L.push(""); }
   return L.join("\n");
 }
 function importText(text){
-  const res={}, poses={}; let cur=null, sh=null;
+  const res={}, poses={}, adj={}; let cur=null, sh=null;
   for(const raw of text.split(/\r?\n/)){ const l=raw.trim(); if(!l||l[0]==="#") continue; const t=l.split(/\s+/);
     if(t[0]==="pieza"){ if(!BASE.pieces[t[1]]) { cur=null; continue; } cur=res[t[1]]={shapes:[],cx:0,cy:0,tx:0,ty:0,s:1,rot:0,fx:1,fy:1,tol:0}; }
     else if(t[0]==="forma"&&cur){ const kv={}; t.slice(1).forEach(x=>{ const [k,v]=x.split("="); kv[k]=v; });
@@ -678,15 +712,16 @@ function importText(text){
       sh={polys:[],open:[],fill:fa?"#"+f.slice(2).toLowerCase():null,fa:fa||1,stroke:sa?"#"+k.slice(2).toLowerCase():null,sa:sa||1,sw:parseFloat(kv.grosor)||0,eo:kv.parimpar==="1",suit:kv.traje==="1"}; cur.shapes.push(sh); }
     else if(t[0]==="p"&&sh){ sh.polys.push(t.slice(1).map(Number)); sh.open.push(false); }
     else if(t[0]==="pose"&&BASE.poseDefs[t[1]]&&t.length===12){ const v=t.slice(2).map(Number); if(v.every(x=>isFinite(x))) poses[t[1]]=v; }
+    else if(t[0]==="ajuste"&&BASE.poseDefs[t[1]]&&JOINTS.includes(t[2])&&t.length===6){ const v=t.slice(3).map(Number); if(v.every(x=>isFinite(x))){ adj[t[1]]=adj[t[1]]||{}; adj[t[1]][t[2]]=v; } }
   }
-  return {pieces:res, poses};
+  return {pieces:res, poses, adj};
 }
 $("exportBtn").onclick=()=>{ $("out").value=exportText(); $("copyMsg").textContent=""; $("dlg").showModal(); };
 $("closeDlg").onclick=()=>$("dlg").close();
 $("copyBtn").onclick=()=>{ const t=$("out").value; navigator.clipboard.writeText(t).then(()=>{ $("copyMsg").textContent="Copiado."; },()=>{ $("out").select(); $("copyMsg").textContent="Selecciona todo y copia con Ctrl+C."; }); };
 $("openTxt").onclick=()=>$("txtFile").click();
-$("txtFile").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return; const r=importText(await f.text()); const n=Object.keys(r.pieces).length, np=Object.keys(r.poses).length;
-  if(!n&&!np){ setStatus("Ese archivo no tiene piezas ni poses de WAP.","err"); return; } P={...P,...r.pieces}; Q={...Q,...r.poses}; changed(true); refreshPoses(); setStatus("Abrí "+n+" piezas y "+np+" poses de "+f.name+".","ok"); };
+$("txtFile").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; if(!f) return; const r=importText(await f.text()); const n=Object.keys(r.pieces).length, np=new Set([...Object.keys(r.poses),...Object.keys(r.adj)]).size;
+  if(!n&&!np){ setStatus("Ese archivo no tiene piezas ni poses de WAP.","err"); return; } P={...P,...r.pieces}; Q={...Q,...r.poses}; QA={...QA,...r.adj}; changed(true); refreshPoses(); setStatus("Abrí "+n+" piezas y "+np+" poses de "+f.name+".","ok"); };
 
 /* ---------- vista previa ---------- */
 const pv=$("pv"), px=pv.getContext("2d"); let animI=0, t0=performance.now(), playing=true;
@@ -721,52 +756,74 @@ function buildPoseList(){
   FIELDS.forEach(([k,lab],i)=>{ const l=document.createElement("label"); l.htmlFor="pv-"+k; l.textContent=lab; const inp=document.createElement("input"); inp.type="number"; inp.step=k==="fx"||k==="fy"||k==="bx"||k==="by"||k==="pel"?"0.5":"1"; inp.id="pv-"+k;
     inp.oninput=()=>{ const v=parseFloat(inp.value); if(!isFinite(v)) return; const F=poseOf(psel); F[i]=v; Q[psel]=F; poseChanged(false); }; l.append(inp); N.append(l); });
 }
-function isChanged(n){ return !!Q[n] && Q[n].some((v,i)=>Math.abs(v-BASE.poseDefs[n][i])>1e-6); }
+function isChanged(n){ return (!!Q[n] && Q[n].some((v,i)=>Math.abs(v-BASE.poseDefs[n][i])>1e-6)) || !!(QA[n]&&Object.keys(QA[n]).length); }
 function refreshPoses(){
   for(const n of POSE_NAMES){ const b=$("po-"+n); if(!b) continue; b.classList.toggle("on", n===psel); b.querySelector(".chip").hidden=!isChanged(n);
     const ctx=poseThumbs[n].getContext("2d"); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,80,60); drawCharacter(ctx, frameParts(n), 1, 40, 57, $("suit").value); }
   if(mode!=="poses") return;
   $("posename").textContent=POSE_LABEL[psel]||psel; $("poseNote").textContent=POSE_NOTE[psel]||""; $("poseReset").disabled=!isChanged(psel);
   const F=poseOf(psel); FIELDS.forEach(([k],i)=>{ const inp=$("pv-"+k); if(document.activeElement!==inp) inp.value=Math.round(F[i]*10)/10; });
-  drawPoseEditor();
+  drawPoseEditor(); refreshJoint();
 }
 function prevPoseName(n){ for(const [,seq] of ANIMS){ const i=seq.findIndex(x=>x[0]===n); if(i>=0){ const p=seq[(i-1+seq.length)%seq.length][0]; return p===n?null:p; } } return null; }
-const HANDLES=[["ff","#ffc94a"],["bf","#ffc94a"],["hip","#6ee2b4"],["chest","#ff6f9c"],["aE","#7fc8ff"],["aH","#7fc8ff"],["bE","#b9a7ff"],["bH","#b9a7ff"]];
+const JCOL={torso:"#ff6f9c",cabeza:"#ff6f9c",pecho:"#ff6f9c",abdomen:"#ff6f9c",pelvis:"#6ee2b4",brazo_cercano:"#7fc8ff",codo_cercano:"#7fc8ff",mano_cercana:"#7fc8ff",brazo_lejano:"#b9a7ff",codo_lejano:"#b9a7ff",mano_lejana:"#b9a7ff",muslo_cercano:"#ffc94a",rodilla_cercana:"#ffc94a",pie_cercano:"#ffc94a",muslo_lejano:"#ffb07a",rodilla_lejana:"#ffb07a",pie_lejano:"#ffb07a"};
+// al arrastrar estas articulaciones se dobla la de arriba (padre); las demás se mueven
+const PARENT={codo_cercano:"brazo_cercano",mano_cercana:"codo_cercano",codo_lejano:"brazo_lejano",mano_lejana:"codo_lejano",rodilla_cercana:"muslo_cercano",pie_cercano:"rodilla_cercana",rodilla_lejana:"muslo_lejano",pie_lejano:"rodilla_lejana"};
+let jsel=null;
+const curSk=()=>skeleton(poseOf(psel), psel==="disparo", adjOf(psel));
+function getAdj(j){ return (QA[psel]&&QA[psel][j]) ? QA[psel][j].slice() : [0,0,0]; }
+function setAdj(j,v){ const r=v.map(x=>Math.round(x*100)/100); QA[psel]=QA[psel]||{}; if(!r[0]&&!r[1]&&!r[2]) delete QA[psel][j]; else QA[psel][j]=r; if(!Object.keys(QA[psel]).length) delete QA[psel]; }
+const KNOB=4.2; // distancia de la perilla de giro, en unidades
+function knobPos(sk,j){ const p=sk.J[j], a=D2R((sk.P[j]?sk.P[j].a:0)); return [p[0]+Math.cos(a)*KNOB, p[1]+Math.sin(a)*KNOB]; }
 function drawPoseEditor(){
   const {k,ox,oy}=pview; pc.setTransform(1,0,0,1,0,0); pc.fillStyle="#0c1024"; pc.fillRect(0,0,pe.width,pe.height);
-  pc.strokeStyle="#26315f"; pc.lineWidth=1; for(let x=-50;x<=50;x+=5){ pc.beginPath(); pc.moveTo(ox+x*k+.5,0); pc.lineTo(ox+x*k+.5,pe.height); pc.stroke(); } for(let y=-70;y<=10;y+=5){ pc.beginPath(); pc.moveTo(0,oy+y*k+.5); pc.lineTo(pe.width,oy+y*k+.5); pc.stroke(); }
+  pc.strokeStyle="#1b2348"; pc.lineWidth=1; for(let x=-50;x<=50;x+=5){ pc.beginPath(); pc.moveTo(ox+x*k+.5,0); pc.lineTo(ox+x*k+.5,pe.height); pc.stroke(); } for(let y=-70;y<=10;y+=5){ pc.beginPath(); pc.moveTo(0,oy+y*k+.5); pc.lineTo(pe.width,oy+y*k+.5); pc.stroke(); }
   pc.strokeStyle="#6ee2b4"; pc.lineWidth=2; pc.beginPath(); pc.moveTo(0,oy); pc.lineTo(pe.width,oy); pc.stroke();
-  const pr=prevPoseName(psel); if(pr){ const prv=pr==="disparo"; drawCharacter(pc, skeleton(poseOf(pr),prv).parts, k, ox, oy, "#9aa3cf", .22); }
-  const sk=skeleton(poseOf(psel), psel==="disparo"); drawCharacter(pc, sk.parts, k, ox, oy, $("suit").value, 1);
-  const J=sk.J; pc.lineWidth=2;
-  for(const [a,b,c] of [["aS","aE","#7fc8ff"],["aE","aH","#7fc8ff"],["bS","bE","#b9a7ff"],["bE","bH","#b9a7ff"],["hip","chest","#ff6f9c"]]){ pc.strokeStyle=c; pc.setLineDash([4,4]); pc.beginPath(); pc.moveTo(ox+J[a][0]*k,oy+J[a][1]*k); pc.lineTo(ox+J[b][0]*k,oy+J[b][1]*k); pc.stroke(); } pc.setLineDash([]);
-  for(const [h,c] of HANDLES){ if(psel==="gancho"&&/^[ab][EH]$/.test(h)) continue; const [x,y]=J[h]; pc.fillStyle=c; pc.strokeStyle="#0c1024"; pc.lineWidth=3; pc.beginPath(); pc.arc(ox+x*k,oy+y*k,hover===h?11:8,0,Math.PI*2); pc.fill(); pc.stroke(); }
+  const pr=prevPoseName(psel); if(pr) drawCharacter(pc, skeleton(poseOf(pr),pr==="disparo",adjOf(pr)).parts, k, ox, oy, "#9aa3cf", .22);
+  const sk=curSk(); drawCharacter(pc, sk.parts, k, ox, oy, $("suit").value, 1);
+  const S=q=>[ox+q[0]*k, oy+q[1]*k];
+  for(const j of JOINTS){ const [x,y]=S(sk.J[j]); const on=j===jsel, hv=j===hover; pc.fillStyle=JCOL[j]; pc.strokeStyle="#0c1024"; pc.lineWidth=3;
+    pc.beginPath(); pc.arc(x,y,on||hv?9:6.5,0,Math.PI*2); pc.fill(); pc.stroke(); if(on){ pc.strokeStyle="#fff"; pc.lineWidth=2; pc.beginPath(); pc.arc(x,y,9,0,Math.PI*2); pc.stroke(); } }
+  if(jsel){ const c=S(sk.J[jsel]), kp=S(knobPos(sk,jsel)); pc.strokeStyle=JCOL[jsel]; pc.lineWidth=2; pc.setLineDash([5,4]); pc.beginPath(); pc.arc(c[0],c[1],KNOB*k,0,Math.PI*2); pc.stroke(); pc.setLineDash([]);
+    pc.beginPath(); pc.moveTo(c[0],c[1]); pc.lineTo(kp[0],kp[1]); pc.stroke(); pc.fillStyle="#fff"; pc.strokeStyle=JCOL[jsel]; pc.lineWidth=3; pc.beginPath(); pc.arc(kp[0],kp[1],hover==="@knob"?9:7,0,Math.PI*2); pc.fill(); pc.stroke();
+    pc.fillStyle="#eef0fa"; pc.font="13px Inter, sans-serif"; pc.fillText(JOINT_LABEL[jsel], c[0]+12, c[1]-12); }
   pc.fillStyle="#9aa3cf"; pc.font="12px Inter, sans-serif"; pc.fillText("suelo", 10, oy-6);
 }
 let pdrag=null, hover=null;
 function pePoint(e){ const r=pe.getBoundingClientRect(), f=pe.width/r.width; return [((e.clientX-r.left)*f-pview.ox)/pview.k, ((e.clientY-r.top)*f-pview.oy)/pview.k]; }
-function hitHandle(p){ const J=skeleton(poseOf(psel),false).J; let best=null, bd=1.6; for(const [h] of HANDLES){ if(psel==="gancho"&&/^[ab][EH]$/.test(h)) continue; const d=Math.hypot(J[h][0]-p[0],J[h][1]-p[1]); if(d<bd){ bd=d; best=h; } } return best; }
-pe.addEventListener("pointerdown",e=>{ const h=hitHandle(pePoint(e)); if(!h) return; pe.setPointerCapture(e.pointerId); pdrag=h; });
+function hitHandle(p){ const sk=curSk(); if(jsel){ const kp=knobPos(sk,jsel); if(Math.hypot(kp[0]-p[0],kp[1]-p[1])<1.3) return "@knob"; }
+  let best=null, bd=1.3; for(const j of JOINTS){ const q=sk.J[j], d=Math.hypot(q[0]-p[0],q[1]-p[1]); if(d<bd){ bd=d; best=j; } } return best; }
+const ang=(a,b)=>Math.atan2(b[1]-a[1],b[0]-a[0])*180/Math.PI;
+const wrap=d=>{ while(d>180) d-=360; while(d<-180) d+=360; return d; };
+pe.addEventListener("pointerdown",e=>{ const p=pePoint(e), h=hitHandle(p); if(!h){ return; } pe.setPointerCapture(e.pointerId); const sk=curSk();
+  if(h==="@knob"){ pdrag={kind:"rot", j:jsel, a0:ang(sk.J[jsel],p), g0:getAdj(jsel)}; return; }
+  jsel=h; const par=PARENT[h];
+  if(par && !$("freeMove").checked) pdrag={kind:"aim", j:par, a0:ang(sk.J[par],sk.J[h]), g0:getAdj(par)};
+  else pdrag={kind:"move", j:h, p0:p, g0:getAdj(h)};
+  refreshJoint(); drawPoseEditor(); });
 pe.addEventListener("pointermove",e=>{ const p=pePoint(e);
   if(!pdrag){ const h=hitHandle(p); if(h!==hover){ hover=h; pe.style.cursor=h?"grab":"default"; drawPoseEditor(); } return; }
-  const F=poseOf(psel), sk=skeleton(F,false), J=sk.J, deg=(a,b)=>Math.round(Math.atan2(b[1]-a[1],b[0]-a[0])*180/Math.PI), r1=v=>Math.round(v*2)/2;
-  switch(pdrag){
-    case "ff": F[0]=r1(p[0]); F[1]=r1(p[1]+1); break;
-    case "bf": F[2]=r1(p[0]); F[3]=r1(p[1]); break;
-    case "hip": F[8]=r1(Math.min(-4,p[1])); break;
-    case "chest": F[9]=Math.round(Math.atan2(p[0]-J.hip[0], J.hip[1]-p[1])*180/Math.PI); break;
-    case "aE": F[4]=deg(J.aS,p); break; case "aH": F[5]=deg(J.aE,p); break;
-    case "bE": F[6]=deg(J.bS,p); break; case "bH": F[7]=deg(J.bE,p); break;
-  }
-  Q[psel]=F; poseChanged(false); });
+  const g=pdrag.g0.slice(), sk=curSk();
+  if(pdrag.kind==="move"){ g[0]=pdrag.g0[0]+Math.round((p[0]-pdrag.p0[0])*4)/4; g[1]=pdrag.g0[1]+Math.round((p[1]-pdrag.p0[1])*4)/4; }
+  else if(pdrag.kind==="rot"){ g[2]=Math.round(pdrag.g0[2]+wrap(ang(sk.J[pdrag.j],p)-pdrag.a0)); }
+  else { const child=Object.keys(PARENT).find(c=>PARENT[c]===pdrag.j && c===jsel); g[2]=Math.round(pdrag.g0[2]+wrap(ang(sk.J[pdrag.j],p)-pdrag.a0)); }
+  setAdj(pdrag.j,g); poseChanged(false); });
 const endP=()=>{ if(pdrag){ pdrag=null; save(); refreshPoses(); } };
 pe.addEventListener("pointerup",endP); pe.addEventListener("pointercancel",endP);
-function poseChanged(full){ save(); if(full) refreshPoses(); else { drawPoseEditor(); const F=poseOf(psel); FIELDS.forEach(([k],i)=>{ const inp=$("pv-"+k); if(document.activeElement!==inp) inp.value=Math.round(F[i]*10)/10; }); $("poseReset").disabled=!isChanged(psel); clearTimeout(poseChanged.t); poseChanged.t=setTimeout(refreshPoses,120); } }
-function selectPose(n){ psel=n; refreshPoses(); $("pstatus").textContent=""; 
+pe.addEventListener("wheel",e=>{ if(!jsel) return; const p=pePoint(e), q=curSk().J[jsel]; if(Math.hypot(q[0]-p[0],q[1]-p[1])>KNOB+1) return; e.preventDefault();
+  const g=getAdj(jsel); g[2]=Math.round(g[2]+(e.deltaY>0?2:-2)); setAdj(jsel,g); poseChanged(false); save(); },{passive:false});
+function refreshJoint(){
+  const has=!!jsel; $("jnums").hidden=!has; $("jsel").textContent=has?("Elegida: "+JOINT_LABEL[jsel]):"Toca una articulación para elegirla.";
+  if(!has) return; const g=getAdj(jsel); [["j-dx",0],["j-dy",1],["j-r",2]].forEach(([id,i])=>{ const inp=$(id); if(document.activeElement!==inp) inp.value=g[i]; });
+}
+[["j-dx",0],["j-dy",1],["j-r",2]].forEach(([id,i])=>{ $(id).oninput=()=>{ if(!jsel) return; const v=parseFloat($(id).value); if(!isFinite(v)) return; const g=getAdj(jsel); g[i]=v; setAdj(jsel,g); poseChanged(false); }; });
+$("jReset").onclick=()=>{ if(!jsel) return; setAdj(jsel,[0,0,0]); poseChanged(true); };
+function poseChanged(full){ save(); if(full) refreshPoses(); else { drawPoseEditor(); refreshJoint(); const F=poseOf(psel); FIELDS.forEach(([k],i)=>{ const inp=$("pv-"+k); if(document.activeElement!==inp) inp.value=Math.round(F[i]*10)/10; }); $("poseReset").disabled=!isChanged(psel); clearTimeout(poseChanged.t); poseChanged.t=setTimeout(refreshPoses,120); } }
+function selectPose(n){ psel=n; jsel=null; refreshPoses(); $("pstatus").textContent=""; 
   // la animación de la derecha muestra la que contiene esta pose
   const i=ANIMS.findIndex(([,seq])=>seq.some(x=>x[0]===n)); if(i>=0&&i!==animI){ animI=i; $("anim").value=i; t0=performance.now(); } }
-$("poseReset").onclick=()=>{ delete Q[psel]; poseChanged(true); $("pstatus").textContent="Volvió la pose original."; };
-$("copyFrom").onchange=e=>{ const n=e.target.value; e.target.value=""; if(!n||n===psel) return; Q[psel]=poseOf(n); poseChanged(true); $("pstatus").textContent="Copié los valores de "+(POSE_LABEL[n]||n)+"."; };
+$("poseReset").onclick=()=>{ delete Q[psel]; delete QA[psel]; poseChanged(true); $("pstatus").textContent="Volvió la pose original."; };
+$("copyFrom").onchange=e=>{ const n=e.target.value; e.target.value=""; if(!n||n===psel) return; Q[psel]=poseOf(n); if(QA[n]) QA[psel]=JSON.parse(JSON.stringify(QA[n])); else delete QA[psel]; poseChanged(true); $("pstatus").textContent="Copié los valores de "+(POSE_LABEL[n]||n)+"."; };
 function setMode(m){ mode=m; $("tabPieces").setAttribute("aria-selected",m==="pieces"); $("tabPoses").setAttribute("aria-selected",m==="poses");
   $("list").hidden=m!=="pieces"; $("plist").hidden=m!=="poses"; $("modePieces").hidden=m!=="pieces"; $("modePoses").hidden=m!=="poses";
   if(m==="poses") refreshPoses(); else render(); }
@@ -775,5 +832,5 @@ $("tabPieces").onclick=()=>setMode("pieces"); $("tabPoses").onclick=()=>setMode(
 /* ---------- arranque ---------- */
 load(); buildList(); buildPoseList(); $("maxp").textContent=MAX_POINTS; select(sel); refreshPoses(); requestAnimationFrame(drawPreview);
 $("suit").addEventListener("input",()=>refreshPoses());
-window.__taller={P:()=>P,Q:()=>Q,select,importFile,exportText,importText,totalPoints,skeleton,frameParts,setMode,selectPose,BASE};
+window.__taller={P:()=>P,Q:()=>Q,QA:()=>QA,setQA:v=>{QA=v;},select,importFile,exportText,importText,totalPoints,skeleton,frameParts,setMode,selectPose,BASE};
 </script>

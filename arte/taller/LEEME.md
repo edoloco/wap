@@ -11,3 +11,14 @@ Para regenerar los datos de base (piezas y poses actuales) después de cambiar `
     javac -d /tmp/b app/src/main/java/com/wap/*/*.java tools/BasePiezas.java && java -cp /tmp/b BasePiezas > base.json
 
 y reemplazar `__BASE__` en `taller_src.html` con ese JSON.
+
+# Taller de armas
+
+Editor (artefacto web) para cambiar valores, nombre y descripción de las armas, o quitarlas del juego.
+
+- Exporta `app/src/main/assets/armas.txt`, que el juego lee al iniciar (`Wpn.load`). Sin archivo, las armas de siempre.
+- Formato: `arma NOMBRE clave=valor ...`, `nombre NOMBRE texto`, `descripcion NOMBRE texto`, `quitar NOMBRE`. En los nombres, los espacios van como `_`.
+- Un archivo con errores se ignora entero. Los valores se limitan a rangos seguros (`Wpn.LIMITS`).
+- En línea: con armas distintas los teléfonos no se conectan (`World.rules()` incluye la huella de armas.txt).
+
+Para regenerar los datos de base: `java BaseArmas > armas_base.json` (tools/BaseArmas.java) y reemplazar `__ARMAS__` en `armas_src.html`.

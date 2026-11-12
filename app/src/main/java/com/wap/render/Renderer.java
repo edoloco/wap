@@ -72,7 +72,7 @@ public final class Renderer {
                 break; }
             case Fx.CHIPS: for (int i = 0; i < f.a; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 4, -r.nextFloat() * 3, 24, 1.6f, DIRT2); break;
             case Fx.SMOKE: { P p = part(f.a > 0 ? FIRE : SMOKE, f.x, f.y, 0, -.2f, f.a > 0 ? 14 : 30, f.a > 0 ? 3 : 2.5f, f.a > 0 ? 0xFFFF8A1A : 0x5A3A3E48); p.g = 0; break; }
-            case Fx.FLASH: { RobotArt.View v = views[f.who]; v.label = Wpn.ALL[(int) f.b].name; v.labelT = LABEL; if (v.shotT <= 0) v.shotT = 12; break; }
+            case Fx.FLASH: { RobotArt.View v = views[f.who]; v.label = Wpn.ALL[(int) f.b].label; v.labelT = LABEL; if (v.shotT <= 0) v.shotT = 12; break; }
             case Fx.WOOD: { // astillas del color de la madera
                 int n = Math.min(26, 5 + (int) f.a / 18), c = (int) f.b, d = RobotArt.mixDark(c);
                 for (int i = 0; i < n; i++) {
@@ -100,7 +100,7 @@ public final class Renderer {
                 booms.add(new float[]{f.x, f.y, 14 + f.a * 14, 0, 0}); if (!reduceMotion) shake = Math.min(14, shake + 3 + f.a * 6);
                 for (int i = 0; i < 12; i++) { P p = part(SPARK, f.x, f.y, (r.nextFloat() - .5f) * 7, -r.nextFloat() * 5, 16, 1, 0xFFFFFFFF); p.g = .15f; }
                 break; }
-            case Fx.CHARGE: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? (Wpn.ALL[(int) f.b].trap ? "TRAMPA LISTA" : "CARGADO") : Wpn.ALL[(int) f.b].name; v.labelT = LABEL; break; }
+            case Fx.CHARGE: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? (Wpn.ALL[(int) f.b].trap ? "TRAMPA LISTA" : "CARGADO") : Wpn.ALL[(int) f.b].label; v.labelT = LABEL; break; }
             case Fx.LASSO: { RobotArt.View v = views[f.who]; v.label = f.a == 1 ? "¡ATRAPADO!" : f.a == 2 ? "¡SALTA!" : "¡LIBRE!"; v.labelT = LABEL;
                 for (int i = 0; i < 10; i++) { float a = i * .628f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3, (float) Math.sin(a) * 3, 12, 1, f.a > 0 ? 0xFF7FE8FF : 0xFFFFFFFF); p.g = 0; }
                 break; }

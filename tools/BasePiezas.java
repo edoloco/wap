@@ -46,7 +46,8 @@ public class BasePiezas {
             float[] p = new float[q.size()]; for (int i = 0; i < p.length; i++) p[i] = q.get(i); poly(p, f, s, sw);
         }
     }
-    public static void main(String[] a) {
+    public static void main(String[] a) throws Exception {
+        if (a.length > 0) { Pieces.load(new String(java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(a[0])), "UTF-8")); if (Pieces.error != null) throw new RuntimeException(Pieces.error); }
         StringBuilder o = new StringBuilder("{\"pieces\":{");
         for (int i = 0; i < RobotArt.PARTS.length; i++) {
             Rec r = new Rec(); RobotArt.vec(r, RobotArt.PARTS[i], SUIT, false);

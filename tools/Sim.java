@@ -217,6 +217,23 @@ public class Sim {
         Pieces.load("pieza pecho\np 1 2\n");check(Pieces.error!=null,"un archivo mal escrito avisa el error ("+Pieces.error+")");
         Pieces.load("pose disparo 11 -4 -10 -4 -90 -90 -6 4 -20 4\n");check(Pieces.poses==1&&RobotArt.poseValues("disparo")[4]==-90,"personaje.txt cambia una pose (brazo arriba al disparar)");
         Pieces.clear();check(RobotArt.poseValues("disparo")[4]==0,"sin archivo, las poses vuelven a las de siempre");
-        Pieces.load("pose disparo 1 2 3\n");check(Pieces.error!=null&&RobotArt.poseValues("disparo")[4]==0,"una pose mal escrita se ignora ("+Pieces.error+")");Pieces.clear();}
-    public static void main(String[] a)throws Exception{piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+        Pieces.load("pose disparo 1 2 3\n");check(Pieces.error!=null&&RobotArt.poseValues("disparo")[4]==0,"una pose mal escrita se ignora ("+Pieces.error+")");
+        {BufferedImage[] q=new BufferedImage[2];for(int k=0;k<2;k++){Pieces.clear();if(k==1)Pieces.load("ajuste disparo codo_cercano 0 0 -80\najuste disparo cabeza 0 -3 30\najuste disparo rodilla_lejana 2 0 20\n");
+          q[k]=new BufferedImage(300,400,BufferedImage.TYPE_INT_RGB);J g=new J(q[k]);g.clear(0xFF000000);g.save();g.translate(150,380);g.scale(6,6);RobotArt.drawPose(g,RobotArt.frame("disparo"),(1<<Robot.PIECES)-1,0xFF2050E0,0);g.restore();}
+         int dif=0;for(int y=0;y<400;y++)for(int x=0;x<300;x++)if(q[0].getRGB(x,y)!=q[1].getRGB(x,y))dif++;check(Pieces.error==null&&dif>2000,"personaje.txt mueve y gira articulaciones libres ("+dif+" píxeles cambian)");
+         ImageIO.write(q[1],"png",new File(out,"ajustes_articulaciones.png"));}
+        Pieces.load("ajuste disparo oreja 0 0 5\n");check(Pieces.error!=null,"un ajuste con articulación desconocida se ignora");Pieces.clear();}
+    static void armas(){
+        int base=World.rules();float d0=Wpn.ALL[Wpn.index("BAZOOKA")].dmg;
+        Wpn.load("# prueba\narma BAZOOKA dano=99 cargador=7 explosion=60\nnombre BAZOOKA COHETERA\ndescripcion BAZOOKA Dispara cohetes enormes\nquitar UZI\narma BIG_NUKE velocidad=4\n");
+        Wpn bz=Wpn.ALL[Wpn.index("BAZOOKA")];check(Wpn.error==null&&bz.dmg==99&&bz.clip==7&&bz.radius==60&&bz.label.equals("COHETERA")&&bz.desc.equals("Dispara cohetes enormes"),"armas.txt cambia valores, nombre y descripción ("+Wpn.error+")");
+        boolean uzi=false;for(int i:Wpn.enabled())uzi|=Wpn.ALL[i].name.equals("UZI");check(!uzi&&Wpn.usable(Wpn.index("UZI"))!=Wpn.index("UZI"),"un arma quitada no se puede elegir");
+        check(Wpn.ALL[Wpn.index("BIG NUKE")].speed==4,"los nombres con espacio van con _");
+        check(World.rules()!=base&&base==World.RULES,"con armas cambiadas, en línea solo se conecta con quien tenga las mismas");
+        {World w=flat();Robot r=w.robots[0];for(int i=0;i<Robot.SLOTS;i++){r.loadout[i]=bz;r.ammo[i]=7;}w.robots[1].px=r.px+120;float hp=w.robots[1].hp;run(w,0,1);run(w,Input.A,1);run(w,0,90);check(w.robots[1].hp<hp-60,"el arma cambiada se usa en la partida ("+(hp-w.robots[1].hp)+" de daño)");}
+        Wpn.load("arma BAZOOKA dano=5\narma PISTOLA dano=3\n");check(Wpn.error!=null&&bz.dmg==d0&&Wpn.signature==0,"un armas.txt con errores se ignora entero ("+Wpn.error+")");
+        Wpn.load("arma BAZOOKA cargador=-50 velocidad=999\n");check(bz.clip==1&&bz.speed==60,"los valores se limitan a rangos seguros");
+        StringBuilder all=new StringBuilder();for(Wpn x:Wpn.ALL)all.append("quitar ").append(x.name.replace(' ','_')).append('\n');Wpn.load(all.toString());check(Wpn.error!=null,"no se pueden quitar todas las armas");
+        Wpn.reset();check(bz.dmg==d0&&bz.label.equals("BAZOOKA")&&Wpn.enabled().length==Wpn.ALL.length&&World.rules()==World.RULES,"sin armas.txt, todo vuelve a como era");}
+    public static void main(String[] a)throws Exception{armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

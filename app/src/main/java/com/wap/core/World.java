@@ -4,6 +4,8 @@ import java.util.ArrayList;
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
     public static final int RULES = 15;
+    /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
+    public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
     public final Robot[] robots;
     /** Equipo ganador al terminar (-1 si nadie). winner es un robot de ese equipo. */
