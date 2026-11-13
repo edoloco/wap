@@ -281,10 +281,13 @@ public final class App {
     public int editorSolidCount() { int c = 0; for (int i = 0; i < editor.w.t.m.length; i += 7) { int k = editor.w.t.m[i]; if (k == Terrain.EARTH || k == Terrain.WOOD) c++; } return c * 7; }
     public void editorApply(int x, int y) { editor.apply(x, y); }
     public World editorWorld() { return editor.w; }
+    public int editorCell() { return editor.cellSize; }
+    public void editorMat(int m) { editor.mat = m; }
+    public long editorUndoBytes() { long b = 0; for (Editor.Snap e : editor.undo) b += e.bytes; for (Editor.Snap e : editor.redo) b += e.bytes; return b; }
     public void editorUndo() { editor.undo(); }
     public void editorRedo() { editor.redo(); }
     public void editorStroke(float x0, float y0, float x1, float y1) { editor.lastX = Float.NaN; editor.strokeTo(x0, y0); editor.strokeTo(x1, y1); editor.end(); }
-    public void editorSize(int k) { editor.size = k; }
+    public void editorSize(int k) { if (editor.tool == Editor.PIXEL) editor.cellSize = k; else editor.size = k; }
     public void editorPanel(int p) { editor.panel = p; }
     static final int NAME_MAX = 12;
     /** Nombre en mayúsculas, sin saltos de línea y con largo máximo. */

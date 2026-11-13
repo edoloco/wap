@@ -234,6 +234,15 @@ public class Sim {
          q.editorRedo();check(q.editorSolidCount()==c1,"rehacer lo vuelve a poner");q.editorRedo();check(q.editorSolidCount()==c2,"rehacer otra vez");
          q.editorUndo();q.editorStroke(400,900,600,900);q.editorRedo();check(q.editorSolidCount()!=c2,"un cambio nuevo borra lo que había para rehacer");
          BufferedImage ub=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);q.draw(new J(ub));ImageIO.write(ub,"png",new File(out,"20_deshacer.png"));}
+        {App q=new App(store,mute);q.seed(5);q.openEditor(Level.empty("DESHACER2"));World ew=q.editorWorld();
+         q.editorTool(1);q.editorSize(0);q.editorTool(0);q.editorSize(2);q.editorTool(1);check(q.editorCell()==0,"la grilla del pixel no cambia al cambiar el grosor de otra herramienta");
+         q.editorTool(7);q.editorMat(3);q.editorApply(600,500);check(ew.t.back!=null&&ew.t.back[100*Terrain.W+100]!=0,"balde de fondo en el nivel vacío");
+         q.editorUndo();check(ew.t.back==null||ew.t.back[100*Terrain.W+100]==0,"deshacer quita el fondo pintado con balde");q.editorRedo();check(ew.t.back[100*Terrain.W+100]!=0,"rehacer lo vuelve a pintar");
+         q.editorTool(11);q.editorApply(700,400);int np=ew.props.size();q.editorUndo();check(ew.props.size()==np-1,"deshacer quita una caja");q.editorRedo();check(ew.props.size()==np,"rehacer la vuelve a poner");
+         q.editorTool(16);int w0=ew.water;q.editorApply(500,640);q.editorUndo();check(ew.water==w0,"deshacer el agua");
+         long t0=System.nanoTime();for(int i=0;i<300;i++){q.editorTool(i%2==0?0:7);q.editorMat(i%5);if(i%2==0)q.editorStroke(100+i*5,200,300+i*5,800);else q.editorApply(100+(i*37)%1500,100+(i*53)%800);}
+         for(int i=0;i<60;i++)q.editorUndo();for(int i=0;i<30;i++)q.editorRedo();
+         Runtime rt=Runtime.getRuntime();System.gc();long used=(rt.totalMemory()-rt.freeMemory())>>20;check(q.editorUndoBytes()<=(40L<<20)+(30L<<20),"300 cambios: el historial no pasa de ~40 MB ("+(q.editorUndoBytes()>>20)+" MB, "+(System.nanoTime()-t0)/1000000+" ms, memoria usada "+used+" MB)");}
         // nivel con capas: guardar y leer
         App q=new App(store,mute);q.seed(2);q.openEditor(Level.empty("CAPAS"));World ew=q.editorWorld();
         ew.t.brush(400,600,40,Terrain.BACKDROP,0xFF7FD6FF);ew.t.brush(900,850,30,Terrain.OVERLAY,0xFF3FB34F);ew.t.brush(1300,860,20,Terrain.STEEL,0xFFE03C3C);

@@ -6,6 +6,18 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
     private App app; private Sounds snd; private GameView view; private int keyMask, axisMask; private InputManager im;
     @Override protected void onCreate(Bundle b) {
         super.onCreate(b);
+        // si la app se cae, guarda el error para mostrarlo la próxima vez (y poder copiarlo y enviarlo)
+        final java.io.File crash = new java.io.File(getFilesDir(), "ultimo_error.txt");
+        final Thread.UncaughtExceptionHandler prev = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((th, ex) -> {
+            try (java.io.PrintWriter w = new java.io.PrintWriter(new java.io.FileWriter(crash))) {
+                String ver = "?"; try { ver = getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { }
+                w.println("WAP " + ver + " · Android " + Build.VERSION.RELEASE + " · " + Build.MODEL + " · hilo " + th.getName());
+                w.println("memoria: " + Runtime.getRuntime().totalMemory() / 1048576 + " de " + Runtime.getRuntime().maxMemory() / 1048576 + " MB");
+                ex.printStackTrace(w);
+            } catch (Throwable e) { }
+            if (prev != null) prev.uncaughtException(th, ex);
+        });
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (Build.VERSION.SDK_INT >= 28) getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         final SharedPreferences p = getSharedPreferences("wap", MODE_PRIVATE);
@@ -52,6 +64,19 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
         app.files = new DiskFiles(new java.io.File(getFilesDir(), "niveles"));
         app.up = new AppUpdater(this); ((AppUpdater) app.up).check();
         view = new GameView(this, app); setContentView(view); view.requestFocus();
+        if (crash.exists()) {
+            String txt = ""; try (java.io.FileInputStream in = new java.io.FileInputStream(crash)) { txt = new String(readAll(in), java.nio.charset.StandardCharsets.UTF_8); } catch (Exception e) { }
+            crash.delete(); final String err = txt;
+            view.post(() -> {
+                android.widget.TextView tv = new android.widget.TextView(this); tv.setText(err); tv.setTextIsSelectable(true); tv.setTextSize(11); tv.setPadding(40, 20, 40, 20);
+                android.widget.ScrollView sv = new android.widget.ScrollView(this); sv.addView(tv);
+                android.app.AlertDialog d = new android.app.AlertDialog.Builder(this).setTitle("La última vez la app se cerró por un error")
+                    .setMessage("Copia este texto y envíaselo a Claude para corregirlo.").setView(sv)
+                    .setPositiveButton("Copiar", (x, y) -> { android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE); if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("error WAP", err)); })
+                    .setNegativeButton("Cerrar", null).create();
+                d.setOnDismissListener(x -> { immersive(); view.requestFocus(); }); d.show();
+            });
+        }
         im = (InputManager) getSystemService(INPUT_SERVICE); im.registerInputDeviceListener(this, null); checkPads();
     }
     private void immersive() {

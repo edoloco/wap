@@ -38,7 +38,7 @@ public final class Terrain {
     public int[] back, front;
     /** Materiales del editor que no van en m, sino en las capas. */
     public static final int BACKDROP = 100, OVERLAY = 101;
-    int[] layer(int mat) { if (mat == BACKDROP) { if (back == null) back = new int[W * H]; return back; } if (front == null) front = new int[W * H]; return front; }
+    public int[] layer(int mat) { if (mat == BACKDROP) { if (back == null) back = new int[W * H]; return back; } if (front == null) front = new int[W * H]; return front; }
 
     public boolean solid(int x, int y) { if (x < 0 || y < 0 || x >= W || y >= H) return true; byte k = m[y * W + x]; return k != 0 && k != DEBRIS && k != DECOR; }
     public int at(int x, int y) { return x < 0 || y < 0 || x >= W || y >= H ? 2 : m[y * W + x]; }
@@ -103,8 +103,12 @@ public final class Terrain {
     private void mark(int x0, int y0, int x1, int y1) {
         int a = Math.max(0, (x0 - 3) / TILE), b = Math.min(TW - 1, (x1 + 3) / TILE);
         int c = Math.max(0, (y0 - 3) / TILE), d = Math.min(TH - 1, (y1 + 3) / TILE);
-        for (int ty = c; ty <= d; ty++) for (int tx = a; tx <= b; tx++) dirty[ty * TW + tx] = true;
+        for (int ty = c; ty <= d; ty++) for (int tx = a; tx <= b; tx++) { dirty[ty * TW + tx] = true; touched[ty * TW + tx] = true; }
     }
+    /** Cuadros tocados desde que el editor los limpió (para deshacer guardando solo lo que cambió). */
+    public final boolean[] touched = new boolean[TW * TH];
+    /** Marca un cuadro para volver a dibujarlo (deshacer). */
+    public void redraw(int tile) { dirty[tile] = true; }
     public void carve(int cx, int cy, int r) { disc(cx, cy, r, r, -1, 0); }
     public void carveE(int cx, int cy, int rx, int ry) { disc(cx, cy, rx, ry, -1, 0); }
     /** Borra un objeto roto del mapa. */

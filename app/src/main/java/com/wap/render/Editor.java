@@ -31,7 +31,7 @@ final class Editor {
         0xFF5A2A8C, 0xFFE07AD8, 0xFFFF9EC4, 0xFFC8325F, 0xFFF6D2B0, 0xFFD69A6A, 0xFF8D5A3C, 0xFFA0522D, 0xFF3A2A1E};
     static final int[] SIZES = {4, 9, 18}, CELLS = {4, 8, 16};
     static final String[] ERASE_NAMES = {"BORRA: MAPA", "BORRA: FONDO", "BORRA: SOBRE"};
-    final App app; World w; String name; int tool = BRUSH, color, size = 1, mat, eraseLayer; boolean fill = true, dirty, confirmDelete, pixErase;
+    final App app; World w; String name; int tool = BRUSH, color, size = 1, cellSize = 0, mat, eraseLayer; /* cellSize: grilla del pixel art, aparte del grosor de las demás herramientas */ boolean fill = true, dirty, confirmDelete, pixErase;
     /** Panel abierto: 0 ninguno, 1 materiales y colores, 2 objetos. */
     int panel;
     /** Últimos colores usados (índices de COLORS), el más reciente primero. */
@@ -45,9 +45,9 @@ final class Editor {
         name = l.name; Wpn[] k = new Wpn[Robot.SLOTS]; java.util.Arrays.fill(k, Wpn.ALL[0]);
         w = new World(1, 1, k, k, l); for (Robot r : w.robots) r.deadT = Integer.MAX_VALUE; // sin personajes
         app.ren.marks = true; app.ren.reset(w); app.ren.freeCam = true; app.ren.zoomMul = .7f; app.ren.camX = 900; app.ren.camY = 600; app.ren.shake = 0;
-        dirty = false; confirmDelete = false; mode = NONE; fingers.clear(); pts.clear(); panel = 0; undo.clear(); redo.clear(); editing = false;
+        dirty = false; confirmDelete = false; mode = NONE; fingers.clear(); pts.clear(); panel = 0; undo.clear(); redo.clear(); editing = false; shadowAll();
     }
-    void close() { app.ren.marks = false; app.ren.freeCam = false; app.ren.zoomMul = 1; fingers.clear(); mode = NONE; pts.clear(); panel = 0; }
+    void close() { undo.clear(); redo.clear(); sm = null; stex = null; sback = null; sfront = null; app.ren.marks = false; app.ren.freeCam = false; app.ren.zoomMul = 1; fingers.clear(); mode = NONE; pts.clear(); panel = 0; }
     Level level() { return Level.of(w, name); }
     int mat() { return MATS[mat]; }
     int col() { return COLORS[color]; }
@@ -64,7 +64,7 @@ final class Editor {
         begin(); int ix = Math.round(x), iy = Math.round(y), r = SIZES[size];
         switch (tool) {
             case BRUSH: w.t.brush(ix, iy, r, mat(), col()); break;
-            case PIXEL: w.t.cell((int) Math.floor(x), (int) Math.floor(y), CELLS[size], mat(), col(), pixErase); break;
+            case PIXEL: w.t.cell((int) Math.floor(x), (int) Math.floor(y), CELLS[cellSize], mat(), col(), pixErase); break;
             case ERASE: if (eraseLayer == 0) w.removeProps(ix, iy, r); w.t.wipe(ix, iy, r, eraseLayer == 1 ? Terrain.BACKDROP : eraseLayer == 2 ? Terrain.OVERLAY : 0); break;
             case BUCKET: if (!w.t.bucket(ix, iy, mat(), col())) { drop(); app.toast = "LOS BLOQUES Y OBJETOS NO SE PINTAN CON EL BALDE"; app.toastT = 120; return; } break;
             case PANEL: case STEEL: w.t.block(ix, iy, tool == STEEL ? Terrain.STEEL : Terrain.PANEL); break;
@@ -79,7 +79,7 @@ final class Editor {
     float lastX = Float.NaN, lastY;
     void strokeTo(float x, float y) {
         if (Float.isNaN(lastX) || tool == PANEL || tool == STEEL) { apply(x, y); lastX = x; lastY = y; return; }
-        float step = tool == PIXEL ? Math.max(1, CELLS[size] * .5f) : Math.max(2, SIZES[size] * .5f);
+        float step = tool == PIXEL ? Math.max(1, CELLS[cellSize] * .5f) : Math.max(2, SIZES[size] * .5f);
         float dx = x - lastX, dy = y - lastY, d = (float) Math.hypot(dx, dy); int n = Math.max(1, (int) (d / step));
         for (int i = 1; i <= n; i++) apply(lastX + dx * i / n, lastY + dy * i / n);
         lastX = x; lastY = y;
@@ -111,37 +111,82 @@ final class Editor {
         int[] xy = new int[n * 2]; for (int i = 0; i < n; i++) { xy[2 * i] = Math.round(pts.get(i)[0]); xy[2 * i + 1] = Math.round(pts.get(i)[1]); }
         begin(); w.t.polygon(xy, fill, closed || fill, SIZES[size], mat(), col()); pts.clear(); dirty = true; end();
     }
-    // ---------- Deshacer y rehacer: antes de cada cambio se guarda una copia del nivel (comprimida aparte, para no trabar)
-    static final int MAX_UNDO = 30;
+    // ---------- Deshacer y rehacer. Se guarda solo lo que cambió: los cuadros del mapa (128 px) que tocó cada acción.
+    // "shadow" es una copia del nivel tal como quedó después de la última acción; al terminar una acción, los cuadros
+    // tocados se copian de shadow a la entrada de deshacer (cómo estaban) y shadow se pone al día.
+    static final int MAX_UNDO = 40; static final long MAX_BYTES = 40L << 20;
     final ArrayList<Snap> undo = new ArrayList<>(), redo = new ArrayList<>();
     boolean editing;
-    static final java.util.concurrent.ExecutorService PACK = java.util.concurrent.Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "deshacer"); t.setDaemon(true); return t; });
-    /** Copia del nivel; se comprime en segundo plano. */
-    static final class Snap {
-        final java.util.concurrent.Future<byte[]> data;
-        Snap(Level l) { data = PACK.submit(l::save); }
-        Level level() { try { return Level.load(data.get()); } catch (Exception e) { return null; } }
+    byte[] sm; int[] stex, sback, sfront; ArrayList<int[]> sprops; int swater;
+    static final class Snap { int[] tiles; byte[][] m; int[][] tex, back, front; ArrayList<int[]> props; int water; long bytes; }
+    /** Copia inicial (al abrir o cargar un nivel). */
+    void shadowAll() {
+        Terrain t = w.t; sm = t.m.clone(); stex = t.tex.clone(); sback = t.back == null ? null : t.back.clone(); sfront = t.front == null ? null : t.front.clone();
+        sprops = copyProps(t.props); swater = w.water; java.util.Arrays.fill(t.touched, false);
     }
-    /** Antes del primer cambio de un trazo o una acción: guarda cómo estaba. */
-    void begin() { if (editing) return; editing = true; undo.add(new Snap(Level.of(w, name))); if (undo.size() > MAX_UNDO) undo.remove(0); redo.clear(); }
-    /** Termina el trazo o la acción. */
-    void end() { editing = false; }
-    /** La acción no cambió nada (balde en un hueco abierto): se olvida la copia. */
-    void drop() { if (editing && !undo.isEmpty()) undo.remove(undo.size() - 1); editing = false; }
+    static ArrayList<int[]> copyProps(ArrayList<int[]> a) { ArrayList<int[]> r = new ArrayList<>(); for (int[] q : a) r.add(q.clone()); return r; }
+    /** Antes del primer cambio de un trazo o una acción. */
+    void begin() { if (editing) return; editing = true; java.util.Arrays.fill(w.t.touched, false); }
+    /** Termina el trazo o la acción: guarda cómo estaban los cuadros que cambió. */
+    void end() {
+        if (!editing) return; editing = false; Terrain t = w.t;
+        int n = 0; for (boolean b : t.touched) if (b) n++;
+        boolean other = w.water != swater || !sameProps(t.props, sprops);
+        if (n == 0 && !other) return;
+        int[] tiles = new int[n]; n = 0; for (int i = 0; i < t.touched.length; i++) if (t.touched[i]) tiles[n++] = i;
+        Snap e = grab(tiles, sm, stex, sback, sfront, sprops, swater); // cómo estaba
+        for (int id : tiles) { copyTile(id, t.m, t.tex, t.back, t.front, true); } // shadow al día
+        sprops = copyProps(t.props); swater = w.water;
+        java.util.Arrays.fill(t.touched, false);
+        undo.add(e); redo.clear(); trim();
+    }
+    void drop() { end(); }
+    static boolean sameProps(ArrayList<int[]> a, ArrayList<int[]> b) { if (a.size() != b.size()) return false; for (int i = 0; i < a.size(); i++) if (!java.util.Arrays.equals(a.get(i), b.get(i))) return false; return true; }
+    /** Junta los datos de esos cuadros (de shadow o del nivel). */
+    static Snap grab(int[] tiles, byte[] m, int[] tex, int[] back, int[] front, ArrayList<int[]> props, int water) {
+        Snap e = new Snap(); e.tiles = tiles; int n = tiles.length; e.m = new byte[n][]; e.tex = new int[n][]; e.back = new int[n][]; e.front = new int[n][];
+        for (int k = 0; k < n; k++) { int[] r = rect(tiles[k]); int sz = r[2] * r[3]; e.m[k] = new byte[sz]; e.tex[k] = new int[sz]; if (back != null) e.back[k] = new int[sz]; if (front != null) e.front[k] = new int[sz];
+            for (int j = 0; j < r[3]; j++) { int src = (r[1] + j) * Terrain.W + r[0], dst = j * r[2];
+                System.arraycopy(m, src, e.m[k], dst, r[2]); System.arraycopy(tex, src, e.tex[k], dst, r[2]);
+                if (back != null) System.arraycopy(back, src, e.back[k], dst, r[2]); if (front != null) System.arraycopy(front, src, e.front[k], dst, r[2]); }
+            e.bytes += sz * (1L + 4 + (back != null ? 4 : 0) + (front != null ? 4 : 0)); }
+        e.props = copyProps(props); e.water = water; return e;
+    }
+    /** x, y, ancho y alto de un cuadro. */
+    static int[] rect(int id) { int tx = id % Terrain.TW, ty = id / Terrain.TW, x = tx * Terrain.TILE, y = ty * Terrain.TILE; return new int[]{x, y, Math.min(Terrain.TILE, Terrain.W - x), Math.min(Terrain.TILE, Terrain.H - y)}; }
+    /** Copia un cuadro del nivel a shadow (toShadow) o al revés. */
+    void copyTile(int id, byte[] m, int[] tex, int[] back, int[] front, boolean toShadow) {
+        if (back != null && sback == null) sback = new int[back.length]; if (front != null && sfront == null) sfront = new int[front.length];
+        int[] r = rect(id);
+        for (int j = 0; j < r[3]; j++) { int o = (r[1] + j) * Terrain.W + r[0];
+            System.arraycopy(m, o, sm, o, r[2]); System.arraycopy(tex, o, stex, o, r[2]);
+            if (back != null) System.arraycopy(back, o, sback, o, r[2]); else if (sback != null) java.util.Arrays.fill(sback, o, o + r[2], 0);
+            if (front != null) System.arraycopy(front, o, sfront, o, r[2]); else if (sfront != null) java.util.Arrays.fill(sfront, o, o + r[2], 0); }
+    }
+    /** Pone los datos de una entrada en el nivel y en shadow. */
+    void put(Snap e) {
+        Terrain t = w.t;
+        for (int k = 0; k < e.tiles.length; k++) { int[] r = rect(e.tiles[k]);
+            int[] tb = e.back[k] != null ? t.layer(Terrain.BACKDROP) : t.back, tf = e.front[k] != null ? t.layer(Terrain.OVERLAY) : t.front;
+            for (int j = 0; j < r[3]; j++) { int o = (r[1] + j) * Terrain.W + r[0], s = j * r[2];
+                System.arraycopy(e.m[k], s, t.m, o, r[2]); System.arraycopy(e.tex[k], s, t.tex, o, r[2]);
+                if (tb != null) { if (e.back[k] != null) System.arraycopy(e.back[k], s, tb, o, r[2]); else java.util.Arrays.fill(tb, o, o + r[2], 0); }
+                if (tf != null) { if (e.front[k] != null) System.arraycopy(e.front[k], s, tf, o, r[2]); else java.util.Arrays.fill(tf, o, o + r[2], 0); } }
+            copyTile(e.tiles[k], t.m, t.tex, t.back, t.front, true); t.redraw(e.tiles[k]); }
+        t.props.clear(); for (int[] q : e.props) t.props.add(q.clone());
+        w.props.clear(); for (int[] q : t.props) w.addProp(q.clone());
+        w.water = e.water; sprops = copyProps(t.props); swater = w.water;
+    }
     void undo() { step(undo, redo); }
     void redo() { step(redo, undo); }
     void step(ArrayList<Snap> from, ArrayList<Snap> to) {
-        if (from.isEmpty() || mode == DRAW) return; editing = false;
-        Level l = from.remove(from.size() - 1).level(); if (l == null) return;
-        to.add(new Snap(Level.of(w, name))); restore(l); dirty = true;
+        if (mode == DRAW) return; end(); if (from.isEmpty()) return;
+        Snap e = from.remove(from.size() - 1);
+        to.add(grab(e.tiles, w.t.m, w.t.tex, w.t.back, w.t.front, w.t.props, w.water)); // lo de ahora, para volver
+        put(e); pts.clear(); dirty = true;
     }
-    /** Carga una copia sin mover la vista. */
-    void restore(Level l) {
-        float x = app.ren.camX, y = app.ren.camY, z = app.ren.zoomMul;
-        Wpn[] k = new Wpn[Robot.SLOTS]; java.util.Arrays.fill(k, Wpn.ALL[0]);
-        w = new World(1, 1, k, k, l); for (Robot r : w.robots) r.deadT = Integer.MAX_VALUE;
-        app.ren.reset(w); app.ren.freeCam = true; app.ren.camX = x; app.ren.camY = y; app.ren.zoomMul = z; app.ren.shake = 0; pts.clear();
-    }
+    /** No guarda más de 40 pasos ni más de 40 MB. */
+    void trim() { long b = 0; for (Snap s : undo) b += s.bytes; while (undo.size() > MAX_UNDO || b > MAX_BYTES && undo.size() > 1) b -= undo.remove(0).bytes; }
     /** Si un punto del mapa está bajo el dedo (unos 10 px de pantalla). */
     boolean near(float[] p, float x, float y) { return Math.hypot(p[0] - x, p[1] - y) * app.ren.zoom < 11 * app.uiScale; }
     int dragPt = -1;
@@ -298,11 +343,11 @@ final class Editor {
         }
         if (sizes) {
             for (int i = 0; i < 3; i++) {
-                final int k = i; boolean sel = i == size;
+                final int k = i; boolean sel = i == (tool == PIXEL ? cellSize : size);
                 app.box(g, x, by + 3, bw, 18, sel ? App.GOLD : App.BLUE, sel ? App.CREAM : App.SKY, sel ? 0xFFB8862A : App.NAVY);
                 int d = 2 + i * 2; if (tool == PIXEL) { g.rect(Math.round(x + bw / 2f - d / 2f), Math.round(by + 12 - d / 2f), d, d, sel ? App.INK : App.CREAM); g.rect(Math.round(x + bw / 2f - d / 2f) + 1, Math.round(by + 12 - d / 2f) + 1, Math.max(1, d - 2), Math.max(1, d - 2), sel ? App.GOLD : App.BLUE); }
                 else g.rect(Math.round(x + bw / 2f - d / 2f), Math.round(by + 12 - d / 2f), d, d, sel ? App.INK : App.CREAM);
-                app.btn(x, by, bw, BOTTOM, () -> size = k); x += bw + 2;
+                app.btn(x, by, bw, BOTTOM, () -> { if (tool == PIXEL) cellSize = k; else size = k; }); x += bw + 2;
             }
             x += 3;
         }
@@ -370,7 +415,7 @@ final class Editor {
     }
     /** Grilla del pixel art, solo si las celdas se ven de 3 px o más. */
     void grid(Gfx g) {
-        Renderer r = app.ren; float cs = CELLS[size], k = cs * r.zoom / app.uiScale; if (k < 3) return;
+        Renderer r = app.ren; float cs = CELLS[cellSize], k = cs * r.zoom / app.uiScale; if (k < 3) return;
         float x0 = (float) Math.floor(r.vx0 / cs) * cs, y0 = (float) Math.floor(r.vy0 / cs) * cs; int c = k >= 6 ? 0x40FFFFFF : 0x26FFFFFF;
         for (float x = x0; x < r.vx0 + r.vw + cs; x += cs) { float u = ux(x); g.rect(Math.round(u), TOP, 1, app.H - TOP - BOTTOM, c); }
         for (float y = y0; y < r.vy0 + r.vh + cs; y += cs) { float v = uy(y); if (v > TOP && v < app.H - BOTTOM) g.rect(0, Math.round(v), app.W, 1, c); }
