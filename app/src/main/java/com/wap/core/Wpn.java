@@ -10,6 +10,14 @@ public final class Wpn {
     public boolean off;
     /** Dron teledirigido: mientras vuela, los controles del dueño lo manejan (ver Shot.droneMove). */
     public boolean drone;
+    /** Aspecto (armas.txt): color nuevo (0 = el de siempre), tamaño, si se ve su luz y un dibujo propio que reemplaza al cuerpo. */
+    public int tint; public float size = 1; public boolean light = true; public Art[] art;
+    /** Una forma de un dibujo propio, en unidades del juego, mirando hacia la derecha (hacia donde vuela). */
+    public static final class Art { public float[][] polys; public int fill, stroke; public float sw; public boolean eo; }
+    /** Nombres de los aspectos para armas.txt, en el orden de las constantes BULLET..MISSILE. */
+    public static final String[] LOOKS = {"BALA", "COHETE", "GRANADA", "MINA", "FUEGO", "PUAS", "TIERRA", "ORBE", "NUKE", "CHISPA", "CAPSULAS", "LIMON", "PLASMA",
+        "VERDE", "LASER", "LUZ", "RAYO", "GAS", "VIENTO", "GUANTE", "PROTON", "TRAMPA", "DRON", "MISIL"};
+    public static final int MAX_ART_POINTS = 600;
     public int charge, clip = 1, delay = 20, reload = 100, parts = 1, fuse = 0, look = BULLET;
     public float spread, speed = 10, grav, bounce, drag = 1, accel, dmg, knock = 1, recoil, lob, jitter;
     public int radius, dig;          // radio de explosión (0 = sin explosión) y radio de excavación
@@ -110,15 +118,16 @@ public final class Wpn {
     // ---------- armas.txt: cambiar valores, nombres y quitar armas (Taller de armas) ----------
     /** Valores que se pueden cambiar: clave en armas.txt y límites. */
     public static final String[] KEYS = {"cargador", "cadencia", "recarga", "carga", "proyectiles", "dispersion", "velocidad", "gravedad", "rebote", "roce", "aceleracion",
-        "dano", "excavar", "empuje", "explosion", "mecha", "retroceso", "arco", "pedazos", "zigzag", "rebotes", "angulo", "saltos", "sensor"};
+        "dano", "excavar", "empuje", "explosion", "mecha", "retroceso", "arco", "pedazos", "zigzag", "rebotes", "angulo", "saltos", "sensor", "tamano", "luz"};
     static final float[][] LIMITS = {{1, 999}, {1, 600}, {0, 3000}, {0, 3000}, {1, 60}, {0, 180}, {0, 60}, {-1, 2}, {0, 1.2f}, {.5f, 1.05f}, {0, 2},
-        {0, 500}, {0, 200}, {0, 30}, {0, 250}, {0, 3000}, {0, 20}, {-90, 90}, {0, 60}, {0, 2}, {0, 100}, {-90, 90}, {0, 50}, {0, 200}};
+        {0, 500}, {0, 200}, {0, 30}, {0, 250}, {0, 3000}, {0, 20}, {-90, 90}, {0, 60}, {0, 2}, {0, 100}, {-90, 90}, {0, 50}, {0, 200}, {.3f, 4}, {0, 1}};
     public float get(String k) {
         switch (k) {
             case "cargador": return clip; case "cadencia": return delay; case "recarga": return reload; case "carga": return charge; case "proyectiles": return parts;
             case "dispersion": return spread; case "velocidad": return speed; case "gravedad": return grav; case "rebote": return bounce; case "roce": return drag; case "aceleracion": return accel;
             case "dano": return dmg; case "excavar": return dig; case "empuje": return knock; case "explosion": return radius; case "mecha": return fuse; case "retroceso": return recoil;
             case "arco": return lob; case "pedazos": return nSplinter; case "zigzag": return jitter; case "rebotes": return maxBounce; case "angulo": return angle; case "saltos": return hops; case "sensor": return trigger;
+            case "tamano": return size; case "luz": return light ? 1 : 0;
             default: throw new IllegalArgumentException("valor desconocido: " + k);
         }
     }
@@ -132,13 +141,14 @@ public final class Wpn {
             case "dano": dmg = v; break; case "excavar": dig = n; break; case "empuje": knock = v; break; case "explosion": radius = n; break; case "mecha": fuse = n; break; case "retroceso": recoil = v; break;
             case "arco": lob = v; break; case "pedazos": nSplinter = splinter == null ? 0 : n; break; case "zigzag": jitter = v; break; case "rebotes": maxBounce = n; break; case "angulo": angle = v; break;
             case "saltos": hops = n; break; case "sensor": trigger = n; break;
+            case "tamano": size = v; break; case "luz": light = v >= .5f; break;
             default:
         }
     }
-    private static float[][] DEFAULTS; private static String[][] DEF_TEXT;
+    private static float[][] DEFAULTS; private static String[][] DEF_TEXT; private static int[] DEF_LOOK;
     private static void snapshot() {
         DEFAULTS = new float[ALL.length][KEYS.length]; DEF_TEXT = new String[ALL.length][];
-        BASE_COUNT = ALL.length;
+        BASE_COUNT = ALL.length; DEF_LOOK = new int[ALL.length]; for (int i = 0; i < ALL.length; i++) DEF_LOOK[i] = ALL[i].look;
         for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) DEFAULTS[i][k] = ALL[i].get(KEYS[k]); DEF_TEXT[i] = new String[]{ALL[i].label, ALL[i].desc}; }
     }
     /** Huella de las armas: 0 si son las de siempre. Se compara en línea para que ambos teléfonos jueguen con las mismas. */
@@ -147,7 +157,7 @@ public final class Wpn {
     /** Vuelve a las armas de siempre. */
     public static void reset() {
         if (ALL.length != BASE_COUNT) ALL = java.util.Arrays.copyOf(ALL, BASE_COUNT); // quita las armas creadas
-        for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) ALL[i].set(KEYS[k], DEFAULTS[i][k]); ALL[i].label = DEF_TEXT[i][0]; ALL[i].desc = DEF_TEXT[i][1]; ALL[i].off = false; }
+        for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) ALL[i].set(KEYS[k], DEFAULTS[i][k]); ALL[i].label = DEF_TEXT[i][0]; ALL[i].desc = DEF_TEXT[i][1]; ALL[i].off = false; ALL[i].look = DEF_LOOK[i]; ALL[i].tint = 0; ALL[i].art = null; }
         signature = 0; error = null;
     }
     /**
@@ -157,6 +167,8 @@ public final class Wpn {
      *   descripcion NOMBRE texto de ayuda
      *   quitar NOMBRE
      *   nueva NOMBRE_NUEVO NOMBRE_BASE   (crea un arma copiando otra; después se cambia con las líneas de arriba)
+     *   arma NOMBRE aspecto=COHETE color=RRGGBB tamano=1.5 luz=0   (cómo se ve el disparo; aspectos en LOOKS)
+     *   dibujo NOMBRE  /  forma relleno=AARRGGBB contorno=AARRGGBB grosor=N parimpar=0  /  p x y ...  /  fin   (dibujo propio del disparo)
      * Si hay un error, se deja todo como siempre y se avisa en error.
      */
     public static void load(String text) {
@@ -176,13 +188,37 @@ public final class Wpn {
                 extra.add(from.copy(n)); sig.append(l).append('\n');
             }
             ALL = extra.toArray(new Wpn[0]); line = 0;
-            for (String raw : lines) {
-                line++; String l = raw.trim(); if (l.isEmpty() || l.startsWith("#") || l.startsWith("nueva")) continue;
+            while (line < lines.length) { // por índice: "dibujo" consume sus propias líneas hasta "fin"
+                String raw = lines[line++]; String l = raw.trim(); if (l.isEmpty() || l.startsWith("#") || l.startsWith("nueva")) continue;
                 String[] t = l.split("\\s+", 3); if (t.length < 2) throw new IllegalArgumentException("falta el nombre del arma");
                 int i = find(t[1].replace('_', ' ')); if (i < 0) throw new IllegalArgumentException("no existe el arma " + t[1]);
                 Wpn w = ALL[i]; sig.append(l).append('\n');
                 switch (t[0]) {
-                    case "arma": if (t.length > 2) for (String kv : t[2].trim().split("\\s+")) { String[] p = kv.split("=", 2); if (p.length != 2) throw new IllegalArgumentException("se esperaba clave=valor: " + kv); w.set(p[0], Float.parseFloat(p[1])); } break;
+                    case "arma": if (t.length > 2) for (String kv : t[2].trim().split("\\s+")) { String[] p = kv.split("=", 2); if (p.length != 2) throw new IllegalArgumentException("se esperaba clave=valor: " + kv);
+                        if (p[0].equals("aspecto")) { int lk = java.util.Arrays.asList(LOOKS).indexOf(p[1].toUpperCase()); if (lk < 0) throw new IllegalArgumentException("aspecto desconocido: " + p[1]); w.look = lk; }
+                        else if (p[0].equals("color")) { if (!p[1].matches("[0-9A-Fa-f]{6}")) throw new IllegalArgumentException("color inválido: " + p[1]); w.tint = 0xFF000000 | Integer.parseInt(p[1], 16); }
+                        else w.set(p[0], Float.parseFloat(p[1])); } break;
+                    case "dibujo": {
+                        java.util.ArrayList<Art> shapes = new java.util.ArrayList<>(); Art cur = null; java.util.ArrayList<float[]> ps = new java.util.ArrayList<>(); int pts = 0;
+                        while (true) {
+                            line++; if (line > lines.length) throw new IllegalArgumentException("falta 'fin' en el dibujo de " + t[1]);
+                            String d = lines[line - 1].trim(); if (d.isEmpty() || d.startsWith("#")) continue;
+                            if (d.equals("fin")) break;
+                            String[] q = d.split("\\s+");
+                            if (q[0].equals("forma")) {
+                                if (cur != null) cur.polys = ps.toArray(new float[0][]); ps = new java.util.ArrayList<>(); cur = new Art(); cur.sw = .5f; shapes.add(cur);
+                                for (int k = 1; k < q.length; k++) { String[] kv = q[k].split("=", 2); if (kv.length < 2) continue;
+                                    switch (kv[0]) { case "relleno": cur.fill = (int) Long.parseLong(kv[1], 16); break; case "contorno": cur.stroke = (int) Long.parseLong(kv[1], 16); break;
+                                        case "grosor": cur.sw = Float.parseFloat(kv[1]); break; case "parimpar": cur.eo = kv[1].equals("1"); break; default: } }
+                            } else if (q[0].equals("p")) {
+                                if (cur == null) throw new IllegalArgumentException("contorno sin forma en el dibujo de " + t[1]);
+                                float[] p = new float[q.length - 1]; for (int k = 1; k < q.length; k++) { p[k - 1] = Float.parseFloat(q[k]); if (Math.abs(p[k - 1]) > 200) throw new IllegalArgumentException("dibujo demasiado grande"); }
+                                if (p.length >= 6 && p.length % 2 == 0) { ps.add(p); pts += p.length / 2; }
+                            } else throw new IllegalArgumentException("se esperaba forma, p o fin en el dibujo de " + t[1]);
+                        }
+                        if (cur != null) cur.polys = ps.toArray(new float[0][]);
+                        if (pts > MAX_ART_POINTS) throw new IllegalArgumentException("el dibujo de " + t[1] + " tiene demasiados puntos (" + pts + ", máximo " + MAX_ART_POINTS + ")");
+                        shapes.removeIf(a -> a.polys == null || a.polys.length == 0); w.art = shapes.isEmpty() ? null : shapes.toArray(new Art[0]); break; }
                     case "nombre": if (t.length > 2) w.label = t[2].trim().toUpperCase(); break;
                     case "descripcion": w.desc = t.length > 2 ? t[2].trim() : ""; break;
                     case "quitar": w.off = true; break;

@@ -5,6 +5,7 @@ public class BaseArmas {
     static String q(String s) { return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\""; }
     public static void main(String[] a) {
         StringBuilder o = new StringBuilder("{\"keys\":["); for (int i = 0; i < Wpn.KEYS.length; i++) o.append(i > 0 ? "," : "").append(q(Wpn.KEYS[i]));
+        o.append("],\"looks\":["); for (int i = 0; i < Wpn.LOOKS.length; i++) o.append(i > 0 ? "," : "").append(q(Wpn.LOOKS[i]));
         o.append("],\"weapons\":[");
         for (int i = 0; i < Wpn.ALL.length; i++) { Wpn w = Wpn.ALL[i];
             o.append(i > 0 ? "," : "").append("{\"name\":").append(q(w.name)).append(",\"label\":").append(q(w.label)).append(",\"desc\":").append(q(w.desc)).append(",\"look\":").append(w.look)

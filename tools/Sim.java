@@ -281,5 +281,19 @@ public class Sim {
         for(int k=0;k<70;k++){w.step(new int[]{k==3?Input.A:k<40?Input.RIGHT:Input.UP|Input.RIGHT|Input.A,0});rd.tick(w);rd.consume(w,false);if(k%5==0)rd.drawWorld(g,w,0);}
         rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"dron.png"));
         check(r.piloting()&&Math.abs(rd.camX-r.droneShot.x)<Math.abs(rd.camX-r.px),"la cámara sigue al dron");}
-    public static void main(String[] a)throws Exception{dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void aspecto(String out)throws Exception{
+        Wpn bz=Wpn.ALL[Wpn.index("BAZOOKA")];
+        Wpn.load("arma BAZOOKA aspecto=granada color=33AAFF tamano=2 luz=0\ndibujo BAZOOKA\nforma relleno=FFFF00AA contorno=FF000000 grosor=0.4\np -6 -3 6 0 -6 3\nfin\narma UZI dano=9\n");
+        check(Wpn.error==null&&bz.look==Wpn.GRENADE&&bz.tint==0xFF33AAFF&&bz.size==2&&!bz.light&&bz.art!=null&&bz.art[0].polys[0].length==6&&Wpn.ALL[Wpn.index("UZI")].dmg==9,"armas.txt cambia aspecto, color, tamaño, luz y dibujo ("+Wpn.error+")");
+        check(Recolor.of(0xFFFF8A2A,0xFF33AAFF)!=0xFFFF8A2A&&Recolor.of(0xFFFFFFFF,0xFF33AAFF)==0xFFFFFFFF&&Recolor.of(0xFF000000,0xFF33AAFF)==0xFF000000,"el color nuevo cambia los colores pero no blancos ni negros");
+        // imagen: bazooka con dibujo propio y granada azul
+        Wpn.load("arma BAZOOKA tamano=2.5\ndibujo BAZOOKA\nforma relleno=FFFF00AA contorno=FF000000 grosor=0.4\np -6 -3 6 0 -6 3\nfin\narma GRENADE color=33AAFF tamano=2\n");
+        World w=flat();Renderer rd=new Renderer();rd.reset(w);w.spawn(bz,0,w.robots[0].px+60,w.robots[0].py-40,6,-1);w.spawn(Wpn.ALL[Wpn.index("GRENADE")],0,w.robots[0].px+40,w.robots[0].py-60,3,-2);
+        BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);for(int k=0;k<6;k++){w.step(new int[]{0,0});rd.tick(w);rd.consume(w,false);}rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"aspecto.png"));
+        int mag=0,blue=0;for(int y=0;y<720;y++)for(int x=0;x<1280;x++){int c=im.getRGB(x,y)&0xFFFFFF;if(c==0xFF00AA)mag++;int r=c>>16&255,gg=c>>8&255,b=c&255;if(b>180&&r<120&&gg>100&&gg<220)blue++;}
+        check(mag>30,"el dibujo propio se ve en el juego ("+mag+")");check(blue>20,"la granada se ve del color nuevo ("+blue+")");
+        Wpn.load("dibujo BAZOOKA\nforma relleno=FF000000\np 0 0 1 1 2 0\n");check(Wpn.error!=null,"un dibujo sin fin avisa el error");
+        Wpn.load("arma BAZOOKA aspecto=PATO\n");check(Wpn.error!=null,"un aspecto desconocido avisa el error");
+        Wpn.reset();check(bz.look==Wpn.ROCKET&&bz.tint==0&&bz.art==null&&bz.size==1&&bz.light,"sin armas.txt, el aspecto vuelve a ser el de siempre");}
+    public static void main(String[] a)throws Exception{aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

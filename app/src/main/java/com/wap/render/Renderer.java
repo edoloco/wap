@@ -183,7 +183,8 @@ public final class Renderer {
                 case Wpn.MISSILE: c = 0xFFFF9A3A; z = 1.6f; if (w.tick % 2 == 0) { P q = part(SMOKE, s.x, s.y, 0, -.1f, 22, 1.4f, 0x40404650); q.g = 0; } break;
                 default: continue;
             }
-            P p = part(TRAIL, s.x, s.y, (r.nextFloat() - .5f) * .4f, (r.nextFloat() - .5f) * .4f, 18, z, c); p.g = 0;
+            if (s.w.tint != 0) c = Recolor.of(c, s.w.tint);
+            P p = part(TRAIL, s.x, s.y, (r.nextFloat() - .5f) * .4f, (r.nextFloat() - .5f) * .4f, 18, z * s.w.size, c); p.g = 0;
         }
     }
     public void tick(World w) {
@@ -218,7 +219,7 @@ public final class Renderer {
         float bx0 = x0 * .55f, by0 = y0 * .55f;
         for (int q = (int) Math.floor(by0 / BG); q * BG < by0 + vh; q++) for (int k = (int) Math.floor(bx0 / BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
         for (Bonus b : w.bonus) crate(g, b.x, b.y, b.kind);
-        for (Shot s : w.shots) shot(g, s);
+        for (Shot s : w.shots) look(g, s, false);
         int S = Terrain.TILE, budget = 3; Terrain t = w.t;
         for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(Terrain.TH - 1, (int) ((y0 + vh) / S)); ty++)
             for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(Terrain.TW - 1, (int) ((x0 + vw) / S)); tx++) {
@@ -263,7 +264,7 @@ public final class Renderer {
         }
         for (float[] b : booms) boom(g, b);
         world = w;
-        for (Shot sh : w.shots) shotLight(g, sh);
+        for (Shot sh : w.shots) look(g, sh, true);
         for (Robot o : w.robots) if (o.alive() && o.beamT > 0) proton(g, o.px + o.facing * 16, o.py - 31, o.beamX, o.beamY, w.tick); // rayo continuo
         for (Robot o : w.robots) if (o.alive() && o.lassoT > 0) { // atrapado por el Proton Ray: lazo
             float cy = o.py - 28;
@@ -435,6 +436,25 @@ public final class Renderer {
         g.circle(x, y, rr, 0, alpha(0xFFFF6A4A, (1 - k) * .9f), wd);
     }
     /** Luz propia de cada proyectil. */
+    final Recolor recolor = new Recolor();
+    /** Para las herramientas: dibuja un disparo completo (cuerpo y luz). */
+    public void drawShot(Gfx g, Shot s) { look(g, s, false); look(g, s, true); }
+    /** Para las herramientas: solo el cuerpo (light = false) o solo la luz (light = true). */
+    public void drawShotPart(Gfx g, Shot s, boolean light) { look(g, s, light); }
+    /** Dibuja el cuerpo o la luz de un disparo con el aspecto de armas.txt: color, tamaño, luz y dibujo propio. */
+    void look(Gfx g, Shot s, boolean light) {
+        Wpn w = s.w; if (s.wait > 0) return;
+        if (light && !w.light) return;
+        Gfx gg = w.tint != 0 ? recolor.with(g, w.tint) : g; boolean sz = w.size != 1;
+        if (sz) { g.save(); g.translate(s.x, s.y); g.scale(w.size, w.size); g.translate(-s.x, -s.y); }
+        if (!light && w.art != null) { // dibujo propio, mirando hacia donde vuela (sin quedar de cabeza al ir a la izquierda)
+            float a = w.drone ? s.ang : (float) Math.atan2(s.vy, s.vx); boolean left = Math.cos(a) < 0;
+            g.save(); g.translate(s.x, s.y); g.rotate(left ? a - (float) Math.PI : a); if (left) g.scale(-1, 1);
+            for (Wpn.Art p : w.art) g.shape(p.polys, p.fill, p.eo, p.stroke, p.stroke == 0 ? 0 : p.sw);
+            g.restore();
+        } else if (light) shotLight(gg, s); else shot(gg, s);
+        if (sz) g.restore();
+    }
     void shotLight(Gfx g, Shot s) {
         if (s.wait > 0) return;
         float sp = (float) Math.hypot(s.vx, s.vy);

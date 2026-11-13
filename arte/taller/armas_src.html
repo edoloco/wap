@@ -73,12 +73,26 @@ textarea{width:100%;height:240px;background:var(--navy);color:var(--fg);border:2
 ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(--fg)}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
 .small{font-size:12px;color:var(--dim)}
+.aspect{display:grid;gap:10px;margin:4px 0 10px}
+.looks{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px}
+.lk{display:grid;gap:2px;justify-items:center;padding:4px;border-radius:3px;border:2px solid var(--line);background:var(--navy);color:var(--dim);font:9px var(--pix);box-shadow:none;cursor:pointer}
+.lk canvas{width:72px;height:45px}
+.lk.on{border-color:var(--gold);color:var(--gold)} .lk.def::after{content:"ORIGINAL";font:8px var(--pix);color:var(--mint)}
+.lk:hover{border-color:var(--sky)}
+.arow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.arow input[type=color]{width:44px;height:32px;padding:0;border:2px solid var(--line);border-radius:3px;background:var(--panel2)}
+.toggle{display:flex;gap:6px;align-items:center;font-size:13px}
+.toggle input{width:18px;height:18px;accent-color:var(--gold)}
+.lab2{font-size:12px;color:var(--dim);display:grid;gap:4px}
+.prev{background:var(--navy);border-radius:3px;overflow:hidden}
+.prev canvas{display:block;width:100%;height:auto}
+.prev.over{outline:3px dashed var(--gold)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
 <header>
   <h1>TALLER DE ARMAS</h1>
-  <div class="sub">Crea armas nuevas, cambia valores, nombre y descripción, o quita armas del juego. Exporta <b>armas.txt</b> para el juego.</div>
+  <div class="sub">Crea armas nuevas, cambia sus valores, nombre y cómo se ven, o quítalas del juego. Exporta <b>armas.txt</b> para el juego.</div>
   <button class="sec" id="openTxt">Abrir armas.txt</button>
   <button id="exportBtn">Exportar armas.txt</button>
   <input type="file" id="txtFile" accept=".txt,text/plain" hidden>
@@ -141,10 +155,13 @@ ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(-
 <script>
 "use strict";
 const BASE = __ARMAS__;
+const SPR = __LOOKS__; // cuerpo y luz de cada aspecto, dibujados por el juego (3,2 px por unidad, centro en 120,75)
+const LOOKS = BASE.looks, HIDE_LOOK = new Set([18, 20]); // viento y protón no tienen un disparo que se vea
+const LOOK_LABEL = {BALA:"Bala",COHETE:"Cohete",GRANADA:"Granada",MINA:"Mina",FUEGO:"Fuego",PUAS:"Púas",TIERRA:"Bola de luz",ORBE:"Orbe",NUKE:"Nuke",CHISPA:"Chispa",CAPSULAS:"Cápsulas",LIMON:"Limón",PLASMA:"Plasma",VERDE:"Bola verde",LASER:"Láser",LUZ:"Luz",RAYO:"Rayo",GAS:"Gas",VIENTO:"Viento",GUANTE:"Guante",PROTON:"Protón",TRAMPA:"Trampa",DRON:"Dron",MISIL:"Misil"};
 const $ = id => document.getElementById(id);
 // límites como en Wpn.LIMITS del juego
-const LIM = {cargador:[1,999],cadencia:[1,600],recarga:[0,3000],carga:[0,3000],proyectiles:[1,60],dispersion:[0,180],velocidad:[0,60],gravedad:[-1,2],rebote:[0,1.2],roce:[.5,1.05],aceleracion:[0,2],dano:[0,500],excavar:[0,200],empuje:[0,30],explosion:[0,250],mecha:[0,3000],retroceso:[0,20],arco:[-90,90],pedazos:[0,60],zigzag:[0,2],rebotes:[0,100],angulo:[-90,90],saltos:[0,50],sensor:[0,200]};
-const INT = new Set(["cargador","cadencia","recarga","carga","proyectiles","excavar","explosion","mecha","pedazos","rebotes","saltos","sensor"]);
+const LIM = {tamano:[.3,4],luz:[0,1],cargador:[1,999],cadencia:[1,600],recarga:[0,3000],carga:[0,3000],proyectiles:[1,60],dispersion:[0,180],velocidad:[0,60],gravedad:[-1,2],rebote:[0,1.2],roce:[.5,1.05],aceleracion:[0,2],dano:[0,500],excavar:[0,200],empuje:[0,30],explosion:[0,250],mecha:[0,3000],retroceso:[0,20],arco:[-90,90],pedazos:[0,60],zigzag:[0,2],rebotes:[0,100],angulo:[-90,90],saltos:[0,50],sensor:[0,200]};
+const INT = new Set(["luz","cargador","cadencia","recarga","carga","proyectiles","excavar","explosion","mecha","pedazos","rebotes","saltos","sensor"]);
 const INFO = {
   cargador:["Balas por cargador","Cuántas veces dispara antes de recargar."],
   cadencia:["Espera entre disparos","En cuadros: 60 = 1 segundo."],
@@ -169,19 +186,24 @@ const INFO = {
   retroceso:["Retroceso","Cuánto empuja hacia atrás al que dispara."],
   pedazos:["Pedazos al explotar","Fragmentos que suelta."],
   sensor:["Distancia del sensor","Minas: a qué distancia explotan."],
+  tamano:["Tamaño","1 = normal; 2 = el doble (solo se ve más grande; no cambia los golpes)."],
+  luz:["Luz","1 = con su brillo; 0 = sin luz."],
 };
 const GROUPS = [
   ["Cargador", ["cargador","cadencia","recarga","carga"]],
   ["Disparo", ["proyectiles","dispersion","velocidad","aceleracion","angulo"]],
   ["Vuelo", ["gravedad","roce","rebote","rebotes","saltos","zigzag","mecha"]],
   ["Golpe", ["dano","explosion","excavar","empuje","retroceso","pedazos","sensor"]],
+  ["Aspecto", ["tamano","luz"]],
 ];
 const BASEW = BASE.weapons; let W = [], byName = {};
 let N = []; // armas creadas: {name, base}
 function rebuild(){ W = BASEW.concat(N.map(n=>{ const b=BASEW.find(x=>x.name===n.base)||BASEW[0]; return {...b, v:{...b.v}, name:n.name, label:n.name, created:true, base:b.name}; })); byName=Object.fromEntries(W.map((w,i)=>[w.name,i])); }
 rebuild();
 // qué valores importan en cada arma (los demás se esconden para no confundir)
+function hasLook(w){ return !w.lasso && !w.beam && !w.fan; }
 function relevant(w,k){
+  if(k==="tamano"||k==="luz") return hasLook(w);
   if(w.drone) return ["cargador","recarga","velocidad","dano","explosion","excavar","empuje","mecha"].includes(k);
   if(k==="carga") return w.v.carga>0; if(k==="pedazos") return w.splinter; if(k==="sensor") return w.sticky&&w.v.sensor>0;
   if(k==="rebotes") return w.v.rebotes>0||w.v.rebote>0; if(k==="saltos") return w.v.saltos>0; if(k==="aceleracion") return w.v.aceleracion>0;
@@ -198,10 +220,10 @@ const SPECIAL = {"DRONE":"Teledirigido: al dispararlo, la cruceta lo maneja (sie
 let E = {}, sel = W[0].name;
 function save(){ try{ localStorage.setItem("wap-armas", JSON.stringify({E,N})); }catch(e){} }
 function load(){ try{ const t=localStorage.getItem("wap-armas"); if(t){ const d=JSON.parse(t)||{}; if(d.E||d.N){ E=d.E||{}; N=d.N||[]; } else E=d; } }catch(e){ E={}; N=[]; } rebuild(); }
-function cur(n){ const w=W[byName[n]], e=E[n]||{}; return {w, v:{...w.v,...(e.v||{})}, label:e.label??w.label, desc:e.desc??w.desc, off:!!e.off}; }
-function isChanged(n){ const e=E[n]; if(W[byName[n]]&&W[byName[n]].created) return true; if(!e) return false; return e.off || (e.label!=null&&e.label!==W[byName[n]].label) || (e.desc!=null&&e.desc!==W[byName[n]].desc) || Object.keys(e.v||{}).length>0; }
+function cur(n){ const w=W[byName[n]], e=E[n]||{}; return {w, v:{...w.v,...(e.v||{})}, label:e.label??w.label, desc:e.desc??w.desc, off:!!e.off, look:e.look??w.look, tint:e.tint||null, art:e.art||null}; }
+function isChanged(n){ const e=E[n]; if(W[byName[n]]&&W[byName[n]].created) return true; if(!e) return false; return e.off || (e.look!=null&&e.look!==W[byName[n]].look) || !!e.tint || !!e.art || (e.label!=null&&e.label!==W[byName[n]].label) || (e.desc!=null&&e.desc!==W[byName[n]].desc) || Object.keys(e.v||{}).length>0; }
 function tidy(n){ const e=E[n]; if(!e) return; const w=W[byName[n]]; for(const k in (e.v||{})) if(Math.abs(e.v[k]-w.v[k])<1e-9) delete e.v[k];
-  if(e.label===w.label) delete e.label; if(e.desc===w.desc) delete e.desc; if(!e.off) delete e.off; if(e.v&&!Object.keys(e.v).length) delete e.v; if(!Object.keys(e).length) delete E[n]; }
+  if(e.label===w.label) delete e.label; if(e.look===w.look) delete e.look; if(!e.tint) delete e.tint; if(!e.art) delete e.art; if(e.desc===w.desc) delete e.desc; if(!e.off) delete e.off; if(e.v&&!Object.keys(e.v).length) delete e.v; if(!Object.keys(e).length) delete E[n]; }
 function edit(n){ return E[n]=E[n]||{}; }
 
 /* lista */
@@ -224,7 +246,7 @@ function buildForm(){
   const c=cur(sel), G=$("groups"); G.innerHTML="";
   $("wname").textContent=c.w.name+(c.w.created?" (nueva, copia de "+c.w.base+")":""); $("label").value=c.label; $("desc").value=c.desc; $("special").textContent=SPECIAL[c.w.name]||""; $("special").hidden=!SPECIAL[c.w.name];
   for(const [title,keys] of GROUPS){ const ks=keys.filter(k=>relevant(c.w,k)); if(!ks.length) continue;
-    const h=document.createElement("h3"); h.textContent=title.toUpperCase(); G.append(h); const box=document.createElement("div"); box.className="fields"; G.append(box);
+    const h=document.createElement("h3"); h.textContent=title.toUpperCase(); G.append(h); if(title==="Aspecto") G.append(aspectBlock()); const box=document.createElement("div"); box.className="fields"; G.append(box);
     for(const k of ks){ const [lab,help]=INFO[k], [lo,hi]=LIM[k], f=document.createElement("div"); f.className="f"; f.id="f-"+k;
       const top=document.createElement("div"); top.className="lab"; const l=document.createElement("label"); l.htmlFor="n-"+k; l.textContent=lab; const val=document.createElement("b"); top.append(l,val);
       const ctl=document.createElement("div"); ctl.className="ctl"; const r=document.createElement("input"); r.type="range"; r.min=lo; r.max=hi; r.step=step(k); r.id="r-"+k; r.setAttribute("aria-label",lab);
@@ -256,7 +278,7 @@ $("newForm").onsubmit=e=>{ e.preventDefault(); const n=$("newName").value.toUppe
   const from=$("newBase").value, src=W[byName[from]];
   // si copia de otra arma cambiada o nueva, se copian también sus cambios
   N.push({name:n, base:src.created?src.base:src.name}); rebuild(); const fc=cur(from), bw=W[byName[n]];
-  const v={}; for(const k in fc.v) if(Math.abs(fc.v[k]-bw.v[k])>1e-9) v[k]=fc.v[k]; E[n]={desc:fc.desc}; if(Object.keys(v).length) E[n].v=v; tidy(n);
+  const v={}; for(const k in fc.v) if(Math.abs(fc.v[k]-bw.v[k])>1e-9) v[k]=fc.v[k]; E[n]={desc:fc.desc, look:fc.look, tint:fc.tint, art:fc.art?JSON.parse(JSON.stringify(fc.art)):null}; if(Object.keys(v).length) E[n].v=v; tidy(n);
   save(); $("newForm").hidden=true; $("newBtn").hidden=false; buildList(); select(n); setStatus("Creé "+n+" copiando "+fc.label+". Cámbiale lo que quieras.","ok"); };
 $("label").oninput=()=>{ edit(sel).label=$("label").value.toUpperCase().replace(/\s+/g," ").trimStart(); tidy(sel); save(); refreshList(); };
 $("desc").oninput=()=>{ edit(sel).desc=$("desc").value.replace(/\s+/g," "); tidy(sel); save(); refreshList(); };
@@ -284,8 +306,331 @@ function simulate(v, w, angDeg){
   }
   return {pts,end};
 }
+/* ---------- aspecto: forma, color, tamaño, luz y dibujo propio ---------- */
+const imgs={body:SPR.body.map(u=>{ const i=new Image(); i.src=u; return i; }), light:SPR.light.map(u=>{ const i=new Image(); i.src=u; return i; })};
+let loaded=0; [...imgs.body,...imgs.light].forEach(i=>i.onload=()=>{ if(++loaded===imgs.body.length*2) drawRange(); });
+// misma regla que Recolor.of en el juego: toma el tono del color nuevo y conserva cuán claro era; blancos, grises y negros no cambian
+function recolor(r,g,b,t){ const mx=Math.max(r,g,b), mn=Math.min(r,g,b); if(mx===0||(mx-mn)/mx<.25) return [r,g,b];
+  const tr=parseInt(t.slice(0,2),16), tg=parseInt(t.slice(2,4),16), tb=parseInt(t.slice(4,6),16), tv=Math.max(tr,tg,tb); if(!tv) return [0,0,0]; const k=mx/tv;
+  return [Math.min(255,Math.round(tr*k)),Math.min(255,Math.round(tg*k)),Math.min(255,Math.round(tb*k))]; }
+const sprCache={};
+function sprite(kind,look,tint){ const key=kind+look+(tint||""); if(sprCache[key]) return sprCache[key]; const im=imgs[kind][look]; if(!im||!im.complete||!im.naturalWidth) return null;
+  const c=document.createElement("canvas"); c.width=240; c.height=150; const x=c.getContext("2d"); x.drawImage(im,0,0);
+  if(tint){ const d=x.getImageData(0,0,240,150), p=d.data; for(let i=0;i<p.length;i+=4){ if(!p[i+3]) continue; const q=recolor(p[i],p[i+1],p[i+2],tint); p[i]=q[0]; p[i+1]=q[1]; p[i+2]=q[2]; } x.putImageData(d,0,0); }
+  return sprCache[key]=c; }
+/** El dibujo propio en unidades del juego: centrado, girado, volteado y del largo elegido, ya simplificado (lo mismo que va a armas.txt). */
+const bakeCache=new WeakMap();
+function bakedArt(a){ if(!a) return null; if(bakeCache.has(a)) return bakeCache.get(a); const bb=bboxOf(a.raw), cx0=(bb[0]+bb[2])/2, cy0=(bb[1]+bb[3])/2, rot=(a.rot||0)%4;
+  const tf=(x,y)=>{ x-=cx0; y-=cy0; for(let i=0;i<rot;i++){ const t=x; x=-y; y=t; } if(a.flip) y=-y; return [x,y]; };
+  let mnx=1e9,mxx=-1e9; for(const s of a.raw) for(const p of s.polys) for(let i=0;i<p.length;i+=2){ const q=tf(p[i],p[i+1]); mnx=Math.min(mnx,q[0]); mxx=Math.max(mxx,q[0]); }
+  const k=a.len/((mxx-mnx)||1), tol=Math.max(.04,a.len/220);
+  const out=a.raw.map(s=>({...s, sw:s.sw*k, polys:s.polys.map((p,i)=>{ const o=[]; for(let j=0;j<p.length;j+=2){ const q=tf(p[j],p[j+1]); o.push(q[0]*k,q[1]*k); } return simplify(o,tol,!s.open[i]); })}));
+  bakeCache.set(a,out); return out; }
+function artPoints(a){ const b=bakedArt(a); let n=0; if(b) for(const s of b) for(const p of s.polys) n+=p.length/2; return n; }
+function drawArt(x, shapes){ for(const s of shapes){ x.beginPath(); s.polys.forEach((p,i)=>{ if(p.length<2) return; x.moveTo(p[0],p[1]); for(let k=2;k<p.length;k+=2) x.lineTo(p[k],p[k+1]); if(!s.open[i]) x.closePath(); });
+  if(s.fill&&!s.open.every(Boolean)){ x.globalAlpha=s.fa??1; x.fillStyle=s.fill; x.fill(s.eo?"evenodd":"nonzero"); } if(s.stroke&&s.sw>0){ x.globalAlpha=s.sa??1; x.strokeStyle=s.stroke; x.lineWidth=s.sw; x.lineJoin="round"; x.lineCap="round"; x.stroke(); } x.globalAlpha=1; } }
+/** Dibuja el disparo como en el juego: cuerpo (o dibujo propio) y luz encima. k = píxeles por unidad; ang = rumbo. */
+function drawProjectile(x, c, px, py, k, ang){
+  const size=c.v.tamano??1, f=k*size/3.2, left=Math.cos(ang)<0;
+  x.save(); x.translate(px,py); x.rotate(left?ang-Math.PI:ang); if(left) x.scale(-1,1);
+  if(c.art){ const b=bakedArt(c.art); x.save(); x.scale(k*size,k*size); drawArt(x,b); x.restore(); }
+  else { const sp=sprite("body",c.look,c.tint); if(sp) x.drawImage(sp,-120*f,-75*f,240*f,150*f); }
+  if((c.v.luz??1)>=.5){ const sp=sprite("light",c.look,c.tint); if(sp){ x.globalCompositeOperation="lighter"; x.drawImage(sp,-120*f,-75*f,240*f,150*f); x.globalCompositeOperation="source-over"; } }
+  x.restore(); }
+function aspectChanged(){ tidy(sel); save(); refreshList(); drawRange(); }
+function aspectBlock(){
+  const box=document.createElement("div"); box.className="aspect";
+  box.innerHTML=`<div class="lab2">Forma del disparo</div><div class="looks" id="looks"></div>
+    <div class="arow"><label class="toggle"><input type="checkbox" id="tintOn"> Color propio</label><input type="color" id="tintIn" value="#ff4fd8" aria-label="Color del disparo"><span class="small">Cambia el cuerpo, la luz y la estela; los blancos y negros quedan igual.</span></div>
+    <div class="lab2">Dibujo propio: reemplaza la forma (dibújalo apuntando a la derecha; el juego lo gira hacia donde vuela)</div>
+    <div class="arow"><button type="button" id="artBtn">Importar dibujo…</button><button type="button" class="sec" id="artRot">Girar 90°</button><button type="button" class="sec" id="artFlip">Voltear</button><button type="button" class="danger" id="artDel">Quitar dibujo</button></div>
+    <label class="lab2" id="artLenL"><span>Largo del dibujo: <b id="artLenV"></b> unidades (el personaje mide unas 52)</span><input type="range" id="artLen" min="3" max="40" step="0.5"></label>
+    <div class="small" id="artMsg">Acepta PDF, EPS, AI o SVG. También puedes soltar el archivo sobre la vista previa.</div>
+    <div class="prev" id="prevBox"><canvas id="prev" width="480" height="200" aria-label="Así se ve el disparo"></canvas></div>
+    <input type="file" id="artFile" accept=".pdf,.eps,.ai,.svg,.ps,application/pdf,image/svg+xml,application/postscript" hidden>`;
+  const L=box.querySelector("#looks");
+  LOOKS.forEach((nm,i)=>{ if(HIDE_LOOK.has(i)) return; const b=document.createElement("button"); b.type="button"; b.className="lk"; b.dataset.i=i; b.title=LOOK_LABEL[nm]||nm;
+    const cv2=document.createElement("canvas"); cv2.width=144; cv2.height=90; const t=document.createElement("span"); t.textContent=(LOOK_LABEL[nm]||nm).toUpperCase(); b.append(cv2,t);
+    b.onclick=()=>{ const e=edit(sel); e.look=i; delete e.art; aspectChanged(); }; L.append(b); });
+  const q=id=>box.querySelector("#"+id);
+  q("tintOn").onchange=()=>{ edit(sel).tint=q("tintOn").checked? q("tintIn").value.slice(1).toUpperCase() : null; aspectChanged(); };
+  q("tintIn").oninput=()=>{ q("tintOn").checked=true; edit(sel).tint=q("tintIn").value.slice(1).toUpperCase(); aspectChanged(); };
+  q("artBtn").onclick=()=>q("artFile").click();
+  q("artFile").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) importArt(f); };
+  q("artRot").onclick=()=>{ const a=cur(sel).art; if(!a) return; edit(sel).art={...a,rot:((a.rot||0)+1)%4}; aspectChanged(); };
+  q("artFlip").onclick=()=>{ const a=cur(sel).art; if(!a) return; edit(sel).art={...a,flip:!a.flip}; aspectChanged(); };
+  q("artDel").onclick=()=>{ delete edit(sel).art; $("artMsg").textContent="Dibujo quitado: vuelve a la forma elegida arriba."; aspectChanged(); };
+  q("artLen").oninput=()=>{ const a=cur(sel).art; if(!a) return; edit(sel).art={...a,len:+q("artLen").value}; aspectChanged(); artNote(); };
+  const pb=q("prevBox"); pb.addEventListener("dragover",e=>{ e.preventDefault(); pb.classList.add("over"); }); pb.addEventListener("dragleave",()=>pb.classList.remove("over"));
+  pb.addEventListener("drop",e=>{ e.preventDefault(); pb.classList.remove("over"); const f=e.dataTransfer.files[0]; if(f) importArt(f); });
+  return box;
+}
+function artNote(){ const a=cur(sel).art; if(!a) return; const n=artPoints(a); $("artMsg").textContent=a.raw.length+" formas, "+n+" puntos"+(n>600?" — demasiados: el juego permite hasta 600 por arma. Achícalo o simplifícalo en tu programa de dibujo.":"."); }
+async function importArt(f){
+  const msg=$("artMsg"); msg.textContent="Leyendo "+f.name+"…";
+  try{ const buf=new Uint8Array(await f.arrayBuffer()), head=new TextDecoder("latin1").decode(buf.subarray(0,Math.min(buf.length,4096))); let shapes;
+    if(head.includes("%PDF-")) shapes=await readPDF(buf); else if(/<svg[\s>]/i.test(head)||/\.svg$/i.test(f.name)) shapes=readSVG(new TextDecoder().decode(buf)); else shapes=readPS(buf);
+    shapes=shapes.filter(s=>s.polys.length&&(s.fill||s.stroke)); if(!shapes.length) throw new Error("no encontré formas vectoriales (si es texto, pásalo a contornos)");
+    edit(sel).art={raw:shapes,len:14,rot:0,flip:false}; aspectChanged(); artNote();
+  }catch(err){ console.error(err); msg.textContent="No pude leer "+f.name+": "+(err.message||err); }
+}
+function refreshAspect(){
+  const box=$("looks"); if(!box) return; const c=cur(sel);
+  for(const b of box.children){ const i=+b.dataset.i; b.classList.toggle("on", i===c.look&&!c.art); b.classList.toggle("def", i===c.w.look);
+    const x=b.querySelector("canvas").getContext("2d"); x.clearRect(0,0,144,90);
+    const bd=sprite("body",i,c.tint), lt=sprite("light",i,c.tint); const Z=i===22?1:1.8; if(bd) x.drawImage(bd,72-120*Z,45-75*Z,240*Z,150*Z); if(lt){ x.globalCompositeOperation="lighter"; x.drawImage(lt,72-120*Z,45-75*Z,240*Z,150*Z); x.globalCompositeOperation="source-over"; } }
+  $("tintOn").checked=!!c.tint; if(c.tint) $("tintIn").value="#"+c.tint.toLowerCase();
+  const a=c.art; ["artRot","artFlip","artDel","artLenL"].forEach(id=>$(id).hidden=!a); if(a){ $("artLen").value=a.len; $("artLenV").textContent=a.len; }
+  const pv=$("prev"), x=pv.getContext("2d"); x.fillStyle="#0c1024"; x.fillRect(0,0,pv.width,pv.height);
+  x.strokeStyle="#1b2348"; x.lineWidth=1; for(let gx=0;gx<pv.width;gx+=40){ x.beginPath(); x.moveTo(gx+.5,0); x.lineTo(gx+.5,pv.height); x.stroke(); } for(let gy=0;gy<pv.height;gy+=40){ x.beginPath(); x.moveTo(0,gy+.5); x.lineTo(pv.width,gy+.5); x.stroke(); }
+  drawProjectile(x,c,pv.width/2,pv.height/2,8,0);
+  x.fillStyle="#9aa3cf"; x.font="12px Inter, sans-serif"; x.fillText("Así se ve, 8 veces más grande. Vuela hacia →", 10, pv.height-10);
+}
+function bboxOf(shapes){ let a=1e9,b=1e9,c=-1e9,d=-1e9; for(const s of shapes) for(const p of s.polys) for(let i=0;i<p.length;i+=2){ a=Math.min(a,p[i]); c=Math.max(c,p[i]); b=Math.min(b,p[i+1]); d=Math.max(d,p[i+1]); } return a>c?[0,0,0,0]:[a,b,c,d]; }
+function simplify(p, tol, closed){
+  const n = p.length/2; if (tol <= 0 || n <= 3) return p.slice();
+  if (closed){
+    // un contorno cerrado se parte en dos tramos desde el punto más lejano al primero, para que el inicio y el fin no coincidan
+    let far=0, fd=-1; for(let k=1;k<n;k++){ const d=Math.hypot(p[k*2]-p[0],p[k*2+1]-p[1]); if(d>fd){fd=d;far=k;} }
+    if(far===0) return p.slice(0,6);
+    const a=dp(p.slice(0,far*2+2),tol), b=dp(p.slice(far*2).concat(p.slice(0,2)),tol);
+    const o=a.concat(b.slice(2,b.length-2));
+    // si el primero y el último quedaron repetidos, se quita el último
+    if(o.length>=8 && Math.hypot(o[0]-o[o.length-2],o[1]-o[o.length-1])<1e-6) o.length-=2;
+    return o.length>=6 ? o : pickN(p,3);
+  }
+  return dp(p,tol);
+}
+function dp(p, tol){
+  const n=p.length/2; if(n<=2) return p.slice();
+  const keep = new Uint8Array(n); keep[0]=1; keep[n-1]=1; const st=[[0,n-1]];
+  while(st.length){ const [i,j]=st.pop(); const ax=p[i*2],ay=p[i*2+1],bx=p[j*2],by=p[j*2+1],dx=bx-ax,dy=by-ay,L=Math.hypot(dx,dy); let md=-1,mk=-1;
+    for(let k=i+1;k<j;k++){ const d= L<1e-9 ? Math.hypot(p[k*2]-ax,p[k*2+1]-ay) : Math.abs((p[k*2]-ax)*dy-(p[k*2+1]-ay)*dx)/L; if(d>md){md=d;mk=k;} }
+    if(md>tol){ keep[mk]=1; st.push([i,mk],[mk,j]); } }
+  const o=[]; for(let k=0;k<n;k++) if(keep[k]) o.push(p[k*2],p[k*2+1]); return o;
+}
+function pickN(p,k){ const n=p.length/2,o=[]; for(let i=0;i<k;i++){ const j=Math.floor(i*n/k); o.push(p[j*2],p[j*2+1]); } return o; }
+/* curvas a puntos */
+function cubic(o,x0,y0,x1,y1,x2,y2,x3,y3){ const n=Math.max(4,Math.min(48,Math.ceil((Math.hypot(x1-x0,y1-y0)+Math.hypot(x2-x1,y2-y1)+Math.hypot(x3-x2,y3-y2))/ (curveStep||1)))); for(let i=1;i<=n;i++){ const t=i/n,u=1-t; o.push(u*u*u*x0+3*u*u*t*x1+3*u*t*t*x2+t*t*t*x3, u*u*u*y0+3*u*u*t*y1+3*u*t*t*y2+t*t*t*y3); } }
+let curveStep=1;
+
+/* ---- SVG ---- */
+function readSVG(text){
+  const doc=new DOMParser().parseFromString(text,"image/svg+xml"); const root=doc.documentElement;
+  if(root.nodeName.toLowerCase()!=="svg") throw new Error("el SVG no se pudo interpretar");
+  const host=document.createElement("div"); host.style.cssText="position:absolute;left:-99999px;top:0;width:10px;height:10px;overflow:hidden";
+  const svg=document.importNode(root,true); host.append(svg); document.body.append(host);
+  try{
+    const vb=svg.viewBox&&svg.viewBox.baseVal; curveStep=vb&&vb.width? Math.max(vb.width,vb.height)/400 : 1;
+    const out=[];
+    for(const el of svg.querySelectorAll("path,rect,circle,ellipse,line,polyline,polygon")){
+      if(el.closest("defs,clipPath,mask,symbol,pattern,marker")) continue;
+      const cs=getComputedStyle(el); if(cs.display==="none"||cs.visibility==="hidden") continue;
+      const m=el.getCTM(); if(!m) continue;
+      const subs=svgGeom(el); if(!subs.length) continue;
+      const polys=[], open=[];
+      for(const s of subs){ const q=[]; for(let i=0;i<s.p.length;i+=2){ const x=s.p[i],y=s.p[i+1]; q.push(m.a*x+m.c*y+m.e, m.b*x+m.d*y+m.f); } if(q.length>=4){ polys.push(q); open.push(!s.closed); } }
+      const op=+cs.opacity||1, fill=paint(cs.fill,svg), stroke=paint(cs.stroke,svg), sc=Math.sqrt(Math.abs(m.a*m.d-m.b*m.c));
+      const sw=parseFloat(cs.strokeWidth)||0;
+      out.push({polys, open, fill:fill&&fill.c, fa:fill?fill.a*(+cs.fillOpacity||1)*op:1, stroke:stroke&&sw>0?stroke.c:null, sa:stroke?stroke.a*(+cs.strokeOpacity||1)*op:1, sw:sw*sc, eo:cs.fillRule==="evenodd"});
+    }
+    return out;
+  } finally { host.remove(); }
+}
+function paint(v,svg){
+  if(!v||v==="none") return null;
+  let m=v.match(/url\(["']?#([^"')]+)/); if(m){ const g=svg.querySelector("#"+CSS.escape(m[1])); const st=g&&g.querySelector("stop"); if(!st) return null; return color(getComputedStyle(st).stopColor); }
+  return color(v);
+}
+function color(v){ const m=v.match(/rgba?\(([^)]+)\)/); if(!m) return null; const p=m[1].split(/[ ,\/]+/).filter(Boolean).map(Number); return {c:"#"+p.slice(0,3).map(x=>Math.round(x).toString(16).padStart(2,"0")).join(""), a:p.length>3?p[3]:1}; }
+function svgGeom(el){
+  const n=el.nodeName.toLowerCase(), A=k=>parseFloat(el.getAttribute(k))||0;
+  if(n==="rect"){ const x=A("x"),y=A("y"),w=A("width"),h=A("height"); let rx=A("rx"),ry=A("ry"); if(!el.hasAttribute("ry")) ry=rx; if(!el.hasAttribute("rx")) rx=ry; rx=Math.min(rx,w/2); ry=Math.min(ry,h/2);
+    if(!rx) return [{p:[x,y,x+w,y,x+w,y+h,x,y+h],closed:true}];
+    const p=[]; [[x+w-rx,y+ry,-90],[x+w-rx,y+h-ry,0],[x+rx,y+h-ry,90],[x+rx,y+ry,180]].forEach(([cx,cy,a])=>{ for(let i=0;i<=6;i++){ const t=(a+i*15)*Math.PI/180; p.push(cx+Math.cos(t)*rx, cy+Math.sin(t)*ry); } }); return [{p,closed:true}]; }
+  if(n==="circle"||n==="ellipse"){ const cx=A("cx"),cy=A("cy"),rx=n==="circle"?A("r"):A("rx"),ry=n==="circle"?A("r"):A("ry"),p=[]; for(let i=0;i<40;i++){ const t=i*Math.PI/20; p.push(cx+Math.cos(t)*rx, cy+Math.sin(t)*ry); } return [{p,closed:true}]; }
+  if(n==="line") return [{p:[A("x1"),A("y1"),A("x2"),A("y2")],closed:false}];
+  if(n==="polyline"||n==="polygon"){ const p=(el.getAttribute("points")||"").trim().split(/[\s,]+/).map(Number).filter(x=>!isNaN(x)); return [{p,closed:n==="polygon"}]; }
+  return parsePath(el.getAttribute("d")||"");
+}
+function parsePath(d){
+  const tk=d.match(/[a-zA-Z]|[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?/g)||[]; let i=0, cmd="", x=0,y=0, sx=0,sy=0, lcx=0,lcy=0, lq=null;
+  const subs=[]; let cur=null; const num=()=>parseFloat(tk[i++]);
+  const start=(nx,ny)=>{ cur={p:[nx,ny],closed:false}; subs.push(cur); sx=nx; sy=ny; };
+  while(i<tk.length){
+    if(/[a-zA-Z]/.test(tk[i])) cmd=tk[i++]; else if(!cmd) { i++; continue; }
+    const rel=cmd===cmd.toLowerCase(), C=cmd.toUpperCase(), ox=rel?x:0, oy=rel?y:0;
+    if(C==="Z"){ if(cur){ cur.closed=true; } x=sx; y=sy; cur=null; lcx=x; lcy=y; lq=null; continue; }
+    if(i>=tk.length || /[a-zA-Z]/.test(tk[i])) { if(C!=="Z") continue; }
+    if(!cur && C!=="M") start(x,y);
+    switch(C){
+      case "M": { const nx=num()+ox, ny=num()+oy; start(nx,ny); x=nx; y=ny; cmd=rel?"l":"L"; lcx=x; lcy=y; lq=null; break; }
+      case "L": x=num()+ox; y=num()+oy; cur.p.push(x,y); lcx=x; lcy=y; lq=null; break;
+      case "H": x=num()+(rel?x:0); cur.p.push(x,y); lcx=x; lcy=y; lq=null; break;
+      case "V": y=num()+(rel?y:0); cur.p.push(x,y); lcx=x; lcy=y; lq=null; break;
+      case "C": { const a=num()+ox,b=num()+oy,c=num()+ox,e=num()+oy,f=num()+ox,g=num()+oy; cubic(cur.p,x,y,a,b,c,e,f,g); lcx=c; lcy=e; x=f; y=g; lq=null; break; }
+      case "S": { const a=2*x-lcx,b=2*y-lcy,c=num()+ox,e=num()+oy,f=num()+ox,g=num()+oy; cubic(cur.p,x,y,a,b,c,e,f,g); lcx=c; lcy=e; x=f; y=g; lq=null; break; }
+      case "Q": { const a=num()+ox,b=num()+oy,f=num()+ox,g=num()+oy; cubic(cur.p,x,y,x+2/3*(a-x),y+2/3*(b-y),f+2/3*(a-f),g+2/3*(b-g),f,g); lq=[a,b]; x=f; y=g; lcx=x; lcy=y; break; }
+      case "T": { const a=lq?2*x-lq[0]:x, b=lq?2*y-lq[1]:y, f=num()+ox, g=num()+oy; cubic(cur.p,x,y,x+2/3*(a-x),y+2/3*(b-y),f+2/3*(a-f),g+2/3*(b-g),f,g); lq=[a,b]; x=f; y=g; lcx=x; lcy=y; break; }
+      case "A": { const rx=num(),ry=num(),rot=num(),la=num(),sw=num(),f=num()+ox,g=num()+oy; arc(cur.p,x,y,rx,ry,rot,la,sw,f,g); x=f; y=g; lcx=x; lcy=y; lq=null; break; }
+      default: i++;
+    }
+  }
+  return subs.filter(s=>s.p.length>=4);
+}
+function arc(o,x1,y1,rx,ry,phi,fa,fs,x2,y2){
+  if(!rx||!ry){ o.push(x2,y2); return; } rx=Math.abs(rx); ry=Math.abs(ry); const ph=phi*Math.PI/180, c=Math.cos(ph), s=Math.sin(ph);
+  const dx=(x1-x2)/2, dy=(y1-y2)/2, x1p=c*dx+s*dy, y1p=-s*dx+c*dy; let l=x1p*x1p/(rx*rx)+y1p*y1p/(ry*ry); if(l>1){ rx*=Math.sqrt(l); ry*=Math.sqrt(l); }
+  const sg=(fa===fs?-1:1), num=rx*rx*ry*ry-rx*rx*y1p*y1p-ry*ry*x1p*x1p, den=rx*rx*y1p*y1p+ry*ry*x1p*x1p, co=sg*Math.sqrt(Math.max(0,num/den));
+  const cxp=co*rx*y1p/ry, cyp=-co*ry*x1p/rx, cx=c*cxp-s*cyp+(x1+x2)/2, cy=s*cxp+c*cyp+(y1+y2)/2;
+  const ang=(ux,uy,vx,vy)=>Math.atan2(ux*vy-uy*vx, ux*vx+uy*vy);
+  const t1=ang(1,0,(x1p-cxp)/rx,(y1p-cyp)/ry); let dt=ang((x1p-cxp)/rx,(y1p-cyp)/ry,(-x1p-cxp)/rx,(-y1p-cyp)/ry);
+  if(!fs&&dt>0) dt-=2*Math.PI; else if(fs&&dt<0) dt+=2*Math.PI;
+  const n=Math.max(4,Math.ceil(Math.abs(dt)/(Math.PI/18)));
+  for(let i=1;i<=n;i++){ const t=t1+dt*i/n; o.push(cx+rx*Math.cos(t)*c-ry*Math.sin(t)*s, cy+rx*Math.cos(t)*s+ry*Math.sin(t)*c); }
+}
+
+/* ---- PDF (también AI modernos), con pdf.js ---- */
+const PDFJS="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+function loadScript(src){ return new Promise((ok,ko)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=()=>ko(new Error("no se pudo cargar el lector de PDF")); document.head.append(s); }); }
+async function pdfLib(){ if(!window.pdfjsLib){ await loadScript(PDFJS+"pdf.min.js"); await loadScript(PDFJS+"pdf.worker.min.js"); } return window.pdfjsLib; }
+async function readPDF(buf){
+  const lib=await pdfLib(); const doc=await lib.getDocument({data:buf, isEvalSupported:false}).promise; const page=await doc.getPage(1);
+  const ops=await page.getOperatorList(); const O=lib.OPS, R={}; for(const k in O) R[O[k]]=k;
+  const vp=page.view; curveStep=Math.max(vp[2]-vp[0],vp[3]-vp[1])/400;
+  let ctm=[1,0,0,1,0,0], gs={fill:"#000000",fa:1,stroke:"#000000",sa:1,lw:1}; const st=[]; let path=[], cur=null, cx=0, cy=0; const out=[];
+  const T=(x,y)=>[ctm[0]*x+ctm[2]*y+ctm[4], -(ctm[1]*x+ctm[3]*y+ctm[5])];
+  const mul=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
+  const hex=(r,g,b)=>"#"+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,"0")).join("");
+  const paintPath=(fill,stroke,eo,close)=>{ if(close&&cur) cur.closed=true; const sub=path.filter(s=>s.p.length>=4);
+    if(sub.length&&(fill||stroke)){ const sc=Math.sqrt(Math.abs(ctm[0]*ctm[3]-ctm[1]*ctm[2]));
+      out.push({polys:sub.map(s=>s.p), open:sub.map(s=>!s.closed&&!fill), fill:fill?gs.fill:null, fa:gs.fa, stroke:stroke?gs.stroke:null, sa:gs.sa, sw:Math.max(gs.lw,0.01)*sc, eo}); }
+    path=[]; cur=null; };
+  for(let i=0;i<ops.fnArray.length;i++){
+    const fn=R[ops.fnArray[i]], a=ops.argsArray[i];
+    switch(fn){
+      case "save": st.push([ctm.slice(),{...gs}]); break;
+      case "restore": if(st.length){ const s=st.pop(); ctm=s[0]; gs=s[1]; } break;
+      case "transform": ctm=mul(ctm,a); break;
+      case "paintFormXObjectBegin": st.push([ctm.slice(),{...gs}]); if(a&&a[0]) ctm=mul(ctm,a[0]); break;
+      case "paintFormXObjectEnd": if(st.length){ const s=st.pop(); ctm=s[0]; gs=s[1]; } break;
+      case "setLineWidth": gs.lw=a[0]; break;
+      case "setGState": for(const [k,v] of a[0]){ if(k==="LW") gs.lw=v; else if(k==="CA") gs.sa=v; else if(k==="ca") gs.fa=v; } break;
+      case "setFillRGBColor": gs.fill=hex(a[0],a[1],a[2]); break;
+      case "setStrokeRGBColor": gs.stroke=hex(a[0],a[1],a[2]); break;
+      case "constructPath": { const [pops,args]=a; let k=0;
+        for(const op of pops){ const nm=R[op];
+          if(nm==="moveTo"){ const [x,y]=T(args[k],args[k+1]); cx=args[k]; cy=args[k+1]; k+=2; cur={p:[x,y],closed:false}; path.push(cur); }
+          else if(nm==="lineTo"){ if(!cur){ cur={p:T(cx,cy),closed:false}; path.push(cur);} cur.p.push(...T(args[k],args[k+1])); cx=args[k]; cy=args[k+1]; k+=2; }
+          else if(nm==="curveTo"||nm==="curveTo2"||nm==="curveTo3"){ if(!cur){ cur={p:T(cx,cy),closed:false}; path.push(cur);}
+            let x1,y1,x2,y2,x3,y3; if(nm==="curveTo"){ [x1,y1,x2,y2,x3,y3]=args.slice(k,k+6); k+=6; } else if(nm==="curveTo2"){ x1=cx; y1=cy; [x2,y2,x3,y3]=args.slice(k,k+4); k+=4; } else { [x1,y1,x3,y3]=args.slice(k,k+4); x2=x3; y2=y3; k+=4; }
+            const p0=T(cx,cy),p1=T(x1,y1),p2=T(x2,y2),p3=T(x3,y3); cubic(cur.p,p0[0],p0[1],p1[0],p1[1],p2[0],p2[1],p3[0],p3[1]); cx=x3; cy=y3; }
+          else if(nm==="closePath"){ if(cur) cur.closed=true; cur=null; }
+          else if(nm==="rectangle"){ const [x,y,w,h]=args.slice(k,k+4); k+=4; cur={p:[...T(x,y),...T(x+w,y),...T(x+w,y+h),...T(x,y+h)],closed:true}; path.push(cur); cur=null; cx=x; cy=y; }
+        } break; }
+      case "fill": paintPath(true,false,false,false); break;
+      case "eoFill": paintPath(true,false,true,false); break;
+      case "stroke": paintPath(false,true,false,false); break;
+      case "closeStroke": paintPath(false,true,false,true); break;
+      case "fillStroke": paintPath(true,true,false,false); break;
+      case "eoFillStroke": paintPath(true,true,true,false); break;
+      case "closeFillStroke": paintPath(true,true,false,true); break;
+      case "closeEOFillStroke": paintPath(true,true,true,true); break;
+      case "endPath": path=[]; cur=null; break;
+    }
+  }
+  return out;
+}
+
+/* ---- EPS / AI (formato PostScript de Illustrator, como lo exporta FreeHand) ---- */
+function readPS(buf){
+  let start=0, end=buf.length;
+  if(buf[0]===0xC5&&buf[1]===0xD0&&buf[2]===0xD3&&buf[3]===0xC6){ const dv=new DataView(buf.buffer,buf.byteOffset); start=dv.getUint32(4,true); end=start+dv.getUint32(8,true); }
+  let text=new TextDecoder("latin1").decode(buf.subarray(start,end));
+  if(text.includes("%PDF-")) throw new Error("este AI es de los nuevos (por dentro es PDF): expórtalo como PDF o como Illustrator 7 o anterior");
+  // el dibujo empieza después de la configuración; lo anterior son definiciones
+  for(const mk of ["%%EndSetup","%%EndProlog"]){ const k=text.indexOf(mk); if(k>=0){ text=text.slice(k+mk.length); break; } }
+  const tr=text.search(/%%PageTrailer|%%Trailer/); if(tr>0) text=text.slice(0,tr);
+  // dialecto: en el formato de Illustrator g/k/Xa pintan el relleno y G/K/XA el contorno; en PostScript genérico un color sirve para ambos
+  const AI=/Adobe.?Illustrator|%AI\d|Adobe_Illustrator/.test(new TextDecoder("latin1").decode(buf.subarray(start,Math.min(end,start+20000))));
+  const both=c=>{ gs.fill=c; if(!AI) gs.stroke=c; };
+  const out=[]; let stack=[], path=[], cur=null, cx=0, cy=0, gs={fill:"#000000",fa:1,stroke:"#000000",sa:1,lw:1,eo:false,ctm:[1,0,0,1,0,0]}; const st=[];
+  let compound=null, last=null; curveStep=1;
+  const T=(x,y)=>{ const m=gs.ctm; return [m[0]*x+m[2]*y+m[4], -(m[1]*x+m[3]*y+m[5])]; };
+  const mul=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
+  const hex=(r,g,b)=>"#"+[r,g,b].map(v=>Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,"0")).join("");
+  const cmyk=(c,m,y,k)=>hex((1-c)*(1-k),(1-m)*(1-k),(1-y)*(1-k));
+  const nums=n=>{ const r=[]; while(r.length<n&&stack.length){ const v=stack.pop(); if(typeof v==="number") r.unshift(v); else break; } return r.length===n?r:null; };
+  const pt=(x,y)=>{ if(!cur){ cur={p:T(cx,cy),closed:false}; path.push(cur); } cur.p.push(...T(x,y)); cx=x; cy=y; };
+  const finish=(fill,stroke,close,eo)=>{
+    if(close&&cur) cur.closed=true;
+    const sub=path.filter(s=>s.p.length>=4); path=[]; cur=null;
+    if(compound){ compound.subs.push(...sub); if(fill||stroke) compound.style={fill,stroke}; return; }
+    if(sub.length&&(fill||stroke)){ const sc=Math.sqrt(Math.abs(gs.ctm[0]*gs.ctm[3]-gs.ctm[1]*gs.ctm[2]));
+      out.push({polys:sub.map(s=>s.p), open:sub.map(s=>!s.closed&&!fill), fill:fill?gs.fill:null, fa:1, stroke:stroke?gs.stroke:null, sa:1, sw:Math.max(gs.lw,.01)*sc, eo:eo||gs.eo}); }
+  };
+  // tokens de PostScript: números, nombres, cadenas (se saltan), procedimientos {…} (se saltan), comentarios
+  const re=/%[^\r\n]*|\((?:\\.|[^\\)])*\)|<[0-9a-fA-F\s]*>|[{}\[\]]|\/?[^\s()<>\[\]{}\/%]+/g; let m, depth=0;
+  while((m=re.exec(text))){
+    const t=m[0]; if(t[0]==="%") continue;
+    if(t==="{"){ depth++; continue; } if(t==="}"){ depth=Math.max(0,depth-1); if(!depth) stack.push("proc"); continue; } if(depth) continue;
+    if(t[0]==="("||t[0]==="<"){ stack.push("str"); continue; }
+    if(t==="["||t==="]"){ stack.push(t); continue; }
+    if(t[0]==="/"){ stack.push("name"); continue; }
+    const v=Number(t); if(!isNaN(v)&&/^[-+.\d]/.test(t)){ stack.push(v); continue; }
+    let a;
+    switch(t){
+      case "m": case "moveto": if((a=nums(2))){ cur={p:T(a[0],a[1]),closed:false}; path.push(cur); cx=a[0]; cy=a[1]; } break;
+      case "l": case "L": case "lineto": if((a=nums(2))) pt(a[0],a[1]); break;
+      case "c": case "C": case "curveto": if((a=nums(6))){ const p0=T(cx,cy),p1=T(a[0],a[1]),p2=T(a[2],a[3]),p3=T(a[4],a[5]); if(!cur){cur={p:p0,closed:false};path.push(cur);} cubic(cur.p,...p0,...p1,...p2,...p3); cx=a[4]; cy=a[5]; } break;
+      case "v": case "V": if((a=nums(4))){ const p0=T(cx,cy),p2=T(a[0],a[1]),p3=T(a[2],a[3]); if(!cur){cur={p:p0,closed:false};path.push(cur);} cubic(cur.p,...p0,...p0,...p2,...p3); cx=a[2]; cy=a[3]; } break;
+      case "y": case "Y": if((a=nums(4))){ const p0=T(cx,cy),p1=T(a[0],a[1]),p3=T(a[2],a[3]); if(!cur){cur={p:p0,closed:false};path.push(cur);} cubic(cur.p,...p0,...p1,...p3,...p3); cx=a[2]; cy=a[3]; } break;
+      case "re": if((a=nums(4))){ const [x,y,w,h]=a; path.push({p:[...T(x,y),...T(x+w,y),...T(x+w,y+h),...T(x,y+h)],closed:true}); cur=null; } break;
+      case "h": case "closepath": if(cur){ cur.closed=true; } cur=null; break;
+      case "N": case "n": finish(false,false,t==="n",false); break;
+      case "F": case "fill": finish(true,false,false,false); break;
+      case "f": finish(true,false,true,false); break;
+      case "f*": case "eofill": finish(true,false,false,true); break;
+      case "S": case "stroke": finish(false,true,false,false); break;
+      case "s": finish(false,true,true,false); break;
+      case "B": finish(true,true,false,false); break;
+      case "b": finish(true,true,true,false); break;
+      case "B*": finish(true,true,false,true); break;
+      case "b*": finish(true,true,true,true); break;
+      case "W": case "W*": case "clip": case "eoclip": break;
+      case "g": case "setgray": if((a=nums(1))) { both(hex(a[0],a[0],a[0])); if(t==="setgray") gs.stroke=gs.fill; } break;
+      case "G": if((a=nums(1))) gs.stroke=hex(a[0],a[0],a[0]); break;
+      case "k": case "setcmykcolor": if((a=nums(4))) { both(cmyk(...a)); if(t==="setcmykcolor") gs.stroke=gs.fill; } break;
+      case "K": if((a=nums(4))) gs.stroke=cmyk(...a); break;
+      case "rg": case "setrgbcolor": if((a=nums(3))) { both(hex(...a)); if(t==="setrgbcolor") gs.stroke=gs.fill; } break;
+      case "RG": if((a=nums(3))) gs.stroke=hex(...a); break;
+      case "Xa": if((a=nums(3))) gs.fill=hex(...a); break;
+      case "XA": if((a=nums(3))) gs.stroke=hex(...a); break;
+      case "x": case "X": { // c m y k (nombre) tinte [tipo] x
+        const s=stack; let j=s.lastIndexOf("str"); if(j>=4){ const [c,mm,yy,kk]=s.slice(j-4,j); const tint=typeof s[j+1]==="number"?s[j+1]:0; const col=cmyk(c*(1-tint),mm*(1-tint),yy*(1-tint),kk*(1-tint)); if(t==="x") gs.fill=col; else gs.stroke=col; } break; }
+      case "XR": if((a=nums(1))) gs.eo=a[0]===1; break;
+      case "w": case "setlinewidth": if((a=nums(1))) gs.lw=a[0]; break;
+      case "q": case "gsave": st.push({...gs, ctm:gs.ctm.slice()}); break;
+      case "Q": case "grestore": if(st.length) gs=st.pop(); break;
+      case "cm": if((a=nums(6))) gs.ctm=mul(gs.ctm,a); break;
+      case "concat": { const k=stack.lastIndexOf("["); if(k>=0){ const arr=stack.slice(k+1).filter(x=>typeof x==="number"); if(arr.length===6) gs.ctm=mul(gs.ctm,arr); } break; }
+      case "translate": if((a=nums(2))) gs.ctm=mul(gs.ctm,[1,0,0,1,a[0],a[1]]); break;
+      case "scale": if((a=nums(2))) gs.ctm=mul(gs.ctm,[a[0],0,0,a[1],0,0]); break;
+      case "rotate": if((a=nums(1))){ const r=a[0]*Math.PI/180; gs.ctm=mul(gs.ctm,[Math.cos(r),Math.sin(r),-Math.sin(r),Math.cos(r),0,0]); } break;
+      case "*u": compound={subs:[],style:null}; break;
+      case "*U": if(compound){ const c=compound; compound=null; const sub=c.subs; if(sub.length&&c.style){ const sc=Math.sqrt(Math.abs(gs.ctm[0]*gs.ctm[3]-gs.ctm[1]*gs.ctm[2]));
+          out.push({polys:sub.map(s=>s.p), open:sub.map(s=>!s.closed&&!c.style.fill), fill:c.style.fill?gs.fill:null, fa:1, stroke:c.style.stroke?gs.stroke:null, sa:1, sw:Math.max(gs.lw,.01)*sc, eo:true}); } } break;
+    }
+    if(!(t in KEEP)) stack=[];
+  }
+  return out;
+}
+const KEEP={}; // los operadores siempre vacían la pila de operandos
+
+
 let drawBoomAt=[];
 function drawRange(){
+  refreshAspect();
   const c=cur(sel), v=c.v, w=c.w, Wd=cv.width;
   // encuadre: se ajusta al recorrido principal (y su explosión) para que siempre se vea completo
   drawBoomAt=[]; const main=(w.lasso||w.beam||w.drone)?null:simulate(v,w,0); let x0=-20, x1=260, y0=-70, y1=10;
@@ -313,6 +658,7 @@ function drawRange(){
   const angs=v.dispersion>0||v.proyectiles>1?[0,-v.dispersion,v.dispersion]:[0];
   angs.forEach((ad,i)=>{ drawBoomAt=[]; const r=simulate(v,w,ad); cx.strokeStyle=i===0?"#ffc94a":"rgba(255,201,74,.35)"; cx.lineWidth=i===0?2.5:1.5; cx.setLineDash(i===0?[]:[5,5]);
     cx.beginPath(); r.pts.forEach((p,j)=>{ const q=S(p[0],p[1]); j?cx.lineTo(...q):cx.moveTo(...q); }); cx.stroke(); cx.setLineDash([]);
+    if(i===0&&hasLook(w)&&r.pts.length>3){ for(const fr of [.2,.55]){ const j=Math.max(1,Math.floor(r.pts.length*fr)), a=r.pts[j-1], b2=r.pts[j], q=S(b2[0],b2[1]); drawProjectile(cx,c,q[0],q[1],k,Math.atan2(b2[1]-a[1],b2[0]-a[0])); } }
     if(i===0){ for(const [bx,by,rr] of drawBoomAt){ const q=S(bx,by); cx.strokeStyle="rgba(255,111,156,.6)"; cx.beginPath(); cx.arc(q[0],q[1],rr*k,0,Math.PI*2); cx.stroke(); }
       if(r.end){ const q=S(r.end.x,r.end.y); if(r.end.kind==="boom"&&v.explosion>0){ cx.fillStyle="rgba(255,111,156,.25)"; cx.strokeStyle="#ff6f9c"; cx.lineWidth=2; cx.beginPath(); cx.arc(q[0],q[1],v.explosion*k,0,Math.PI*2); cx.fill(); cx.stroke(); }
         cx.fillStyle="#eef0fa"; cx.font="12px Inter, sans-serif"; const txt={boom:v.explosion>0?"explota":"se parte",choca:"choca",pega:"se pega",fin:"se acaba"}[r.end.kind]; cx.fillText(txt+(w.splinter&&v.pedazos?" en "+v.pedazos+" pedazos":""), q[0]+8, q[1]-8); } } });
@@ -330,12 +676,19 @@ function stats(){
 
 /* armas.txt */
 const id=n=>n.replace(/ /g,"_");
+function argb(hex,a){ return Math.round(Math.max(0,Math.min(1,a))*255).toString(16).padStart(2,"0").toUpperCase()+hex.slice(1).toUpperCase(); }
+function f3(v){ let s=v.toFixed(3).replace(/0+$/,"").replace(/\.$/,""); return s==="-0"?"0":s; }
 function f4(v){ let s=(Math.round(v*10000)/10000).toString(); return s; }
 function exportText(){
   const L=["# armas.txt de WAP, hecho con el Taller de armas","# arma NOMBRE clave=valor ... | nombre NOMBRE texto | descripcion NOMBRE texto | quitar NOMBRE (en los nombres, espacios como _)",""];
   if(N.length){ for(const n of N) L.push("nueva "+id(n.name)+" "+id(n.base)); L.push(""); }
   for(const w of W){ const e=E[w.name]; if(!e) continue;
-    if(e.v&&Object.keys(e.v).length) L.push("arma "+id(w.name)+" "+Object.keys(e.v).map(k=>k+"="+f4(e.v[k])).join(" "));
+    const kv=[]; if(e.look!=null&&e.look!==w.look) kv.push("aspecto="+LOOKS[e.look]); if(e.tint) kv.push("color="+e.tint); for(const k of Object.keys(e.v||{})) kv.push(k+"="+f4(e.v[k]));
+    if(kv.length) L.push("arma "+id(w.name)+" "+kv.join(" "));
+    if(e.art){ L.push("dibujo "+id(w.name)); for(const s of bakedArt(e.art)){ const polys=[]; s.polys.forEach((p,i)=>{ if(p.length<4) return; if(s.open[i]){ const back=[]; for(let k=p.length-4;k>=0;k-=2) back.push(p[k],p[k+1]); polys.push(p.concat(back)); } else if(p.length>=6) polys.push(p); }); if(!polys.length) continue;
+        const fl=s.fill&&!s.open.every(Boolean)?argb(s.fill,s.fa??1):"00000000", st=s.stroke&&s.sw>0?argb(s.stroke,s.sa??1):"00000000";
+        L.push("forma relleno="+fl+" contorno="+st+" grosor="+f3(s.sw)+" parimpar="+(s.eo?1:0)); for(const p of polys) L.push("p "+p.map(f3).join(" ")); }
+      L.push("fin"); }
     if(e.label!=null&&e.label.trim()&&e.label!==w.label) L.push("nombre "+id(w.name)+" "+e.label.trim());
     if(e.desc!=null&&e.desc!==w.desc) L.push("descripcion "+id(w.name)+" "+e.desc.trim());
     if(e.off) L.push("quitar "+id(w.name)); }
@@ -345,9 +698,16 @@ function importText(text){
   const res={}, news=[]; let bad=0;
   for(const raw of text.split(/\r?\n/)){ const m=raw.trim().match(/^nueva\s+(\S+)\s+(\S+)$/); if(m){ const n=m[1].replace(/_/g," ").toUpperCase(), b=m[2].replace(/_/g," "); if(BASEW.some(w=>w.name===b)&&!BASEW.some(w=>w.name===n)) news.push({name:n,base:b}); else bad++; } }
   const known=new Set([...BASEW.map(w=>w.name),...news.map(x=>x.name)]);
-  for(const raw of text.split(/\r?\n/)){ const l=raw.trim(); if(!l||l[0]==="#"||l.startsWith("nueva")) continue; const m=l.match(/^(\S+)\s+(\S+)\s*(.*)$/); if(!m){ bad++; continue; }
+  const lines=text.split(/\r?\n/);
+  for(let li=0; li<lines.length; li++){ const l=lines[li].trim(); if(!l||l[0]==="#"||l.startsWith("nueva")) continue; const m=l.match(/^(\S+)\s+(\S+)\s*(.*)$/); if(!m){ bad++; continue; }
+    if(m[1]==="dibujo"){ const n=m[2].replace(/_/g," "), shapes=[]; let sh=null; li++;
+      for(; li<lines.length; li++){ const d=lines[li].trim(); if(!d||d[0]==="#") continue; if(d==="fin") break; const t=d.split(/\s+/);
+        if(t[0]==="forma"){ const kv={}; t.slice(1).forEach(x=>{ const [a,b]=x.split("="); kv[a]=b; }); const f=kv.relleno||"00000000", k=kv.contorno||"00000000", fa=parseInt(f.slice(0,2),16)/255, sa=parseInt(k.slice(0,2),16)/255;
+          sh={polys:[],open:[],fill:fa?"#"+f.slice(2).toLowerCase():null,fa:fa||1,stroke:sa?"#"+k.slice(2).toLowerCase():null,sa:sa||1,sw:parseFloat(kv.grosor)||0,eo:kv.parimpar==="1"}; shapes.push(sh); }
+        else if(t[0]==="p"&&sh){ sh.polys.push(t.slice(1).map(Number)); sh.open.push(false); } }
+      if(known.has(n)&&shapes.length){ const bb=bboxOf(shapes); (res[n]=res[n]||{}).art={raw:shapes,len:Math.round((bb[2]-bb[0])*2)/2||14,rot:0,flip:false}; } else bad++; continue; }
     const n=m[2].replace(/_/g," "); if(!known.has(n)){ bad++; continue; } const e=res[n]=res[n]||{};
-    if(m[1]==="arma"){ e.v=e.v||{}; for(const kv of m[3].split(/\s+/)){ const [k,v]=kv.split("="); if(k in LIM&&isFinite(+v)) e.v[k]=+v; else if(kv) bad++; } }
+    if(m[1]==="arma"){ e.v=e.v||{}; for(const kv of m[3].split(/\s+/)){ const [k,v]=kv.split("="); if(k==="aspecto"&&LOOKS.includes((v||"").toUpperCase())) e.look=LOOKS.indexOf(v.toUpperCase()); else if(k==="color"&&/^[0-9a-f]{6}$/i.test(v||"")) e.tint=v.toUpperCase(); else if(k in LIM&&isFinite(+v)) e.v[k]=+v; else if(kv) bad++; } }
     else if(m[1]==="nombre") e.label=m[3].toUpperCase(); else if(m[1]==="descripcion") e.desc=m[3]; else if(m[1]==="quitar") e.off=true; else bad++; }
   return {res,bad,news};
 }
@@ -359,5 +719,5 @@ $("txtFile").onchange=async e=>{ const f=e.target.files[0]; e.target.value=""; i
   if(!n){ setStatus("Ese archivo no tiene armas de WAP.","err"); return; } N=news; rebuild(); E=res; for(const k in E) tidy(k); save(); buildList(); select(W[0].name); setStatus("Abrí "+n+" armas de "+f.name+(bad?" ("+bad+" líneas no se entendieron)":"")+".", bad?"err":"ok"); };
 
 load(); buildList(); select(sel);
-window.__armas={E:()=>E,N:()=>N,select,exportText,importText,simulate,cur};
+window.__armas={importArt,bakedArt,E:()=>E,N:()=>N,select,exportText,importText,simulate,cur};
 </script>
