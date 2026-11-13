@@ -45,7 +45,7 @@ final class Editor {
         name = l.name; Wpn[] k = new Wpn[Robot.SLOTS]; java.util.Arrays.fill(k, Wpn.ALL[0]);
         w = new World(1, 1, k, k, l); for (Robot r : w.robots) r.deadT = Integer.MAX_VALUE; // sin personajes
         app.ren.marks = true; app.ren.reset(w); app.ren.freeCam = true; app.ren.zoomMul = .7f; app.ren.camX = 900; app.ren.camY = 600; app.ren.shake = 0;
-        dirty = false; confirmDelete = false; mode = NONE; fingers.clear(); pts.clear(); panel = 0;
+        dirty = false; confirmDelete = false; mode = NONE; fingers.clear(); pts.clear(); panel = 0; undo.clear(); redo.clear(); editing = false;
     }
     void close() { app.ren.marks = false; app.ren.freeCam = false; app.ren.zoomMul = 1; fingers.clear(); mode = NONE; pts.clear(); panel = 0; }
     Level level() { return Level.of(w, name); }
@@ -61,12 +61,12 @@ final class Editor {
 
     // ---------- Aplicar herramientas en coordenadas del mapa
     void apply(float x, float y) {
-        int ix = Math.round(x), iy = Math.round(y), r = SIZES[size];
+        begin(); int ix = Math.round(x), iy = Math.round(y), r = SIZES[size];
         switch (tool) {
             case BRUSH: w.t.brush(ix, iy, r, mat(), col()); break;
             case PIXEL: w.t.cell((int) Math.floor(x), (int) Math.floor(y), CELLS[size], mat(), col(), pixErase); break;
             case ERASE: if (eraseLayer == 0) w.removeProps(ix, iy, r); w.t.wipe(ix, iy, r, eraseLayer == 1 ? Terrain.BACKDROP : eraseLayer == 2 ? Terrain.OVERLAY : 0); break;
-            case BUCKET: if (!w.t.bucket(ix, iy, mat(), col())) { app.toast = mat >= 3 ? "TOCA UN HUECO CERRADO O ESA CAPA" : "ESE HUECO NO ESTÁ CERRADO"; app.toastT = 120; return; } break;
+            case BUCKET: if (!w.t.bucket(ix, iy, mat(), col())) { drop(); app.toast = mat >= 3 ? "TOCA UN HUECO CERRADO O ESA CAPA" : "ESE HUECO NO ESTÁ CERRADO"; app.toastT = 120; return; } break;
             case PANEL: case STEEL: w.t.block(ix, iy, tool == STEEL ? Terrain.STEEL : Terrain.PANEL); break;
             case WATER: w.water = Math.max(Terrain.EDGE + 40, Math.min(Terrain.H - Terrain.EDGE - 8, iy)); break;
             case VENT: w.t.vent(ix, iy); break;
@@ -87,15 +87,16 @@ final class Editor {
     /** Dibuja la forma entre dos puntos del mapa. */
     void commitShape(float x0, float y0, float x1, float y1) {
         int a = Math.round(x0), b = Math.round(y0), c = Math.round(x1), d = Math.round(y1), r = SIZES[size], m = mat(), col = col();
-        if (Math.abs(c - a) + Math.abs(d - b) < 3) return;
+        if (Math.abs(c - a) + Math.abs(d - b) < 3 || !shape()) return;
+        begin();
         switch (tool) {
             case LINE: w.t.line(a, b, c, d, r, m, col); break;
             case RECT: w.t.rect(a, b, c, d, fill, r, m, col); break;
             case OVAL: w.t.oval(a, b, c, d, fill, r, m, col); break;
             case TRI: w.t.tri(a, b, c, d, fill, r, m, col); break;
-            default: return;
+            default:
         }
-        dirty = true;
+        dirty = true; end();
     }
     // ---------- Puntos (polígono)
     /** Agrega un punto; si se toca el primero con 3 o más, cierra la figura y la dibuja. */
@@ -108,7 +109,38 @@ final class Editor {
     void commitPoints(boolean closed) {
         int n = pts.size(); if (n < (fill ? 3 : 2)) { app.toast = fill ? "FALTAN PUNTOS: SON 3 O MÁS" : "FALTAN PUNTOS: SON 2 O MÁS"; app.toastT = 90; return; }
         int[] xy = new int[n * 2]; for (int i = 0; i < n; i++) { xy[2 * i] = Math.round(pts.get(i)[0]); xy[2 * i + 1] = Math.round(pts.get(i)[1]); }
-        w.t.polygon(xy, fill, closed || fill, SIZES[size], mat(), col()); pts.clear(); dirty = true;
+        begin(); w.t.polygon(xy, fill, closed || fill, SIZES[size], mat(), col()); pts.clear(); dirty = true; end();
+    }
+    // ---------- Deshacer y rehacer: antes de cada cambio se guarda una copia del nivel (comprimida aparte, para no trabar)
+    static final int MAX_UNDO = 30;
+    final ArrayList<Snap> undo = new ArrayList<>(), redo = new ArrayList<>();
+    boolean editing;
+    static final java.util.concurrent.ExecutorService PACK = java.util.concurrent.Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "deshacer"); t.setDaemon(true); return t; });
+    /** Copia del nivel; se comprime en segundo plano. */
+    static final class Snap {
+        final java.util.concurrent.Future<byte[]> data;
+        Snap(Level l) { data = PACK.submit(l::save); }
+        Level level() { try { return Level.load(data.get()); } catch (Exception e) { return null; } }
+    }
+    /** Antes del primer cambio de un trazo o una acción: guarda cómo estaba. */
+    void begin() { if (editing) return; editing = true; undo.add(new Snap(Level.of(w, name))); if (undo.size() > MAX_UNDO) undo.remove(0); redo.clear(); }
+    /** Termina el trazo o la acción. */
+    void end() { editing = false; }
+    /** La acción no cambió nada (balde en un hueco abierto): se olvida la copia. */
+    void drop() { if (editing && !undo.isEmpty()) undo.remove(undo.size() - 1); editing = false; }
+    void undo() { step(undo, redo); }
+    void redo() { step(redo, undo); }
+    void step(ArrayList<Snap> from, ArrayList<Snap> to) {
+        if (from.isEmpty() || mode == DRAW) return; editing = false;
+        Level l = from.remove(from.size() - 1).level(); if (l == null) return;
+        to.add(new Snap(Level.of(w, name))); restore(l); dirty = true;
+    }
+    /** Carga una copia sin mover la vista. */
+    void restore(Level l) {
+        float x = app.ren.camX, y = app.ren.camY, z = app.ren.zoomMul;
+        Wpn[] k = new Wpn[Robot.SLOTS]; java.util.Arrays.fill(k, Wpn.ALL[0]);
+        w = new World(1, 1, k, k, l); for (Robot r : w.robots) r.deadT = Integer.MAX_VALUE;
+        app.ren.reset(w); app.ren.freeCam = true; app.ren.camX = x; app.ren.camY = y; app.ren.zoomMul = z; app.ren.shake = 0; pts.clear();
     }
     /** Si un punto del mapa está bajo el dedo (unos 10 px de pantalla). */
     boolean near(float[] p, float x, float y) { return Math.hypot(p[0] - x, p[1] - y) * app.ren.zoom < 11 * app.uiScale; }
@@ -153,7 +185,7 @@ final class Editor {
         else if (paints()) { if (!moved) apply(wx(sx0), wy(sy0)); }
         else if (tool == POINTS) { if (!moved || dragPt < 0) addPoint(wx(sx1), wy(sy1)); }
         else apply(wx(sx1), wy(sy1)); // herramientas de un toque
-        lastX = Float.NaN; dragPt = -1;
+        lastX = Float.NaN; dragPt = -1; end();
     }
     void startGesture() {
         mode = GESTURE; float[][] f = two(); if (f == null) return;
@@ -192,6 +224,7 @@ final class Editor {
         if (a && !aHeld) { gx0 = cx; gy0 = cy; lastX = Float.NaN; if (tool == POINTS) addPoint(cx, cy); else if (!shape() && !paints()) apply(cx, cy); }
         if (a && paints()) strokeTo(cx, cy);
         if (!a && aHeld && shape()) commitShape(gx0, gy0, cx, cy);
+        if (!a && aHeld) end();
         aHeld = a;
         if ((press & Input.B) != 0) { if (tool == POINTS && !pts.isEmpty()) pts.remove(pts.size() - 1); else app.leaveEditor(false); }
     }
@@ -232,6 +265,8 @@ final class Editor {
         float nw = PixelFont.width(name, 8) + 10;
         app.box(g, 2, TOP + 2, nw, 14, App.NAVY, App.BLUE, App.DEEP); app.txt(g, name, 7, TOP + 12, 8, App.GOLD, -1);
         app.btn(2, TOP + 2, nw, 14, () -> app.renameLevel());
+        // deshacer y rehacer, a la derecha bajo la barra
+        float ux0 = W - 52; undoBtn(g, ux0, false, !undo.isEmpty()); undoBtn(g, ux0 + 26, true, !redo.isEmpty());
         String tn = NAMES[tool] + (usesMat() ? " · " + MAT_NAMES[mat] : ""); app.txtS(g, tn, Math.max(W / 2, nw + 8 + PixelFont.width(tn, 8) / 2f), TOP + 12, 8, App.CREAM, 0);
         bottom(g, W, H);
         if (panel == 1) matPanel(g, W, H); else if (panel == 2) objPanel(g, W, H);
@@ -289,7 +324,7 @@ final class Editor {
         if (tool == WATER) {
             app.box(g, x, by + 3, 70, 18, w.water < 0 ? App.GOLD : App.BLUE, App.SKY, App.NAVY);
             app.txt(g, "SIN AGUA", x + 35, by + 15, 8, w.water < 0 ? App.INK : App.CREAM, 0);
-            app.btn(x, by, 70, BOTTOM, () -> { w.water = -1; dirty = true; }); x += 76;
+            app.btn(x, by, 70, BOTTOM, () -> { if (w.water >= 0) { begin(); w.water = -1; dirty = true; end(); } }); x += 76;
         }
         String h = usesMat() && tool != POINTS && tool != PIXEL ? MAT_HINT[mat] : HINT[tool]; if (PixelFont.width(h, 8) < W - x - 8) app.txt(g, h, (x + W) / 2, by + 15, 8, App.MUTE, 0);
     }
@@ -378,6 +413,15 @@ final class Editor {
             default: app.txtS(g, "?", cx, cy + 3, 8, w, 0);
         }
         app.btn(x, 0, 24, TOP, r);
+    }
+    static final String[] ARROW = {"..X......", ".XX......", "XXXXXXX..", ".XX....X.", "..X....X.", ".......X.", "...XXXX.."};
+    /** Botón con flecha curva: hacia la izquierda deshace, hacia la derecha rehace. */
+    void undoBtn(Gfx g, float x, boolean right, boolean on) {
+        float y = TOP + 2; int c = on ? App.CREAM : App.MUTE;
+        app.box(g, x, y, 24, 16, on ? App.BLUE : 0xFF3A4370, App.SKY, App.NAVY);
+        int x0 = Math.round(x + 12) - 4, y0 = Math.round(y + 8) - 4;
+        for (int r = 0; r < ARROW.length; r++) for (int q = 0; q < 9; q++) if (ARROW[r].charAt(q) == 'X') g.rect(x0 + (right ? 8 - q : q), y0 + r, 1, 1, c);
+        app.btn(x, y, 24, 16, right ? this::redo : this::undo);
     }
     /** Íconos de 14 px para cada herramienta. */
     void icon(Gfx g, int t, float cx, float cy) {

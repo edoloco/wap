@@ -215,6 +215,15 @@ public class Sim {
         t.polygon(new int[]{1000,200,1100,200,1100,300,1000,300},true,true,4,Terrain.WOOD,0xFFC8955A);check(t.at(1050,250)==Terrain.WOOD&&t.at(1150,250)==0,"puntos: el polígono relleno se dibuja");
         t.polygon(new int[]{1200,200,1300,260,1200,320},false,false,4,Terrain.EARTH,0xFF8B5A2B);check(t.at(1250,230)==Terrain.EARTH&&t.at(1240,260)==0,"puntos: el contorno abierto dibuja solo las líneas");
         check(t.bucket(1050,250,Terrain.STEEL,0xFF7D8590)&&t.at(1050,250)==Terrain.STEEL,"el balde cambia la zona al material elegido (acero)");
+        {Terrain u=new Terrain();u.frame2();check(!u.bucket(500,500,Terrain.EARTH,0xFFE03C3C)&&u.at(500,500)==0,"balde en el aire abierto del nivel: no lo pinta entero");
+         u.oval(400,400,600,600,false,9,Terrain.EARTH,0xFF8B5A2B);check(u.bucket(500,500,Terrain.EARTH,0xFFE03C3C)&&u.at(500,500)==Terrain.EARTH&&u.at(700,700)==0,"balde en un hueco cerrado: lo rellena");}
+        {App q=new App(store,mute);q.seed(4);q.openEditor(Level.empty("DESHACER"));q.editorTool(0);int c0=q.editorSolidCount();
+         q.editorStroke(400,500,800,500);int c1=q.editorSolidCount();q.editorStroke(400,700,800,700);int c2=q.editorSolidCount();
+         q.editorUndo();check(q.editorSolidCount()==c1,"deshacer quita el último trazo ("+c2+"→"+q.editorSolidCount()+", esperado "+c1+")");
+         q.editorUndo();check(q.editorSolidCount()==c0,"deshacer otra vez quita el anterior");
+         q.editorRedo();check(q.editorSolidCount()==c1,"rehacer lo vuelve a poner");q.editorRedo();check(q.editorSolidCount()==c2,"rehacer otra vez");
+         q.editorUndo();q.editorStroke(400,900,600,900);q.editorRedo();check(q.editorSolidCount()!=c2,"un cambio nuevo borra lo que había para rehacer");
+         BufferedImage ub=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);q.draw(new J(ub));ImageIO.write(ub,"png",new File(out,"20_deshacer.png"));}
         // nivel con capas: guardar y leer
         App q=new App(store,mute);q.seed(2);q.openEditor(Level.empty("CAPAS"));World ew=q.editorWorld();
         ew.t.brush(400,600,40,Terrain.BACKDROP,0xFF7FD6FF);ew.t.brush(900,850,30,Terrain.OVERLAY,0xFF3FB34F);ew.t.brush(1300,860,20,Terrain.STEEL,0xFFE03C3C);

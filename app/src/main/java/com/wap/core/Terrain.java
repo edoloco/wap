@@ -301,6 +301,8 @@ public final class Terrain {
         int k = m[i]; if (k != 0 && k != DEBRIS && k != DECOR && k != EARTH && k != WOOD && !(k == STEEL && mat == STEEL)) return;
         m[i] = (byte) mat; tex[i] = flat || mat == WOOD || mat == STEEL ? color | 0xFF000000 : earthTex(color, x, y);
     }
+    /** Solo el marco (pruebas). */
+    public void frame2() { frame(); }
     /** Pixel art: llena la celda de la grilla (de lado cell) que contiene el punto, con color parejo. erase = la vacía. */
     public void cell(int x, int y, int cell, int mat, int color, boolean erase) {
         int x0 = Math.floorDiv(x, cell) * cell, y0 = Math.floorDiv(y, cell) * cell;
@@ -367,7 +369,8 @@ public final class Terrain {
     /**
      * Balde. En el mapa: si se toca tierra, madera o acero, toda esa zona unida del mismo material pasa al material y color
      * elegidos; si se toca un hueco vacío y cerrado, lo rellena. En una capa (fondo o sobre): si se toca esa capa, le cambia
-     * el color a la zona unida; si no, rellena el hueco de aire cerrado. Devuelve false si el hueco no está cerrado.
+     * el color a la zona unida; si no, rellena el hueco de aire cerrado. Devuelve false si el hueco no está cerrado:
+     * un hueco que llega al marco del nivel cuenta como abierto (si no, tocar el aire pintaría el nivel entero).
      */
     public boolean bucket(int x, int y, int mat, int color) {
         if (!inside(x, y)) return false;
@@ -375,6 +378,7 @@ public final class Terrain {
         int[] L = lay ? (mat == BACKDROP ? back : front) : null; boolean onLayer = L != null && L[i0] != 0;
         if (!lay && !empty && k != EARTH && k != WOOD && k != STEEL) return false;
         if (lay && !onLayer && !empty) return false;
+        boolean fillsAir = lay ? !onLayer : empty; // rellenar aire (no cambiar el color de algo que ya existe)
         final int LIMIT = 260_000; int[] q = new int[4096]; int n = 0, head = 0; java.util.BitSet seen = new java.util.BitSet(W * H);
         q[n++] = i0; seen.set(i0); int x0 = x, x1 = x, y0 = y, y1 = y;
         while (head < n) {
@@ -382,7 +386,7 @@ public final class Terrain {
             x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
             for (int d = 0; d < 4; d++) {
                 int ox = px + (d == 0 ? 1 : d == 1 ? -1 : 0), oy = py + (d == 2 ? 1 : d == 3 ? -1 : 0);
-                if (!inside(ox, oy)) continue; int o = oy * W + ox; if (seen.get(o)) continue;
+                if (!inside(ox, oy)) { if (fillsAir) return false; continue; } int o = oy * W + ox; if (seen.get(o)) continue;
                 int ko = m[o]; boolean air = ko == 0 || ko == DEBRIS || ko == DECOR;
                 boolean same = onLayer ? L[o] != 0 : lay ? air && (L == null || L[o] == 0) : empty ? air : ko == k;
                 if (!same) continue;
