@@ -87,7 +87,7 @@ public class Sim {
          T3.oval(700,300,800,400,true,4,Terrain.EARTH,0xFF8B5A2B);check(T3.solid(750,350)&&!T3.solid(702,302),"círculo relleno");T3.tri(900,300,1000,400,true,4,Terrain.EARTH,0xFF8B5A2B);check(T3.solid(950,395)&&T3.solid(950,305)&&!T3.solid(905,310),"triángulo con la punta arriba");
          T3.line(1100,300,1300,400,4,Terrain.EARTH,0xFF8B5A2B);check(T3.solid(1200,350),"línea");
          check(T3.bucket(500,350,Terrain.WOOD,0xFF3E6FB0)&&T3.at(500,350)==Terrain.WOOD&&T3.tex[350*1800+500]==0xFF3E6FB0,"el balde llena un hueco cerrado con madera");check(T3.at(400,350)==Terrain.EARTH,"sin tocar el borde");
-         check(T3.bucket(200,350,Terrain.EARTH,0xFFE8EEF4)&&(T3.tex[350*1800+200]&0xFF)>0xC0,"el balde le cambia el color a una zona de tierra");check(!T3.bucket(1500,200,Terrain.EARTH,0xFF8B5A2B),"no llena un hueco abierto");
+         check(T3.bucket(200,350,Terrain.EARTH,0xFFE8EEF4)&&(T3.tex[350*1800+200]&0xFF)>0xC0,"el balde le cambia el color a una zona de tierra");check(T3.bucket(1500,200,Terrain.EARTH,0xFF8B5A2B)&&T3.at(1500,200)==Terrain.EARTH,"un hueco abierto se llena entero, como en Paint");
          World ww=new World(1,1,k,k,Level.empty("MADERA"));ww.robots[0].px=100;ww.robots[1].px=1700;ww.t.rect(600,400,800,560,true,4,Terrain.WOOD,0xFFC8955A);int solid0=0;for(int y=400;y<=560;y+=2)for(int xx=600;xx<=800;xx+=2)if(ww.t.solid(xx,y))solid0++;
          check(ww.t.at(700,480)==Terrain.WOOD&&ww.t.tex[480*1800+700]==0xFFC8955A,"la madera es de color liso");ww.t.carve(700,480,30);check(ww.t.solid(700,480),"la madera no se recorta como la tierra");
          int f=Terrain.frag(700,480);boolean broke=false;for(int i=0;i<10&&!broke;i++){ww.hitWood(700,480,5);broke=ww.t.at(700,480)!=Terrain.WOOD;}int solid1=0;for(int y=400;y<=560;y+=2)for(int xx=600;xx<=800;xx+=2)if(ww.t.solid(xx,y))solid1++;
@@ -215,14 +215,18 @@ public class Sim {
         t.polygon(new int[]{1000,200,1100,200,1100,300,1000,300},true,true,4,Terrain.WOOD,0xFFC8955A);check(t.at(1050,250)==Terrain.WOOD&&t.at(1150,250)==0,"puntos: el polígono relleno se dibuja");
         t.polygon(new int[]{1200,200,1300,260,1200,320},false,false,4,Terrain.EARTH,0xFF8B5A2B);check(t.at(1250,230)==Terrain.EARTH&&t.at(1240,260)==0,"puntos: el contorno abierto dibuja solo las líneas");
         check(t.bucket(1050,250,Terrain.STEEL,0xFF7D8590)&&t.at(1050,250)==Terrain.STEEL,"el balde cambia la zona al material elegido (acero)");
-        {Terrain u=new Terrain();u.frame2();check(!u.bucket(500,500,Terrain.EARTH,0xFFE03C3C)&&u.at(500,500)==0,"balde en el aire abierto del nivel: no lo pinta entero");
+        {Terrain u=new Terrain();u.frame2();Terrain open=new Terrain();open.frame2();check(open.bucket(500,500,Terrain.BACKDROP,0xFF7FD6FF)&&open.back[30*Terrain.W+30]!=0&&open.back[(Terrain.H-30)*Terrain.W+Terrain.W-30]!=0,"balde en un nivel vacío: pinta todo el lienzo, como en Paint");
+         open.oval(400,400,700,700,false,6,Terrain.BACKDROP,0xFFE03C3C);check(open.bucket(550,550,Terrain.BACKDROP,0xFF3FB34F)&&open.back[550*Terrain.W+550]==0xFF3FB34F&&open.back[300*Terrain.W+300]==0xFF7FD6FF,"fondo de un color, una forma cerrada de otro color encima: el balde rellena solo la forma");
+         open.oval(900,400,1200,700,false,6,Terrain.BACKDROP,0xFF7FD6FF);check(open.bucket(1050,550,Terrain.BACKDROP,0xFFFFD93D)&&open.back[300*Terrain.W+300]==0xFFFFD93D,"si la forma es del mismo color que lo de afuera, el balde lo pinta todo (como en Paint)");
+         {Terrain e=new Terrain();e.frame2();e.rect(300,300,800,800,true,4,Terrain.EARTH,0xFF8B5A2B);e.oval(450,450,650,650,false,6,Terrain.EARTH,0xFF3E6FB0);check(e.bucket(550,550,Terrain.EARTH,0xFFE03C3C)&&e.tex[350*Terrain.W+350]!=Terrain.earthTexT(0xFFE03C3C,350,350)&&e.tex[550*Terrain.W+550]==Terrain.earthTexT(0xFFE03C3C,550,550),"tierra con vetas: el balde respeta un contorno de otro color");
+          check(e.bucket(350,350,Terrain.EARTH,0xFFFFD93D)&&e.tex[790*Terrain.W+790]==Terrain.earthTexT(0xFFFFD93D,790,790),"tierra con vetas: el balde pinta toda la zona del mismo color");}
          u.oval(400,400,600,600,false,9,Terrain.EARTH,0xFF8B5A2B);check(u.bucket(500,500,Terrain.EARTH,0xFFE03C3C)&&u.at(500,500)==Terrain.EARTH&&u.at(700,700)==0,"balde en un hueco cerrado: lo rellena");
-         check(u.bucket(500,500,Terrain.BACKDROP,0xFF7FD6FF)&&u.at(500,500)==0&&u.at(500,405)==0&&u.back[500*Terrain.W+500]==0xFF7FD6FF,"balde con FONDO sobre tierra: toda esa zona pasa a ser fondo");
-         check(u.bucket(500,500,Terrain.BACKDROP,0xFFE03C3C)&&u.back[405*Terrain.W+500]==0xFFE03C3C,"balde con FONDO sobre fondo: le cambia el color");
+         check(u.bucket(500,500,Terrain.BACKDROP,0xFF7FD6FF)&&u.at(500,500)==0&&u.at(500,405)==Terrain.EARTH&&u.back[500*Terrain.W+500]==0xFF7FD6FF,"balde con FONDO sobre tierra: esa zona (del mismo color) pasa a ser fondo");
+         check(u.bucket(500,500,Terrain.BACKDROP,0xFFE03C3C)&&u.back[500*Terrain.W+500]==0xFFE03C3C,"balde con FONDO sobre fondo: le cambia el color");
          check(u.bucket(500,500,Terrain.OVERLAY,0xFF3FB34F)&&u.back[500*Terrain.W+500]==0&&u.front[500*Terrain.W+500]==0xFF3FB34F,"balde con SOBRE sobre el fondo: lo pasa encima");
          check(u.bucket(500,500,Terrain.STEEL,0xFF7D8590)&&u.front[500*Terrain.W+500]==0&&u.at(500,500)==Terrain.STEEL,"balde con ACERO sobre lo de encima: lo vuelve acero");
          u.oval(1000,400,1200,600,false,6,Terrain.BACKDROP,0xFF7FD6FF);check(u.bucket(1100,500,Terrain.BACKDROP,0xFF7FD6FF)&&u.back[500*Terrain.W+1100]!=0&&u.back[300*Terrain.W+1100]==0,"balde con FONDO dentro de un contorno de fondo: lo rellena");
-         check(!u.bucket(200,900,Terrain.BACKDROP,0xFF7FD6FF),"balde con FONDO en el aire abierto: no pinta el nivel entero");}
+}
         {App q=new App(store,mute);q.seed(4);q.openEditor(Level.empty("DESHACER"));q.editorTool(0);int c0=q.editorSolidCount();
          q.editorStroke(400,500,800,500);int c1=q.editorSolidCount();q.editorStroke(400,700,800,700);int c2=q.editorSolidCount();
          q.editorUndo();check(q.editorSolidCount()==c1,"deshacer quita el último trazo ("+c2+"→"+q.editorSolidCount()+", esperado "+c1+")");

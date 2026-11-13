@@ -279,7 +279,7 @@ public final class Terrain {
     static boolean inside(int x, int y) { return x >= EDGE && y >= EDGE && x < W - EDGE && y < H - EDGE; }
     /** Color de tierra con un poco de textura (vetas en bloques de 4 px), para que no se vea plana. */
     static int earthTex(int c, int x, int y) {
-        int h = hash(x >> 2, y >> 2) & 7, k = h < 2 ? -18 : h > 5 ? 12 : 0;
+        int k = vein(x, y);
         int r = Math.max(0, Math.min(255, (c >> 16 & 255) + k)), g = Math.max(0, Math.min(255, (c >> 8 & 255) + k)), b = Math.max(0, Math.min(255, (c & 255) + k));
         return 0xFF000000 | r << 16 | g << 8 | b;
     }
@@ -301,6 +301,8 @@ public final class Terrain {
         int k = m[i]; if (k != 0 && k != DEBRIS && k != DECOR && k != EARTH && k != WOOD && !(k == STEEL && mat == STEEL)) return;
         m[i] = (byte) mat; tex[i] = flat || mat == WOOD || mat == STEEL ? color | 0xFF000000 : earthTex(color, x, y);
     }
+    /** Vetas de la tierra (pruebas). */
+    public static int earthTexT(int c, int x, int y) { return earthTex(c, x, y); }
     /** Solo el marco (pruebas). */
     public void frame2() { frame(); }
     /** Pixel art: llena la celda de la grilla (de lado cell) que contiene el punto, con color parejo. erase = la vacía. */
@@ -367,27 +369,26 @@ public final class Terrain {
         } else { line(mx, c, b, d, r, mat, color); line(b, d, a, d, r, mat, color); line(a, d, mx, c, r, mat, color); }
     }
     /**
-     * Balde. Toma lo que se ve en el punto tocado (lo de encima, si no el mapa, si no el fondo, si no el aire) y toda la
-     * zona unida de eso mismo pasa al material y color elegidos (tierra, madera, acero, fondo o sobre); por ejemplo, una
-     * zona de tierra se puede volver fondo. Si se toca aire, rellena el hueco que encierran el mapa y las dos capas;
-     * un hueco que llega al marco del nivel cuenta como abierto (si no, tocar el aire pintaría el nivel entero).
-     * Devuelve false si el hueco no está cerrado.
+     * Balde, como el de Paint: toma lo que se ve en el punto tocado (lo de encima, si no el mapa, si no el fondo, si no
+     * el aire) y la zona unida del MISMO material y MISMO color pasa al material y color elegidos. Una figura de otro
+     * color dibujada encima hace de borde. Tocar el aire de un nivel vacío pinta todo el lienzo.
+     * Devuelve false si se toca un bloque o un objeto (no se pintan con el balde).
      */
     public boolean bucket(int x, int y, int mat, int color) {
         if (!inside(x, y)) return false;
         final int AIR = 0, FR = 1, MAP = 2, BK = 3;
         int i0 = y * W + x, src = kindAt(i0), k0 = m[i0];
         if (src == MAP && k0 != EARTH && k0 != WOOD && k0 != STEEL) return false; // bloques y objetos no se pintan con el balde
-        final int LIMIT = 900_000; int[] q = new int[4096]; int n = 0, head = 0; java.util.BitSet seen = new java.util.BitSet(W * H);
+        final int LIMIT = W * H; int[] q = new int[4096]; int n = 0, head = 0; java.util.BitSet seen = new java.util.BitSet(W * H);
         q[n++] = i0; seen.set(i0); int x0 = x, x1 = x, y0 = y, y1 = y;
         while (head < n) {
             int p = q[head++], px = p % W, py = p / W;
             x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
             for (int d = 0; d < 4; d++) {
                 int ox = px + (d == 0 ? 1 : d == 1 ? -1 : 0), oy = py + (d == 2 ? 1 : d == 3 ? -1 : 0);
-                if (!inside(ox, oy)) { if (src == AIR) return false; continue; }
+                if (!inside(ox, oy)) continue;
                 int o = oy * W + ox; if (seen.get(o)) continue;
-                boolean same = src == FR ? front[o] != 0 : src == BK ? back[o] != 0 && kindAt(o) == BK : src == MAP ? m[o] == k0 && (front == null || front[o] == 0) : kindAt(o) == AIR;
+                boolean same = src == FR ? front[o] == front[i0] : src == BK ? back[o] == back[i0] && kindAt(o) == BK : src == MAP ? m[o] == k0 && (front == null || front[o] == 0) && sameColor(i0, o) : kindAt(o) == AIR;
                 if (!same) continue;
                 seen.set(o); if (n >= LIMIT) return false;
                 if (n == q.length) q = java.util.Arrays.copyOf(q, q.length * 2);
@@ -403,6 +404,22 @@ public final class Terrain {
             else { m[p] = (byte) mat; tex[p] = mat == WOOD || mat == STEEL ? color | 0xFF000000 : earthTex(color, px, py); }
         }
         mark(x0, y0, x1, y1); return true;
+    }
+    /**
+     * Si dos píxeles del mapa son del mismo color elegido. La tierra lleva vetas (el color sube o baja según el lugar),
+     * así que se compara el color de base: el que queda al quitarle la veta de ese lugar, o el color tal cual (pixel art,
+     * madera y acero son parejos).
+     */
+    boolean sameColor(int a, int b) {
+        int ta = tex[a], tb = tex[b];
+        if (ta == tb) return true;
+        int ka = vein(a % W, a / W), kb = vein(b % W, b / W);
+        return near(ta, 0, tb, kb) || near(ta, ka, tb, 0) || near(ta, ka, tb, kb);
+    }
+    static int vein(int x, int y) { int h = hash(x >> 2, y >> 2) & 7; return h < 2 ? -18 : h > 5 ? 12 : 0; }
+    static boolean near(int a, int ka, int b, int kb) {
+        for (int s = 0; s <= 16; s += 8) if (Math.abs(((a >> s & 255) - ka) - ((b >> s & 255) - kb)) > 6) return false;
+        return true;
     }
     /** Lo que se ve en un píxel: 1 lo de encima, 2 el mapa (tierra, madera, acero), 3 el fondo, 0 aire. Otros materiales del mapa (bloques, objetos) cuentan como mapa. */
     int kindAt(int i) {
