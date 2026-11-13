@@ -25,7 +25,7 @@ public final class Renderer {
     final Random r = new Random(7); final int[] px = new int[Terrain.TILE * Terrain.TILE];
     public float camX = 900, camY = 500, shake; public float zoom = 3; float vx0, vy0, vw, vh; boolean first = true;
 
-    public void reset(World w) { ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; bgNew = true; java.util.Arrays.fill(loaded, false); }
+    public void reset(World w) { java.util.Arrays.fill(okB, false); java.util.Arrays.fill(okF, false); ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; bgNew = true; java.util.Arrays.fill(loaded, false); }
     static int hash(int x, int y) { int h = x * 374761393 + y * 668265263; h = (h ^ h >> 13) * 1274126177; return h ^ h >> 16; }
     final boolean[] loaded = new boolean[Terrain.TW * Terrain.TH];
     static boolean air(Terrain t, int x, int y) { int k = t.at(x, y); return k == 0 || k == Terrain.DEBRIS || k == Terrain.DECOR; }
@@ -33,6 +33,31 @@ public final class Renderer {
         return 0xFF000000 | Math.min(255, (int) ((c >> 16 & 255) * m) + add) << 16 | Math.min(255, (int) ((c >> 8 & 255) * m) + add) << 8 | Math.min(255, (int) ((c & 255) * m) + add);
     }
     /** Plataformas planas en pixel art: color liso, contorno negro de 1 píxel y un brillo de 1 píxel arriba. */
+    /** Capas del editor: fondo más claro; encima más oscuro, apenas translúcido y con borde. Devuelve si hay algo en el cuadro. */
+    boolean fillLayer(int[] a, int tx, int ty, boolean front) {
+        final int S = Terrain.TILE; int q = 0; boolean any = false;
+        for (int wy = ty * S; wy < ty * S + S; wy++) for (int wx = tx * S; wx < tx * S + S; wx++) {
+            int c = 0;
+            if (wx < Terrain.W && wy < Terrain.H) { int v = a[wy * Terrain.W + wx];
+                if (v != 0) { any = true;
+                    if (!front) c = Level.backTone(v);
+                    else { boolean edge = lay(a, wx - 1, wy) || lay(a, wx + 1, wy) || lay(a, wx, wy - 1) || lay(a, wx, wy + 1); c = edge ? 0xF0101018 : Level.frontTone(v) & 0xFFFFFF | 0xF0000000; } } }
+            pxL[q++] = c;
+        }
+        return any;
+    }
+    static boolean lay(int[] a, int x, int y) { return x >= 0 && y >= 0 && x < Terrain.W && y < Terrain.H && a[y * Terrain.W + x] == 0; }
+    final int[] pxL = new int[Terrain.TILE * Terrain.TILE]; final boolean[] fresh = new boolean[Terrain.TW * Terrain.TH], hasB = new boolean[Terrain.TW * Terrain.TH], hasF = new boolean[Terrain.TW * Terrain.TH], okB = new boolean[Terrain.TW * Terrain.TH], okF = new boolean[Terrain.TW * Terrain.TH];
+    /** Dibuja una capa (fondo o encima) en los cuadros visibles. */
+    void layerPass(Gfx g, Terrain t, boolean front, float x0, float y0) {
+        int[] a = front ? t.front : t.back; if (a == null) return; int S = Terrain.TILE; boolean[] has = front ? hasF : hasB, ok = front ? okF : okB;
+        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(Terrain.TH - 1, (int) ((y0 + vh) / S)); ty++)
+            for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(Terrain.TW - 1, (int) ((x0 + vw) / S)); tx++) {
+                int id = ty * Terrain.TW + tx; boolean d = fresh[id] || !ok[id];
+                if (d) { has[id] = fillLayer(a, tx, ty, front); ok[id] = true; }
+                if (has[id]) g.tile((front ? 200000 : 100000) + id, pxL, S, d, tx * S, ty * S);
+            }
+    }
     void fillTile(Terrain t, int tx, int ty) {
         final int S = Terrain.TILE; int q = 0;
         for (int wy = ty * S; wy < ty * S + S; wy++) for (int wx = tx * S; wx < tx * S + S; wx++) {
@@ -218,13 +243,19 @@ public final class Renderer {
         if (bgNew) paintBg();
         float bx0 = x0 * .55f, by0 = y0 * .55f;
         for (int q = (int) Math.floor(by0 / BG); q * BG < by0 + vh; q++) for (int k = (int) Math.floor(bx0 / BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
-        for (Bonus b : w.bonus) crate(g, b.x, b.y, b.kind);
-        for (Shot s : w.shots) look(g, s, false);
         int S = Terrain.TILE, budget = 3; Terrain t = w.t;
-        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(Terrain.TH - 1, (int) ((y0 + vh) / S)); ty++)
+        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(Terrain.TH - 1, (int) ((y0 + vh) / S)); ty++) // qué cuadros se rehacen este cuadro
             for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(Terrain.TW - 1, (int) ((x0 + vw) / S)); tx++) {
                 int id = ty * Terrain.TW + tx; boolean d = t.dirty[id] && (!loaded[id] || budget-- > 0); // como mucho 3 relieves por cuadro
-                if (d) { fillTile(t, tx, ty); t.dirty[id] = false; loaded[id] = true; }
+                fresh[id] = d; if (d) { t.dirty[id] = false; loaded[id] = true; }
+            }
+        layerPass(g, t, false, x0, y0); // fondo: detrás de todo
+        for (Bonus b : w.bonus) crate(g, b.x, b.y, b.kind);
+        for (Shot s : w.shots) look(g, s, false);
+        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(Terrain.TH - 1, (int) ((y0 + vh) / S)); ty++)
+            for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(Terrain.TW - 1, (int) ((x0 + vw) / S)); tx++) {
+                int id = ty * Terrain.TW + tx; boolean d = fresh[id];
+                if (d) fillTile(t, tx, ty);
                 g.tile(id, px, S, d, tx * S, ty * S);
             }
         for (Prop p : w.props) if (!p.gone && p.x < x0 + vw && p.x + p.w > x0 && p.y < y0 + vh && p.y + p.h > y0) { prop(g, p); damage(g, p); }
@@ -271,6 +302,8 @@ public final class Renderer {
             for (int i = 0; i < 2; i++) { float rr = 11 + i * 4 + (float) Math.sin((w.tick + i * 9) * .3f) * 1.5f; g.save(); g.translate(o.px, cy + (i == 0 ? -6 : 8)); g.scale(1, .35f); g.circle(0, 0, rr, 0, 0xCCFF8A1A, 2.2f); g.circle(0, 0, rr, 0, 0xEEFFE6B0, .8f); g.restore(); }
         }
         g.additive(false);
+        layerPass(g, t, true, x0, y0); // encima de todo
+        for (int i = 0; i < fresh.length; i++) fresh[i] = false;
         g.restore();
         lastW = w; lastWho = who;
     }

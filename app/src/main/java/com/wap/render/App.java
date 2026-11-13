@@ -270,7 +270,7 @@ public final class App {
     float swX0, swX, swTapX, swTapY; boolean swOn;
     boolean gridScreen() { return screen == LEVEL_SEL || screen == LEVEL_LIST; }
     /** Para las pruebas: elegir herramienta y aplicarla en un punto del mapa. */
-    public void editorTool(int t) { editor.tool = t; }
+    public void editorTool(int t) { editor.setTool(t); }
     public void editorFill(boolean f) { editor.fill = f; }
     public void setRivals(int n, boolean t) { rivals = n; teams = t; }
     public int selPageNow() { return selPage; }
@@ -280,6 +280,9 @@ public final class App {
     public void saveTestLevel(String n) { Level l = Level.random(n.hashCode(), n); if (n.equals("PLAYA")) l.water = 650; saveLevel(l); }
     public int editorSolidCount() { int c = 0; for (int i = 0; i < editor.w.t.m.length; i += 7) { int k = editor.w.t.m[i]; if (k == Terrain.EARTH || k == Terrain.WOOD) c++; } return c * 7; }
     public void editorApply(int x, int y) { editor.apply(x, y); }
+    public World editorWorld() { return editor.w; }
+    public void editorSize(int k) { editor.size = k; }
+    public void editorPanel(int p) { editor.panel = p; }
     static final int NAME_MAX = 12;
     /** Nombre en mayúsculas, sin saltos de línea y con largo máximo. */
     static String clean(String n) { if (n == null) return ""; n = n.replaceAll("[\\r\\n\\t|]", " ").trim().toUpperCase(); return n.length() > NAME_MAX ? n.substring(0, NAME_MAX) : n; }

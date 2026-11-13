@@ -182,7 +182,7 @@ public class Sim {
          for(int[] r:res){BufferedImage bb=new BufferedImage(r[0],r[1],BufferedImage.TYPE_INT_RGB);J gg=new J(bb);App q=new App(store,mute);q.seed(3);
           for(int sc:new int[]{App.TITLE,App.RIVALS,App.LEVEL_SEL,App.LEVEL_LIST,App.PAINT}){q.go(sc);q.overflow=0;q.draw(gg);if(q.overflow>0){bad++;worst+=r[0]+"x"+r[1]+" pantalla "+sc+"; ";}}
           q.go(App.TITLE);q.draw(gg);ImageIO.write(bb,"png",new File(out,"titulo_"+r[0]+"x"+r[1]+".png"));
-          if(r[0]==2048){q.openEditor(Level.empty("TABLET"));q.editorTool(2);q.draw(gg);ImageIO.write(bb,"png",new File(out,"editor_tablet.png"));q.editorFill(false);q.draw(gg);ImageIO.write(bb,"png",new File(out,"editor_tablet2.png"));}}
+          if(r[0]==2048){q.openEditor(Level.empty("TABLET"));q.editorTool(2);q.editorFill(false);q.overflow=0;q.draw(gg);ImageIO.write(bb,"png",new File(out,"editor_tablet_puntos.png"));if(q.overflow>0){bad++;worst+="editor puntos; ";}q.editorPanel(1);q.draw(gg);ImageIO.write(bb,"png",new File(out,"editor_tablet_colores.png"));q.editorPanel(2);q.draw(gg);ImageIO.write(bb,"png",new File(out,"editor_tablet_objetos.png"));q.editorPanel(0);q.editorFill(true);q.editorTool(4);q.draw(gg);ImageIO.write(bb,"png",new File(out,"editor_tablet.png"));q.editorFill(false);q.draw(gg);ImageIO.write(bb,"png",new File(out,"editor_tablet2.png"));}}
          check(bad==0,"ningún texto se sale de su botón en 7 tamaños de pantalla "+worst);}
         {App q=new App(store,mute);q.seed(6);q.screen=App.LEVEL_LIST;q.draw(g);ImageIO.write(b,"png",new File(out,"6_niveles.png"));q.openEditor(Level.random(77,"MI NIVEL"));Editor_test(q);q.draw(g);ImageIO.write(b,"png",new File(out,"7_editor.png"));
          q.leaveEditor(false);check(q.levelNames().contains("MI NIVEL"),"el editor guarda el nivel");q.nextLevel();check(q.levelName().equals("MI NIVEL"),"se elige el nivel creado para jugar");q.start();check(q.w.water==640&&q.w.t.solid(300,300),"la partida usa el nivel creado (con agua)");q.go(App.TITLE);q.draw(g);ImageIO.write(b,"png",new File(out,"1b_titulo.png"));
@@ -195,7 +195,7 @@ public class Sim {
          q.openEditor(Level.empty("GESTOS"));q.draw(g);float z0=q.ren.zoomMul;q.pointer(1,600,400,true);q.pointer(1,700,420,true);q.pointer(1,800,430,true);q.pointer(1,800,430,false);q.draw(g);int painted=q.editorSolidCount();
          check(painted>200,"un dedo dibuja ("+painted+" px)");q.pointer(2,500,400,true);q.pointer(3,700,400,true);q.pointer(2,400,400,true);q.pointer(3,800,400,true);check(q.ren.zoomMul>z0*1.3f,"el pellizco hace zoom ("+z0+"→"+q.ren.zoomMul+")");float cx=q.ren.camX;q.pointer(2,300,400,true);q.pointer(3,700,400,true);q.pointer(2,300,400,false);q.pointer(3,700,400,false);check(q.editorSolidCount()==painted,"dos dedos no dibujan");
          q.draw(g);q.pointer(4,600,300,true);q.pointer(5,800,300,true);q.pointer(4,700,300,true);q.pointer(5,900,300,true);check(Math.abs(q.ren.camX-cx)>10,"dos dedos mueven la vista");q.pointer(4,0,0,false);q.pointer(5,0,0,false);
-         q.editorTool(2);q.draw(g);q.pointer(6,500,250,true);q.pointer(6,700,450,true);q.draw(g);ImageIO.write(b,"png",new File(out,"12_editor_forma.png"));q.pointer(6,700,450,false);check(q.editorSolidCount()>painted+1000,"arrastrar con la herramienta cuadrado lo dibuja");}
+         q.editorTool(4);q.draw(g);q.pointer(6,500,250,true);q.pointer(6,700,450,true);q.draw(g);ImageIO.write(b,"png",new File(out,"12_editor_forma.png"));q.pointer(6,700,450,false);check(q.editorSolidCount()>painted+1000,"arrastrar con la herramienta cuadrado lo dibuja");}
         {App q=new App(store,mute);q.seed(5);q.start();for(int i=0;i<300;i++)q.tick();q.w.robots[0].damage(q.w,999,0,0,0,100,100);q.tick();check(q.ren.feedMsg.size()==1&&q.ren.feedMsg.get(0).equals("PLAYER 1 SE BANEÓ DE LA VIDA"),"aviso al matarse solo: "+q.ren.feedMsg);for(int i=0;i<200;i++)q.tick();q.w.robots[1].damage(q.w,999,0,0,0,100,100);q.tick();check(q.ren.feedMsg.size()>0&&q.ren.feedMsg.get(0).equals("PLAYER 2 FUE ELIMINADO POR PLAYER 1"),"aviso al eliminar al rival: "+q.ren.feedMsg);for(int i=0;i<3;i++)q.tick();q.draw(g);ImageIO.write(b,"png",new File(out,"5_aviso.png"));}
         app.screen=App.ARMS;app.draw(g);ImageIO.write(b,"png",new File(out,"2_armas.png"));
         app.openLobbyForTest();app.draw(g);ImageIO.write(b,"png",new File(out,"2c_salas.png"));app.back();app.screen=App.PAINT;app.draw(g);ImageIO.write(b,"png",new File(out,"2b_color.png"));app.screen=App.TITLE;app.start();g.tiles.clear();for(int i=0;i<95;i++)app.tick();app.draw(g);ImageIO.write(b,"png",new File(out,"3_inicio.png"));
@@ -203,7 +203,36 @@ public class Sim {
             if(i%160==20)m=Input.UP;if(i%160>20&&i%160<50)m=Input.UP|Input.B;if(i%300==80)m=Input.UP;if(i%300==81)m=Input.UP|Input.A;if(i%211==5)m=Input.DOWN;if(i%211==6)m=Input.DOWN|Input.B;app.keys=m;app.tick();
             if(app.screen!=App.PLAY)break;if(i==700){for(int q=0;q<14;q++){app.keys=Input.X|Input.UP;app.tick();}app.draw(g);ImageIO.write(b,"png",new File(out,"3b_mira.png"));}if(i>120&&i%(190)==0&&app.w.robots[0].alive()){app.draw(g);ImageIO.write(b,"png",new File(out,"j_"+(s++)+".png"));}}
     }
-    static void Editor_test(App q){q.editorTool(0);q.editorApply(300,300);q.editorApply(310,305);q.editorTool(14);q.editorApply(500,640);q.editorTool(9);q.editorApply(700,200);}
+    static void editorNuevo(String out)throws Exception{
+        Terrain t=new Terrain();
+        t.brush(300,300,12,Terrain.STEEL,0xFF3E6FB0);check(t.solid(300,300)&&t.at(300,300)==Terrain.STEEL,"el material acero se pinta y choca");
+        t.carve(300,300,30);check(t.solid(300,300)&&t.solid(305,305),"una explosión no rompe el acero pintado");
+        t.brush(600,300,12,Terrain.BACKDROP,0xFF5E8C3A);t.brush(700,300,12,Terrain.OVERLAY,0xFFE03C3C);
+        check(!t.solid(600,300)&&!t.solid(700,300)&&t.back[300*Terrain.W+600]!=0&&t.front[300*Terrain.W+700]!=0,"fondo y sobre se ven pero no chocan");
+        t.carve(600,300,20);check(t.back[300*Terrain.W+600]!=0,"las explosiones no borran el fondo");
+        t.cell(803,305,8,Terrain.EARTH,0xFFE03C3C,false);check(t.at(800,304)==Terrain.EARTH&&t.at(807,311)==Terrain.EARTH&&t.at(808,304)==0&&t.tex[304*Terrain.W+800]==0xFFE03C3C&&t.tex[311*Terrain.W+807]==0xFFE03C3C,"pixel: llena una celda de 8 alineada a la grilla, con color parejo");
+        t.cell(803,305,8,Terrain.EARTH,0,true);check(t.at(803,305)==0,"pixel: borrar vacía la celda");
+        t.polygon(new int[]{1000,200,1100,200,1100,300,1000,300},true,true,4,Terrain.WOOD,0xFFC8955A);check(t.at(1050,250)==Terrain.WOOD&&t.at(1150,250)==0,"puntos: el polígono relleno se dibuja");
+        t.polygon(new int[]{1200,200,1300,260,1200,320},false,false,4,Terrain.EARTH,0xFF8B5A2B);check(t.at(1250,230)==Terrain.EARTH&&t.at(1240,260)==0,"puntos: el contorno abierto dibuja solo las líneas");
+        check(t.bucket(1050,250,Terrain.STEEL,0xFF7D8590)&&t.at(1050,250)==Terrain.STEEL,"el balde cambia la zona al material elegido (acero)");
+        // nivel con capas: guardar y leer
+        App q=new App(store,mute);q.seed(2);q.openEditor(Level.empty("CAPAS"));World ew=q.editorWorld();
+        ew.t.brush(400,600,40,Terrain.BACKDROP,0xFF7FD6FF);ew.t.brush(900,850,30,Terrain.OVERLAY,0xFF3FB34F);ew.t.brush(1300,860,20,Terrain.STEEL,0xFFE03C3C);
+        Level l=Level.load(Level.of(ew,"CAPAS").save());check(l.back!=null&&l.front!=null&&l.back[600*Terrain.W+400]!=0&&l.front[850*Terrain.W+900]!=0&&l.m[860*Terrain.W+1300]==Terrain.STEEL,"el nivel guarda y lee el fondo, lo de encima y el acero");
+        Level plain=Level.load(Level.empty("SIN CAPAS").save());check(plain.back==null&&plain.front==null,"un nivel sin capas no las guarda");
+        q.draw(new J(new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB)));
+        BufferedImage b=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);J g=new J(b);
+        q.ren.camX=900;q.ren.camY=760;q.editorTool(1);q.editorSize(2);q.draw(g);for(int i=0;i<6;i++){q.pointer(1,500+i*40,500,true);}q.pointer(1,740,500,false);q.draw(g);ImageIO.write(b,"png",new File(out,"14_editor_pixel.png"));
+        q.editorTool(2);q.editorFill(true);for(float[] p:new float[][]{{900,300},{1100,320},{1050,480},{880,440}}){q.pointer(2,p[0],p[1],true);q.pointer(2,p[0],p[1],false);}q.draw(g);ImageIO.write(b,"png",new File(out,"15_editor_puntos.png"));
+        int before=q.editorSolidCount();q.pointer(2,900,300,true);q.pointer(2,900,300,false);check(q.editorSolidCount()>before+500,"puntos: tocar el primer punto cierra y rellena ("+before+"→"+q.editorSolidCount()+")");
+        q.editorPanel(1);q.draw(g);ImageIO.write(b,"png",new File(out,"16_editor_colores.png"));q.editorPanel(2);q.draw(g);ImageIO.write(b,"png",new File(out,"17_editor_objetos.png"));q.editorPanel(0);
+        // partida con capas: se ven, no chocan
+        q.leaveEditor(false);
+        World pw=new World(3,1,set("GRENADE","BAZOOKA","SHOTGUN","MINE","CHAINGUN"),set("GRENADE","BAZOOKA","SHOTGUN","MINE","CHAINGUN"),l);
+        check(pw.t.back!=null&&!pw.t.solid(900,850),"en la partida, las capas no chocan");
+        Renderer rd=new Renderer();rd.reset(pw);rd.freeCam=true;rd.camX=900;rd.camY=760;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J gi=new J(im);rd.drawWorld(gi,pw,0);rd.drawWorld(gi,pw,0);ImageIO.write(im,"png",new File(out,"18_capas_juego.png"));
+    }
+    static void Editor_test(App q){q.editorTool(0);q.editorApply(300,300);q.editorApply(310,305);q.editorTool(16);q.editorApply(500,640);q.editorTool(11);q.editorApply(700,200);}
     static void piezas(String out)throws Exception{
         RobotArt.View v=RobotArt.poster();BufferedImage[] im=new BufferedImage[2];
         for(int k=0;k<2;k++){if(k==1)Pieces.load("# prueba\npieza pecho\nforma relleno=FF5F574E contorno=FF000000 grosor=0.75 traje=1\np -6 -6 6 -6 6 6 -6 6\npieza cabeza\nforma relleno=FFFFD040 contorno=FF000000 grosor=0.5\np -6 -14 6 -14 0 -2\n");
@@ -299,5 +328,5 @@ public class Sim {
         Wpn.load("dibujo BAZOOKA\nforma relleno=FF000000\np 0 0 1 1 2 0\n");check(Wpn.error!=null,"un dibujo sin fin avisa el error");
         Wpn.load("arma BAZOOKA aspecto=PATO\n");check(Wpn.error!=null,"un aspecto desconocido avisa el error");
         Wpn.reset();check(bz.look==Wpn.ROCKET&&bz.tint==0&&bz.art==null&&bz.size==1&&bz.light,"sin armas.txt, el aspecto vuelve a ser el de siempre");}
-    public static void main(String[] a)throws Exception{aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    public static void main(String[] a)throws Exception{editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

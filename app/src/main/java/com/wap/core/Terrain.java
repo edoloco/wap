@@ -31,6 +31,14 @@ public final class Terrain {
     public static final int TW = (W + TILE - 1) / TILE, TH = (H + TILE - 1) / TILE;
     public final byte[] m = new byte[W * H];
     public final boolean[] dirty = new boolean[TW * TH];
+    /**
+     * Capas del editor que no chocan con nada (solo se ven): FONDO, detrás de todo (se dibuja más claro), y SOBRE,
+     * encima de todo (más oscuro). 0 = nada. Se crean al usarlas; null si el nivel no tiene.
+     */
+    public int[] back, front;
+    /** Materiales del editor que no van en m, sino en las capas. */
+    public static final int BACKDROP = 100, OVERLAY = 101;
+    int[] layer(int mat) { if (mat == BACKDROP) { if (back == null) back = new int[W * H]; return back; } if (front == null) front = new int[W * H]; return front; }
 
     public boolean solid(int x, int y) { if (x < 0 || y < 0 || x >= W || y >= H) return true; byte k = m[y * W + x]; return k != 0 && k != DEBRIS && k != DECOR; }
     public int at(int x, int y) { return x < 0 || y < 0 || x >= W || y >= H ? 2 : m[y * W + x]; }
@@ -283,11 +291,56 @@ public final class Terrain {
             if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) paint(x, y, mat, color);
         mark(cx - r, cy - r, cx + r, cy + r);
     }
-    /** Pinta un píxel con tierra o madera; no tapa bloques, acero ni objetos. */
-    public void paint(int x, int y, int mat, int color) {
+    /** Pinta un píxel: tierra (con vetas), madera (lisa), acero (planchas) o una capa (fondo o sobre). No tapa bloques ni objetos. */
+    public void paint(int x, int y, int mat, int color) { put(x, y, mat, color, false); }
+    /** flat = color parejo, sin vetas (pixel art). */
+    void put(int x, int y, int mat, int color, boolean flat) {
         if (!inside(x, y)) return;
-        int i = y * W + x, k = m[i]; if (k != 0 && k != DEBRIS && k != DECOR && k != EARTH && k != WOOD) return;
-        m[i] = (byte) mat; tex[i] = mat == WOOD ? color : earthTex(color, x, y);
+        int i = y * W + x;
+        if (mat == BACKDROP || mat == OVERLAY) { layer(mat)[i] = flat ? color | 0xFF000000 : earthTex(color, x, y); return; }
+        int k = m[i]; if (k != 0 && k != DEBRIS && k != DECOR && k != EARTH && k != WOOD && !(k == STEEL && mat == STEEL)) return;
+        m[i] = (byte) mat; tex[i] = flat || mat == WOOD ? color | 0xFF000000 : mat == STEEL ? steelTex(color, x, y) : earthTex(color, x, y);
+    }
+    /** Acero pintado: planchas de 16 px con juntas oscuras, un brillo arriba y remaches en las esquinas. */
+    static int steelTex(int c, int x, int y) {
+        int u = Math.floorMod(x, 16), v = Math.floorMod(y, 16), k = 0;
+        if (u == 0 || v == 0) k = -55; else if (v == 1) k = 28; else if ((u == 3 || u == 13) && (v == 3 || v == 13)) k = -40; else if ((u == 4 || u == 14) && (v == 4 || v == 14)) k = 20; else if (u == 15 || v == 15) k = -18;
+        int r = Math.max(0, Math.min(255, (c >> 16 & 255) + k)), g = Math.max(0, Math.min(255, (c >> 8 & 255) + k)), b = Math.max(0, Math.min(255, (c & 255) + k));
+        return 0xFF000000 | r << 16 | g << 8 | b;
+    }
+    /** Pixel art: llena la celda de la grilla (de lado cell) que contiene el punto, con color parejo. erase = la vacía. */
+    public void cell(int x, int y, int cell, int mat, int color, boolean erase) {
+        int x0 = Math.floorDiv(x, cell) * cell, y0 = Math.floorDiv(y, cell) * cell;
+        for (int j = y0; j < y0 + cell; j++) for (int i = x0; i < x0 + cell; i++) {
+            if (!inside(i, j)) continue;
+            if (erase) clear(i, j, mat); else put(i, j, mat, color, true);
+        }
+        mark(x0, y0, x0 + cell, y0 + cell);
+    }
+    /** Borra un píxel de la capa elegida (fondo, sobre) o del mapa (si mat es otro); los objetos los quita el mundo. */
+    void clear(int x, int y, int mat) {
+        int i = y * W + x;
+        if (mat == BACKDROP) { if (back != null) back[i] = 0; } else if (mat == OVERLAY) { if (front != null) front[i] = 0; } else if (!isProp(m[i])) m[i] = 0;
+    }
+    /** Polígono (herramienta de puntos): relleno par-impar o contorno de grosor r; closed = une el último con el primero. */
+    public void polygon(int[] xy, boolean fill, boolean closed, int r, int mat, int color) {
+        int n = xy.length / 2; if (n < 2) return;
+        if (fill && n >= 3) {
+            int y0 = Integer.MAX_VALUE, y1 = Integer.MIN_VALUE, x0 = Integer.MAX_VALUE, x1 = Integer.MIN_VALUE;
+            for (int k = 0; k < n; k++) { y0 = Math.min(y0, xy[2 * k + 1]); y1 = Math.max(y1, xy[2 * k + 1]); x0 = Math.min(x0, xy[2 * k]); x1 = Math.max(x1, xy[2 * k]); }
+            float[] cut = new float[n];
+            for (int y = Math.max(EDGE, y0); y <= Math.min(H - EDGE - 1, y1); y++) {
+                float sy = y + .5f; int c = 0;
+                for (int k = 0; k < n; k++) { float ax = xy[2 * k], ay = xy[2 * k + 1], bx = xy[(2 * k + 2) % (2 * n)], by = xy[(2 * k + 3) % (2 * n)];
+                    if ((ay <= sy) != (by <= sy)) cut[c++] = ax + (sy - ay) / (by - ay) * (bx - ax); }
+                java.util.Arrays.sort(cut, 0, c);
+                for (int k = 0; k + 1 < c; k += 2) for (int x = Math.round(cut[k]); x < Math.round(cut[k + 1]); x++) paint(x, y, mat, color);
+            }
+            mark(x0, y0, x1, y1);
+        } else {
+            for (int k = 0; k + 1 < n; k++) line(xy[2 * k], xy[2 * k + 1], xy[2 * k + 2], xy[2 * k + 3], r, mat, color);
+            if (closed && n >= 3) line(xy[2 * n - 2], xy[2 * n - 1], xy[0], xy[1], r, mat, color);
+        }
     }
     // ---------- Formas del editor (relleno o contorno de grosor r)
     public void line(int x0, int y0, int x1, int y1, int r, int mat, int color) {
@@ -319,13 +372,16 @@ public final class Terrain {
         } else { line(mx, c, b, d, r, mat, color); line(b, d, a, d, r, mat, color); line(a, d, mx, c, r, mat, color); }
     }
     /**
-     * Balde: si se toca tierra o madera, le cambia el color a toda esa zona unida del mismo material;
-     * si se toca un hueco vacío y cerrado, lo rellena. Devuelve false si el hueco no está cerrado.
+     * Balde. En el mapa: si se toca tierra, madera o acero, toda esa zona unida del mismo material pasa al material y color
+     * elegidos; si se toca un hueco vacío y cerrado, lo rellena. En una capa (fondo o sobre): si se toca esa capa, le cambia
+     * el color a la zona unida; si no, rellena el hueco de aire cerrado. Devuelve false si el hueco no está cerrado.
      */
     public boolean bucket(int x, int y, int mat, int color) {
         if (!inside(x, y)) return false;
-        int i0 = y * W + x, k = m[i0]; boolean empty = k == 0 || k == DEBRIS || k == DECOR;
-        if (!empty && k != EARTH && k != WOOD) return false;
+        int i0 = y * W + x, k = m[i0]; boolean empty = k == 0 || k == DEBRIS || k == DECOR, lay = mat == BACKDROP || mat == OVERLAY;
+        int[] L = lay ? (mat == BACKDROP ? back : front) : null; boolean onLayer = L != null && L[i0] != 0;
+        if (!lay && !empty && k != EARTH && k != WOOD && k != STEEL) return false;
+        if (lay && !onLayer && !empty) return false;
         final int LIMIT = 260_000; int[] q = new int[4096]; int n = 0, head = 0; java.util.BitSet seen = new java.util.BitSet(W * H);
         q[n++] = i0; seen.set(i0); int x0 = x, x1 = x, y0 = y, y1 = y;
         while (head < n) {
@@ -334,22 +390,26 @@ public final class Terrain {
             for (int d = 0; d < 4; d++) {
                 int ox = px + (d == 0 ? 1 : d == 1 ? -1 : 0), oy = py + (d == 2 ? 1 : d == 3 ? -1 : 0);
                 if (!inside(ox, oy)) continue; int o = oy * W + ox; if (seen.get(o)) continue;
-                int ko = m[o]; boolean same = empty ? ko == 0 || ko == DEBRIS || ko == DECOR : ko == k;
+                int ko = m[o]; boolean air = ko == 0 || ko == DEBRIS || ko == DECOR;
+                boolean same = onLayer ? L[o] != 0 : lay ? air && (L == null || L[o] == 0) : empty ? air : ko == k;
                 if (!same) continue;
                 seen.set(o); if (n >= LIMIT) return false;
                 if (n == q.length) q = java.util.Arrays.copyOf(q, q.length * 2);
                 q[n++] = o;
             }
         }
-        int to = empty ? mat : k;
-        for (int j = 0; j < n; j++) { int p = q[j], px = p % W, py = p / W; m[p] = (byte) to; tex[p] = to == WOOD ? color : earthTex(color, px, py); }
+        for (int j = 0; j < n; j++) { int p = q[j], px = p % W, py = p / W;
+            if (lay) layer(mat)[p] = earthTex(color, px, py);
+            else { m[p] = (byte) mat; tex[p] = mat == WOOD ? color : mat == STEEL ? steelTex(color, px, py) : earthTex(color, px, py); } }
         mark(x0, y0, x1, y1); return true;
     }
     /** Borra todo lo que no sea el marco ni un objeto (los objetos los quita el mundo). */
-    public void wipe(int cx, int cy, int r) {
+    public void wipe(int cx, int cy, int r) { wipe(cx, cy, r, 0); }
+    /** Goma de una capa: mat = BACK o FRONT borra solo esa capa; otro valor borra el mapa. */
+    public void wipe(int cx, int cy, int r, int mat) {
         for (int y = cy - r; y <= cy + r; y++) for (int x = cx - r; x <= cx + r; x++) {
             if (!inside(x, y) || (x - cx) * (x - cx) + (y - cy) * (y - cy) > r * r) continue;
-            int i = y * W + x; if (!isProp(m[i])) m[i] = 0;
+            clear(x, y, mat);
         }
         mark(cx - r, cy - r, cx + r, cy + r);
     }
