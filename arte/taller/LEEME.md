@@ -16,7 +16,7 @@ y reemplazar `__BASE__` en `taller_src.html` con ese JSON.
 
 Editor (artefacto web) para cambiar valores, nombre, descripción y aspecto de las armas, crearlas o quitarlas del juego.
 
-Aspecto: `arma NOMBRE aspecto=COHETE color=RRGGBB tamano=1.5 luz=0` y bloques `dibujo NOMBRE` / `forma relleno=AARRGGBB contorno=AARRGGBB grosor=N parimpar=0` / `p x y ...` / `fin` (unidades del juego, apuntando a la derecha, máx. 600 puntos por arma). El dibujo se importa desde PDF, EPS, AI o SVG.
+Aspecto: `arma NOMBRE aspecto=COHETE color=RRGGBB tamano=1.5 luz=0` y bloques `dibujo NOMBRE` / `forma relleno=AARRGGBB contorno=AARRGGBB grosor=N parimpar=0` / `p x y ...` / `fin` (unidades del juego, apuntando a la derecha, máx. 600 puntos por cuadro). Animación: `dibujo NOMBRE ritmo=6 meneo=1` (ritmo = ticks por cuadro, meneo = flota) y una línea `cuadro` entre cuadros, hasta 8. El dibujo se importa desde PDF, EPS, AI o SVG.
 
 - Exporta `app/src/main/assets/armas.txt`, que el juego lee al iniciar (`Wpn.load`). Sin archivo, las armas de siempre.
 - Formato: `nueva NOMBRE BASE` (crea un arma copiando otra), `arma NOMBRE clave=valor ...`, `nombre NOMBRE texto`, `descripcion NOMBRE texto`, `quitar NOMBRE`. En los nombres, los espacios van como `_`.

@@ -12,6 +12,9 @@ public final class Wpn {
     public boolean drone;
     /** Aspecto (armas.txt): color nuevo (0 = el de siempre), tamaño, si se ve su luz y un dibujo propio que reemplaza al cuerpo. */
     public int tint; public float size = 1; public boolean light = true; public Art[] art;
+    /** Dibujo animado: cuadros que se turnan (art es el primero), ticks por cuadro y si se mece al flotar. */
+    public Art[][] frames; public int artRate = 6; public boolean artBob;
+    public static final int MAX_FRAMES = 8;
     /** Una forma de un dibujo propio, en unidades del juego, mirando hacia la derecha (hacia donde vuela). */
     public static final class Art { public float[][] polys; public int fill, stroke; public float sw; public boolean eo; }
     /** Nombres de los aspectos para armas.txt, en el orden de las constantes BULLET..MISSILE. */
@@ -157,7 +160,7 @@ public final class Wpn {
     /** Vuelve a las armas de siempre. */
     public static void reset() {
         if (ALL.length != BASE_COUNT) ALL = java.util.Arrays.copyOf(ALL, BASE_COUNT); // quita las armas creadas
-        for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) ALL[i].set(KEYS[k], DEFAULTS[i][k]); ALL[i].label = DEF_TEXT[i][0]; ALL[i].desc = DEF_TEXT[i][1]; ALL[i].off = false; ALL[i].look = DEF_LOOK[i]; ALL[i].tint = 0; ALL[i].art = null; }
+        for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) ALL[i].set(KEYS[k], DEFAULTS[i][k]); ALL[i].label = DEF_TEXT[i][0]; ALL[i].desc = DEF_TEXT[i][1]; ALL[i].off = false; ALL[i].look = DEF_LOOK[i]; ALL[i].tint = 0; ALL[i].art = null; ALL[i].frames = null; ALL[i].artRate = 6; ALL[i].artBob = false; }
         signature = 0; error = null;
     }
     /**
@@ -168,7 +171,8 @@ public final class Wpn {
      *   quitar NOMBRE
      *   nueva NOMBRE_NUEVO NOMBRE_BASE   (crea un arma copiando otra; después se cambia con las líneas de arriba)
      *   arma NOMBRE aspecto=COHETE color=RRGGBB tamano=1.5 luz=0   (cómo se ve el disparo; aspectos en LOOKS)
-     *   dibujo NOMBRE  /  forma relleno=AARRGGBB contorno=AARRGGBB grosor=N parimpar=0  /  p x y ...  /  fin   (dibujo propio del disparo)
+     *   dibujo NOMBRE [ritmo=N meneo=0/1]  /  forma relleno=AARRGGBB contorno=AARRGGBB grosor=N parimpar=0  /  p x y ...  /  [cuadro  /  forma ... p ...]  /  fin
+ *   (dibujo propio del disparo; "cuadro" empieza el siguiente cuadro de la animación; ritmo = ticks por cuadro)
      * Si hay un error, se deja todo como siempre y se avisa en error.
      */
     public static void load(String text) {
@@ -200,10 +204,18 @@ public final class Wpn {
                         else w.set(p[0], Float.parseFloat(p[1])); } break;
                     case "dibujo": {
                         java.util.ArrayList<Art> shapes = new java.util.ArrayList<>(); Art cur = null; java.util.ArrayList<float[]> ps = new java.util.ArrayList<>(); int pts = 0;
+                        java.util.ArrayList<Art[]> frs = new java.util.ArrayList<>(); int rate = 6; boolean bob = false;
+                        for (String opt : (t.length > 2 ? t[2].trim() : "").split("\\s+")) { String[] kv = opt.split("=", 2); if (kv.length < 2) continue;
+                            if (kv[0].equals("ritmo")) rate = Math.max(1, Math.min(60, Integer.parseInt(kv[1].trim()))); else if (kv[0].equals("meneo")) bob = kv[1].trim().equals("1"); }
                         while (true) {
                             line++; if (line > lines.length) throw new IllegalArgumentException("falta 'fin' en el dibujo de " + t[1]);
                             String d = lines[line - 1].trim(); if (d.isEmpty() || d.startsWith("#")) continue;
                             if (d.equals("fin")) break;
+                            if (d.equals("cuadro")) { // cierra el cuadro actual y empieza otro
+                                if (cur != null) cur.polys = ps.toArray(new float[0][]); ps = new java.util.ArrayList<>(); cur = null;
+                                if (pts > MAX_ART_POINTS) throw new IllegalArgumentException("un cuadro del dibujo de " + t[1] + " tiene demasiados puntos (" + pts + ", máximo " + MAX_ART_POINTS + ")");
+                                shapes.removeIf(a -> a.polys == null || a.polys.length == 0); if (!shapes.isEmpty()) frs.add(shapes.toArray(new Art[0]));
+                                shapes = new java.util.ArrayList<>(); pts = 0; if (frs.size() >= MAX_FRAMES) throw new IllegalArgumentException("el dibujo de " + t[1] + " tiene más de " + MAX_FRAMES + " cuadros"); continue; }
                             String[] q = d.split("\\s+");
                             if (q[0].equals("forma")) {
                                 if (cur != null) cur.polys = ps.toArray(new float[0][]); ps = new java.util.ArrayList<>(); cur = new Art(); cur.sw = .5f; shapes.add(cur);
@@ -218,7 +230,8 @@ public final class Wpn {
                         }
                         if (cur != null) cur.polys = ps.toArray(new float[0][]);
                         if (pts > MAX_ART_POINTS) throw new IllegalArgumentException("el dibujo de " + t[1] + " tiene demasiados puntos (" + pts + ", máximo " + MAX_ART_POINTS + ")");
-                        shapes.removeIf(a -> a.polys == null || a.polys.length == 0); w.art = shapes.isEmpty() ? null : shapes.toArray(new Art[0]); break; }
+                        shapes.removeIf(a -> a.polys == null || a.polys.length == 0); if (!shapes.isEmpty()) frs.add(shapes.toArray(new Art[0]));
+                        w.frames = frs.isEmpty() ? null : frs.toArray(new Art[0][]); w.art = w.frames == null ? null : w.frames[0]; w.artRate = rate; w.artBob = bob; break; }
                     case "nombre": if (t.length > 2) w.label = t[2].trim().toUpperCase(); break;
                     case "descripcion": w.desc = t.length > 2 ? t[2].trim() : ""; break;
                     case "quitar": w.off = true; break;

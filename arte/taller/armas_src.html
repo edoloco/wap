@@ -84,6 +84,11 @@ ol.steps{margin:8px 0;padding-left:20px;color:var(--dim)} ol.steps b{color:var(-
 .toggle{display:flex;gap:6px;align-items:center;font-size:13px}
 .toggle input{width:18px;height:18px;accent-color:var(--gold)}
 .lab2{font-size:12px;color:var(--dim);display:grid;gap:4px}
+.frames{display:flex;flex-wrap:wrap;gap:6px}
+.fr{display:grid;gap:2px;justify-items:center;padding:4px;border:2px solid var(--line);border-radius:3px;background:var(--navy)}
+.fr canvas{width:60px;height:36px}
+.frb{display:flex;gap:4px;align-items:center;font:9px var(--pix);color:var(--dim)}
+button.mini{padding:2px 6px;font-size:11px;min-height:0}
 .prev{background:var(--navy);border-radius:3px;overflow:hidden}
 .prev canvas{display:block;width:100%;height:auto}
 .prev.over{outline:3px dashed var(--gold)}
@@ -320,23 +325,31 @@ function sprite(kind,look,tint){ const key=kind+look+(tint||""); if(sprCache[key
   return sprCache[key]=c; }
 /** El dibujo propio en unidades del juego: centrado, girado, volteado y del largo elegido, ya simplificado (lo mismo que va a armas.txt). */
 const bakeCache=new WeakMap();
-function bakedArt(a){ if(!a) return null; if(bakeCache.has(a)) return bakeCache.get(a); const bb=bboxOf(a.raw), cx0=(bb[0]+bb[2])/2, cy0=(bb[1]+bb[3])/2, rot=(a.rot||0)%4;
+/** Cuadros del dibujo (los guardados antes tenían uno solo en "raw"). */
+function framesOf(a){ return a? (a.frames||(a.raw?[a.raw]:[])) : []; }
+function bakedArt(a){ if(!a) return null; if(bakeCache.has(a)) return bakeCache.get(a); const fr=framesOf(a); const bb=bboxOf(fr.flat()), cx0=(bb[0]+bb[2])/2, cy0=(bb[1]+bb[3])/2, rot=(a.rot||0)%4;
   const tf=(x,y)=>{ x-=cx0; y-=cy0; for(let i=0;i<rot;i++){ const t=x; x=-y; y=t; } if(a.flip) y=-y; return [x,y]; };
-  let mnx=1e9,mxx=-1e9; for(const s of a.raw) for(const p of s.polys) for(let i=0;i<p.length;i+=2){ const q=tf(p[i],p[i+1]); mnx=Math.min(mnx,q[0]); mxx=Math.max(mxx,q[0]); }
+  let mnx=1e9,mxx=-1e9; for(const sh of fr) for(const s of sh) for(const p of s.polys) for(let i=0;i<p.length;i+=2){ const q=tf(p[i],p[i+1]); mnx=Math.min(mnx,q[0]); mxx=Math.max(mxx,q[0]); }
   const k=a.len/((mxx-mnx)||1), tol=Math.max(.04,a.len/220);
-  const out=a.raw.map(s=>({...s, sw:s.sw*k, polys:s.polys.map((p,i)=>{ const o=[]; for(let j=0;j<p.length;j+=2){ const q=tf(p[j],p[j+1]); o.push(q[0]*k,q[1]*k); } return simplify(o,tol,!s.open[i]); })}));
+  // todos los cuadros con el mismo centro y la misma escala, para que no salten al animarse
+  const out=fr.map(sh=>sh.map(s=>({...s, sw:s.sw*k, polys:s.polys.map((p,i)=>{ const o=[]; for(let j=0;j<p.length;j+=2){ const q=tf(p[j],p[j+1]); o.push(q[0]*k,q[1]*k); } return simplify(o,tol,!s.open[i]); })})));
   bakeCache.set(a,out); return out; }
-function artPoints(a){ const b=bakedArt(a); let n=0; if(b) for(const s of b) for(const p of s.polys) n+=p.length/2; return n; }
+/** Puntos del cuadro más pesado (el juego permite 600 por cuadro). */
+function artPoints(a){ const b=bakedArt(a); let n=0; if(b) for(const f of b){ let m=0; for(const s of f) for(const p of s.polys) m+=p.length/2; n=Math.max(n,m); } return n; }
 function drawArt(x, shapes){ for(const s of shapes){ x.beginPath(); s.polys.forEach((p,i)=>{ if(p.length<2) return; x.moveTo(p[0],p[1]); for(let k=2;k<p.length;k+=2) x.lineTo(p[k],p[k+1]); if(!s.open[i]) x.closePath(); });
   if(s.fill&&!s.open.every(Boolean)){ x.globalAlpha=s.fa??1; x.fillStyle=s.fill; x.fill(s.eo?"evenodd":"nonzero"); } if(s.stroke&&s.sw>0){ x.globalAlpha=s.sa??1; x.strokeStyle=s.stroke; x.lineWidth=s.sw; x.lineJoin="round"; x.lineCap="round"; x.stroke(); } x.globalAlpha=1; } }
 /** Dibuja el disparo como en el juego: cuerpo (o dibujo propio) y luz encima. k = píxeles por unidad; ang = rumbo. */
-function drawProjectile(x, c, px, py, k, ang){
-  const size=c.v.tamano??1, f=k*size/3.2, left=Math.cos(ang)<0;
-  x.save(); x.translate(px,py); x.rotate(left?ang-Math.PI:ang); if(left) x.scale(-1,1);
-  if(c.art){ const b=bakedArt(c.art); x.save(); x.scale(k*size,k*size); drawArt(x,b); x.restore(); }
+/** age = ticks del disparo (para la animación del dibujo propio). */
+function drawProjectile(x, c, px, py, k, ang, age=0){
+  const size=c.v.tamano??1, f=k*size/3.2, left=Math.cos(ang)<0, a=c.art;
+  const tilt=a&&a.bob? Math.sin(age*.11)*.06 : 0, bob=a&&a.bob? Math.sin(age*.16)*1.05 : 0;
+  x.save(); x.translate(px,py); x.rotate((left?ang-Math.PI:ang)+tilt); if(left) x.scale(-1,1);
+  if(a){ const b=bakedArt(a), fi=Math.floor(age/rateTicks(a))%b.length; x.save(); x.scale(k*size,k*size); x.translate(0,bob); drawArt(x,b[fi]); x.restore(); }
   else { const sp=sprite("body",c.look,c.tint); if(sp) x.drawImage(sp,-120*f,-75*f,240*f,150*f); }
   if((c.v.luz??1)>=.5){ const sp=sprite("light",c.look,c.tint); if(sp){ x.globalCompositeOperation="lighter"; x.drawImage(sp,-120*f,-75*f,240*f,150*f); x.globalCompositeOperation="source-over"; } }
   x.restore(); }
+/** Cuadros por segundo elegidos → ticks por cuadro en el juego (60 ticks = 1 s). */
+function rateTicks(a){ return Math.max(1,Math.min(60,Math.round(60/(a.fps||10)))); }
 function aspectChanged(){ tidy(sel); save(); refreshList(); drawRange(); }
 function aspectBlock(){
   const box=document.createElement("div"); box.className="aspect";
@@ -345,9 +358,16 @@ function aspectBlock(){
     <div class="lab2">Dibujo propio: reemplaza la forma (dibújalo apuntando a la derecha; el juego lo gira hacia donde vuela)</div>
     <div class="arow"><button type="button" id="artBtn">Importar dibujo…</button><button type="button" class="sec" id="artRot">Girar 90°</button><button type="button" class="sec" id="artFlip">Voltear</button><button type="button" class="danger" id="artDel">Quitar dibujo</button></div>
     <label class="lab2" id="artLenL"><span>Largo del dibujo: <b id="artLenV"></b> unidades (el personaje mide unas 52)</span><input type="range" id="artLen" min="3" max="40" step="0.5"></label>
-    <div class="small" id="artMsg">Acepta PDF, EPS, AI o SVG. También puedes soltar el archivo sobre la vista previa.</div>
+    <div id="animBox" class="aspect">
+      <div class="lab2">Animación: cada cuadro es un archivo; el juego los va turnando. Exporta todos los cuadros con la misma página para que calcen.</div>
+      <div class="frames" id="frames"></div>
+      <div class="arow"><button type="button" class="sec" id="frAdd">+ Agregar cuadro…</button><label class="toggle"><input type="checkbox" id="artBob"> Flotar (se mece suave, como el dron)</label></div>
+      <label class="lab2" id="fpsL"><span>Velocidad: <b id="fpsV"></b> cuadros por segundo</span><input type="range" id="fps" min="1" max="30" step="1"></label>
+    </div>
+    <div class="small" id="artMsg">Acepta PDF, EPS, AI o SVG. Puedes elegir varios archivos a la vez (uno por cuadro) o soltarlos sobre la vista previa.</div>
     <div class="prev" id="prevBox"><canvas id="prev" width="480" height="200" aria-label="Así se ve el disparo"></canvas></div>
-    <input type="file" id="artFile" accept=".pdf,.eps,.ai,.svg,.ps,application/pdf,image/svg+xml,application/postscript" hidden>`;
+    <input type="file" id="artFile" multiple accept=".pdf,.eps,.ai,.svg,.ps,application/pdf,image/svg+xml,application/postscript" hidden>
+    <input type="file" id="frFile" multiple accept=".pdf,.eps,.ai,.svg,.ps,application/pdf,image/svg+xml,application/postscript" hidden>`;
   const L=box.querySelector("#looks");
   LOOKS.forEach((nm,i)=>{ if(HIDE_LOOK.has(i)) return; const b=document.createElement("button"); b.type="button"; b.className="lk"; b.dataset.i=i; b.title=LOOK_LABEL[nm]||nm;
     const cv2=document.createElement("canvas"); cv2.width=144; cv2.height=90; const t=document.createElement("span"); t.textContent=(LOOK_LABEL[nm]||nm).toUpperCase(); b.append(cv2,t);
@@ -356,35 +376,62 @@ function aspectBlock(){
   q("tintOn").onchange=()=>{ edit(sel).tint=q("tintOn").checked? q("tintIn").value.slice(1).toUpperCase() : null; aspectChanged(); };
   q("tintIn").oninput=()=>{ q("tintOn").checked=true; edit(sel).tint=q("tintIn").value.slice(1).toUpperCase(); aspectChanged(); };
   q("artBtn").onclick=()=>q("artFile").click();
-  q("artFile").onchange=e=>{ const f=e.target.files[0]; e.target.value=""; if(f) importArt(f); };
+  q("artFile").onchange=e=>{ const fs=[...e.target.files]; e.target.value=""; if(fs.length) importArt(fs,false); };
+  q("frAdd").onclick=()=>q("frFile").click();
+  q("frFile").onchange=e=>{ const fs=[...e.target.files]; e.target.value=""; if(fs.length) importArt(fs,true); };
+  q("artBob").onchange=()=>{ const a=cur(sel).art; if(!a) return; edit(sel).art={...a,bob:q("artBob").checked}; aspectChanged(); };
+  q("fps").oninput=()=>{ const a=cur(sel).art; if(!a) return; edit(sel).art={...a,fps:+q("fps").value}; aspectChanged(); };
   q("artRot").onclick=()=>{ const a=cur(sel).art; if(!a) return; edit(sel).art={...a,rot:((a.rot||0)+1)%4}; aspectChanged(); };
   q("artFlip").onclick=()=>{ const a=cur(sel).art; if(!a) return; edit(sel).art={...a,flip:!a.flip}; aspectChanged(); };
   q("artDel").onclick=()=>{ delete edit(sel).art; $("artMsg").textContent="Dibujo quitado: vuelve a la forma elegida arriba."; aspectChanged(); };
   q("artLen").oninput=()=>{ const a=cur(sel).art; if(!a) return; edit(sel).art={...a,len:+q("artLen").value}; aspectChanged(); artNote(); };
   const pb=q("prevBox"); pb.addEventListener("dragover",e=>{ e.preventDefault(); pb.classList.add("over"); }); pb.addEventListener("dragleave",()=>pb.classList.remove("over"));
-  pb.addEventListener("drop",e=>{ e.preventDefault(); pb.classList.remove("over"); const f=e.dataTransfer.files[0]; if(f) importArt(f); });
+  pb.addEventListener("drop",e=>{ e.preventDefault(); pb.classList.remove("over"); const fs=[...e.dataTransfer.files]; if(fs.length) importArt(fs, !!cur(sel).art); });
   return box;
 }
-function artNote(){ const a=cur(sel).art; if(!a) return; const n=artPoints(a); $("artMsg").textContent=a.raw.length+" formas, "+n+" puntos"+(n>600?" — demasiados: el juego permite hasta 600 por arma. Achícalo o simplifícalo en tu programa de dibujo.":"."); }
-async function importArt(f){
-  const msg=$("artMsg"); msg.textContent="Leyendo "+f.name+"…";
-  try{ const buf=new Uint8Array(await f.arrayBuffer()), head=new TextDecoder("latin1").decode(buf.subarray(0,Math.min(buf.length,4096))); let shapes;
-    if(head.includes("%PDF-")) shapes=await readPDF(buf); else if(/<svg[\s>]/i.test(head)||/\.svg$/i.test(f.name)) shapes=readSVG(new TextDecoder().decode(buf)); else shapes=readPS(buf);
-    shapes=shapes.filter(s=>s.polys.length&&(s.fill||s.stroke)); if(!shapes.length) throw new Error("no encontré formas vectoriales (si es texto, pásalo a contornos)");
-    edit(sel).art={raw:shapes,len:14,rot:0,flip:false}; aspectChanged(); artNote();
-  }catch(err){ console.error(err); msg.textContent="No pude leer "+f.name+": "+(err.message||err); }
+function artNote(){ const a=cur(sel).art; if(!a) return; const fr=framesOf(a), n=artPoints(a);
+  $("artMsg").textContent=(fr.length>1? fr.length+" cuadros, el más pesado con ":"")+n+" puntos"+(n>600?" — demasiados: el juego permite hasta 600 por cuadro. Achícalo o simplifícalo en tu programa de dibujo.":"."); }
+async function readArt(f){ const buf=new Uint8Array(await f.arrayBuffer()), head=new TextDecoder("latin1").decode(buf.subarray(0,Math.min(buf.length,4096))); let shapes;
+  if(head.includes("%PDF-")) shapes=await readPDF(buf); else if(/<svg[\s>]/i.test(head)||/\.svg$/i.test(f.name)) shapes=readSVG(new TextDecoder().decode(buf)); else shapes=readPS(buf);
+  shapes=shapes.filter(s=>s.polys.length&&(s.fill||s.stroke)); if(!shapes.length) throw new Error("no encontré formas vectoriales (si es texto, pásalo a contornos)"); return shapes; }
+/** Lee uno o varios archivos (en orden por nombre). add = agregarlos como cuadros nuevos; si no, reemplazan el dibujo. */
+async function importArt(files, add){
+  const msg=$("artMsg"); files=[...files].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})); msg.textContent="Leyendo "+files.map(f=>f.name).join(", ")+"…";
+  const got=[]; for(const f of files){ try{ got.push(await readArt(f)); }catch(err){ console.error(err); msg.textContent="No pude leer "+f.name+": "+(err.message||err); return; } }
+  const old=cur(sel).art, prev=add&&old? framesOf(old) : [];
+  const fr=prev.concat(got).slice(0,8);
+  edit(sel).art= add&&old? {...old,frames:fr,raw:undefined} : {frames:fr,len:14,rot:0,flip:false,fps:10,bob:false};
+  aspectChanged(); artNote(); if(prev.length+got.length>8) msg.textContent+=" Solo caben 8 cuadros: quedaron los primeros 8.";
 }
+function frameOp(i,op){ const a=cur(sel).art; if(!a) return; const fr=framesOf(a).slice();
+  if(op==="del"){ fr.splice(i,1); if(!fr.length){ delete edit(sel).art; aspectChanged(); return; } }
+  else if(op==="left"&&i>0){ [fr[i-1],fr[i]]=[fr[i],fr[i-1]]; }
+  edit(sel).art={...a,frames:fr,raw:undefined}; aspectChanged(); artNote(); }
 function refreshAspect(){
   const box=$("looks"); if(!box) return; const c=cur(sel);
   for(const b of box.children){ const i=+b.dataset.i; b.classList.toggle("on", i===c.look&&!c.art); b.classList.toggle("def", i===c.w.look);
     const x=b.querySelector("canvas").getContext("2d"); x.clearRect(0,0,144,90);
     const bd=sprite("body",i,c.tint), lt=sprite("light",i,c.tint); const Z=i===22?1:1.8; if(bd) x.drawImage(bd,72-120*Z,45-75*Z,240*Z,150*Z); if(lt){ x.globalCompositeOperation="lighter"; x.drawImage(lt,72-120*Z,45-75*Z,240*Z,150*Z); x.globalCompositeOperation="source-over"; } }
   $("tintOn").checked=!!c.tint; if(c.tint) $("tintIn").value="#"+c.tint.toLowerCase();
-  const a=c.art; ["artRot","artFlip","artDel","artLenL"].forEach(id=>$(id).hidden=!a); if(a){ $("artLen").value=a.len; $("artLenV").textContent=a.len; }
-  const pv=$("prev"), x=pv.getContext("2d"); x.fillStyle="#0c1024"; x.fillRect(0,0,pv.width,pv.height);
+  const a=c.art; ["artRot","artFlip","artDel","artLenL","animBox"].forEach(id=>$(id).hidden=!a); if(a){ $("artLen").value=a.len; $("artLenV").textContent=a.len;
+    $("artBob").checked=!!a.bob; $("fps").value=a.fps||10; $("fpsV").textContent=a.fps||10; $("fpsL").hidden=framesOf(a).length<2;
+    const F=$("frames"), b=bakedArt(a); F.innerHTML=""; b.forEach((fr,i)=>{ const d=document.createElement("div"); d.className="fr";
+      const cv3=document.createElement("canvas"); cv3.width=120; cv3.height=72; const x3=cv3.getContext("2d"), kk=96/a.len; x3.translate(60,36); x3.scale(kk,kk); drawArt(x3,fr);
+      const t=document.createElement("span"); t.textContent=(i+1);
+      const bl=document.createElement("button"); bl.type="button"; bl.className="sec mini"; bl.textContent="◀"; bl.title="Mover antes"; bl.disabled=i===0; bl.onclick=()=>frameOp(i,"left");
+      const bx=document.createElement("button"); bx.type="button"; bx.className="danger mini"; bx.textContent="✕"; bx.title="Quitar este cuadro"; bx.onclick=()=>frameOp(i,"del");
+      const row=document.createElement("div"); row.className="frb"; row.append(t,bl,bx); d.append(cv3,row); F.append(d); }); }
+  prevAge=0; drawPrev();
+}
+let prevAge=0, prevTimer=null;
+/** Vista previa: se anima sola si el dibujo tiene varios cuadros o flota (a 60 ticks por segundo, como el juego). */
+function drawPrev(){
+  const pv=$("prev"); if(!pv) return; const c=cur(sel), x=pv.getContext("2d"); x.fillStyle="#0c1024"; x.fillRect(0,0,pv.width,pv.height);
   x.strokeStyle="#1b2348"; x.lineWidth=1; for(let gx=0;gx<pv.width;gx+=40){ x.beginPath(); x.moveTo(gx+.5,0); x.lineTo(gx+.5,pv.height); x.stroke(); } for(let gy=0;gy<pv.height;gy+=40){ x.beginPath(); x.moveTo(0,gy+.5); x.lineTo(pv.width,gy+.5); x.stroke(); }
-  drawProjectile(x,c,pv.width/2,pv.height/2,8,0);
+  drawProjectile(x,c,pv.width/2,pv.height/2,8,0,prevAge);
   x.fillStyle="#9aa3cf"; x.font="12px Inter, sans-serif"; x.fillText("Así se ve, 8 veces más grande. Vuela hacia →", 10, pv.height-10);
+  const moving=c.art&&(framesOf(c.art).length>1||c.art.bob);
+  clearTimeout(prevTimer); if(moving&&!matchMedia("(prefers-reduced-motion: reduce)").matches) prevTimer=setTimeout(()=>{ prevAge+=2; drawPrev(); },33);
 }
 function bboxOf(shapes){ let a=1e9,b=1e9,c=-1e9,d=-1e9; for(const s of shapes) for(const p of s.polys) for(let i=0;i<p.length;i+=2){ a=Math.min(a,p[i]); c=Math.max(c,p[i]); b=Math.min(b,p[i+1]); d=Math.max(d,p[i+1]); } return a>c?[0,0,0,0]:[a,b,c,d]; }
 function simplify(p, tol, closed){
@@ -658,7 +705,7 @@ function drawRange(){
   const angs=v.dispersion>0||v.proyectiles>1?[0,-v.dispersion,v.dispersion]:[0];
   angs.forEach((ad,i)=>{ drawBoomAt=[]; const r=simulate(v,w,ad); cx.strokeStyle=i===0?"#ffc94a":"rgba(255,201,74,.35)"; cx.lineWidth=i===0?2.5:1.5; cx.setLineDash(i===0?[]:[5,5]);
     cx.beginPath(); r.pts.forEach((p,j)=>{ const q=S(p[0],p[1]); j?cx.lineTo(...q):cx.moveTo(...q); }); cx.stroke(); cx.setLineDash([]);
-    if(i===0&&hasLook(w)&&r.pts.length>3){ for(const fr of [.2,.55]){ const j=Math.max(1,Math.floor(r.pts.length*fr)), a=r.pts[j-1], b2=r.pts[j], q=S(b2[0],b2[1]); drawProjectile(cx,c,q[0],q[1],k,Math.atan2(b2[1]-a[1],b2[0]-a[0])); } }
+    if(i===0&&hasLook(w)&&r.pts.length>3){ for(const fr of [.2,.55]){ const j=Math.max(1,Math.floor(r.pts.length*fr)), a=r.pts[j-1], b2=r.pts[j], q=S(b2[0],b2[1]); drawProjectile(cx,c,q[0],q[1],k,Math.atan2(b2[1]-a[1],b2[0]-a[0]),j); } }
     if(i===0){ for(const [bx,by,rr] of drawBoomAt){ const q=S(bx,by); cx.strokeStyle="rgba(255,111,156,.6)"; cx.beginPath(); cx.arc(q[0],q[1],rr*k,0,Math.PI*2); cx.stroke(); }
       if(r.end){ const q=S(r.end.x,r.end.y); if(r.end.kind==="boom"&&v.explosion>0){ cx.fillStyle="rgba(255,111,156,.25)"; cx.strokeStyle="#ff6f9c"; cx.lineWidth=2; cx.beginPath(); cx.arc(q[0],q[1],v.explosion*k,0,Math.PI*2); cx.fill(); cx.stroke(); }
         cx.fillStyle="#eef0fa"; cx.font="12px Inter, sans-serif"; const txt={boom:v.explosion>0?"explota":"se parte",choca:"choca",pega:"se pega",fin:"se acaba"}[r.end.kind]; cx.fillText(txt+(w.splinter&&v.pedazos?" en "+v.pedazos+" pedazos":""), q[0]+8, q[1]-8); } } });
@@ -685,9 +732,9 @@ function exportText(){
   for(const w of W){ const e=E[w.name]; if(!e) continue;
     const kv=[]; if(e.look!=null&&e.look!==w.look) kv.push("aspecto="+LOOKS[e.look]); if(e.tint) kv.push("color="+e.tint); for(const k of Object.keys(e.v||{})) kv.push(k+"="+f4(e.v[k]));
     if(kv.length) L.push("arma "+id(w.name)+" "+kv.join(" "));
-    if(e.art){ L.push("dibujo "+id(w.name)); for(const s of bakedArt(e.art)){ const polys=[]; s.polys.forEach((p,i)=>{ if(p.length<4) return; if(s.open[i]){ const back=[]; for(let k=p.length-4;k>=0;k-=2) back.push(p[k],p[k+1]); polys.push(p.concat(back)); } else if(p.length>=6) polys.push(p); }); if(!polys.length) continue;
+    if(e.art){ const bf=bakedArt(e.art); L.push("dibujo "+id(w.name)+(bf.length>1?" ritmo="+rateTicks(e.art):"")+(e.art.bob?" meneo=1":"")); bf.forEach((frame,fi)=>{ if(fi) L.push("cuadro"); for(const s of frame){ const polys=[]; s.polys.forEach((p,i)=>{ if(p.length<4) return; if(s.open[i]){ const back=[]; for(let k=p.length-4;k>=0;k-=2) back.push(p[k],p[k+1]); polys.push(p.concat(back)); } else if(p.length>=6) polys.push(p); }); if(!polys.length) continue;
         const fl=s.fill&&!s.open.every(Boolean)?argb(s.fill,s.fa??1):"00000000", st=s.stroke&&s.sw>0?argb(s.stroke,s.sa??1):"00000000";
-        L.push("forma relleno="+fl+" contorno="+st+" grosor="+f3(s.sw)+" parimpar="+(s.eo?1:0)); for(const p of polys) L.push("p "+p.map(f3).join(" ")); }
+        L.push("forma relleno="+fl+" contorno="+st+" grosor="+f3(s.sw)+" parimpar="+(s.eo?1:0)); for(const p of polys) L.push("p "+p.map(f3).join(" ")); } });
       L.push("fin"); }
     if(e.label!=null&&e.label.trim()&&e.label!==w.label) L.push("nombre "+id(w.name)+" "+e.label.trim());
     if(e.desc!=null&&e.desc!==w.desc) L.push("descripcion "+id(w.name)+" "+e.desc.trim());
@@ -700,12 +747,13 @@ function importText(text){
   const known=new Set([...BASEW.map(w=>w.name),...news.map(x=>x.name)]);
   const lines=text.split(/\r?\n/);
   for(let li=0; li<lines.length; li++){ const l=lines[li].trim(); if(!l||l[0]==="#"||l.startsWith("nueva")) continue; const m=l.match(/^(\S+)\s+(\S+)\s*(.*)$/); if(!m){ bad++; continue; }
-    if(m[1]==="dibujo"){ const n=m[2].replace(/_/g," "), shapes=[]; let sh=null; li++;
-      for(; li<lines.length; li++){ const d=lines[li].trim(); if(!d||d[0]==="#") continue; if(d==="fin") break; const t=d.split(/\s+/);
+    if(m[1]==="dibujo"){ const n=m[2].replace(/_/g," "), opt={}; (m[3]||"").split(/\s+/).forEach(x=>{ const [a,b]=x.split("="); if(b!=null) opt[a]=b; });
+      let shapes=[]; const frames=[shapes]; let sh=null; li++;
+      for(; li<lines.length; li++){ const d=lines[li].trim(); if(!d||d[0]==="#") continue; if(d==="fin") break; if(d==="cuadro"){ shapes=[]; frames.push(shapes); sh=null; continue; } const t=d.split(/\s+/);
         if(t[0]==="forma"){ const kv={}; t.slice(1).forEach(x=>{ const [a,b]=x.split("="); kv[a]=b; }); const f=kv.relleno||"00000000", k=kv.contorno||"00000000", fa=parseInt(f.slice(0,2),16)/255, sa=parseInt(k.slice(0,2),16)/255;
           sh={polys:[],open:[],fill:fa?"#"+f.slice(2).toLowerCase():null,fa:fa||1,stroke:sa?"#"+k.slice(2).toLowerCase():null,sa:sa||1,sw:parseFloat(kv.grosor)||0,eo:kv.parimpar==="1"}; shapes.push(sh); }
         else if(t[0]==="p"&&sh){ sh.polys.push(t.slice(1).map(Number)); sh.open.push(false); } }
-      if(known.has(n)&&shapes.length){ const bb=bboxOf(shapes); (res[n]=res[n]||{}).art={raw:shapes,len:Math.round((bb[2]-bb[0])*2)/2||14,rot:0,flip:false}; } else bad++; continue; }
+      const fr=frames.filter(f=>f.length); if(known.has(n)&&fr.length){ const bb=bboxOf(fr.flat()); (res[n]=res[n]||{}).art={frames:fr,len:Math.round((bb[2]-bb[0])*2)/2||14,rot:0,flip:false,fps:Math.round(60/Math.max(1,+opt.ritmo||6)),bob:opt.meneo==="1"}; } else bad++; continue; }
     const n=m[2].replace(/_/g," "); if(!known.has(n)){ bad++; continue; } const e=res[n]=res[n]||{};
     if(m[1]==="arma"){ e.v=e.v||{}; for(const kv of m[3].split(/\s+/)){ const [k,v]=kv.split("="); if(k==="aspecto"&&LOOKS.includes((v||"").toUpperCase())) e.look=LOOKS.indexOf(v.toUpperCase()); else if(k==="color"&&/^[0-9a-f]{6}$/i.test(v||"")) e.tint=v.toUpperCase(); else if(k in LIM&&isFinite(+v)) e.v[k]=+v; else if(kv) bad++; } }
     else if(m[1]==="nombre") e.label=m[3].toUpperCase(); else if(m[1]==="descripcion") e.desc=m[3]; else if(m[1]==="quitar") e.off=true; else bad++; }

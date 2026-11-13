@@ -292,6 +292,10 @@ public class Sim {
         BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);for(int k=0;k<6;k++){w.step(new int[]{0,0});rd.tick(w);rd.consume(w,false);}rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"aspecto.png"));
         int mag=0,blue=0;for(int y=0;y<720;y++)for(int x=0;x<1280;x++){int c=im.getRGB(x,y)&0xFFFFFF;if(c==0xFF00AA)mag++;int r=c>>16&255,gg=c>>8&255,b=c&255;if(b>180&&r<120&&gg>100&&gg<220)blue++;}
         check(mag>30,"el dibujo propio se ve en el juego ("+mag+")");check(blue>20,"la granada se ve del color nuevo ("+blue+")");
+        Wpn.load("dibujo BAZOOKA ritmo=4 meneo=1\nforma relleno=FFFF0000\np -6 -3 6 0 -6 3\ncuadro\nforma relleno=FF00FF00\np -6 -3 6 0 -6 3\ncuadro\nforma relleno=FF0000FF\np -6 -3 6 0 -6 3\nfin\n");
+        check(Wpn.error==null&&bz.frames!=null&&bz.frames.length==3&&bz.artRate==4&&bz.artBob&&bz.art==bz.frames[0]&&bz.frames[2][0].fill==0xFF0000FF,"un dibujo puede tener varios cuadros, ritmo y meneo ("+Wpn.error+")");
+        { int[] seen=new int[3]; for(int age=0;age<12;age+=4){ World w2=flat(); Shot sh=w2.spawn(bz,0,200,200,0.01f,0); sh.age=age; BufferedImage i2=new BufferedImage(400,400,BufferedImage.TYPE_INT_RGB); J g2=new J(i2); rd.drawShotPart(g2,sh,false); int c=i2.getRGB(198,200)&0xFFFFFF; if(c==0xFF0000)seen[0]++; if(c==0x00FF00)seen[1]++; if(c==0x0000FF)seen[2]++; }
+          check(seen[0]==1&&seen[1]==1&&seen[2]==1,"los cuadros se turnan en el juego ("+java.util.Arrays.toString(seen)+")"); }
         Wpn.load("dibujo BAZOOKA\nforma relleno=FF000000\np 0 0 1 1 2 0\n");check(Wpn.error!=null,"un dibujo sin fin avisa el error");
         Wpn.load("arma BAZOOKA aspecto=PATO\n");check(Wpn.error!=null,"un aspecto desconocido avisa el error");
         Wpn.reset();check(bz.look==Wpn.ROCKET&&bz.tint==0&&bz.art==null&&bz.size==1&&bz.light,"sin armas.txt, el aspecto vuelve a ser el de siempre");}

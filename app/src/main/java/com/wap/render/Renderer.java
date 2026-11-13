@@ -449,8 +449,10 @@ public final class Renderer {
         if (sz) { g.save(); g.translate(s.x, s.y); g.scale(w.size, w.size); g.translate(-s.x, -s.y); }
         if (!light && w.art != null) { // dibujo propio, mirando hacia donde vuela (sin quedar de cabeza al ir a la izquierda)
             float a = w.drone ? s.ang : (float) Math.atan2(s.vy, s.vx); boolean left = Math.cos(a) < 0;
-            g.save(); g.translate(s.x, s.y); g.rotate(left ? a - (float) Math.PI : a); if (left) g.scale(-1, 1);
-            for (Wpn.Art p : w.art) g.shape(p.polys, p.fill, p.eo, p.stroke, p.stroke == 0 ? 0 : p.sw);
+            float tilt = 0, bob = 0; if (w.artBob) { tilt = (float) Math.sin(s.age * .11f) * .06f; bob = (float) Math.sin(s.age * .16f) * 1.05f; } // se mece como el dron
+            g.save(); g.translate(s.x, s.y); g.rotate((left ? a - (float) Math.PI : a) + tilt); if (left) g.scale(-1, 1); if (bob != 0) g.translate(0, bob);
+            Wpn.Art[] fr = w.frames != null && w.frames.length > 1 ? w.frames[(s.age / Math.max(1, w.artRate)) % w.frames.length] : w.art;
+            for (Wpn.Art p : fr) g.shape(p.polys, p.fill, p.eo, p.stroke, p.stroke == 0 ? 0 : p.sw);
             g.restore();
         } else if (light) shotLight(gg, s); else shot(gg, s);
         if (sz) g.restore();
