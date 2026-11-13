@@ -373,17 +373,21 @@ public final class Terrain {
         } else { line(mx, c, b, d, r, mat, color); line(b, d, a, d, r, mat, color); line(a, d, mx, c, r, mat, color); }
     }
     /**
-     * Balde, como el de Paint: toma lo que se ve en el punto tocado (lo de encima, si no el mapa, si no el fondo, si no
-     * el aire) y la zona unida del MISMO material y MISMO color pasa al material y color elegidos. Una figura de otro
-     * color dibujada encima hace de borde. Tocar el aire de un nivel vacío pinta todo el lienzo.
+     * Balde, como el de Paint pero por capas (como en un programa de dibujo con capas): cada material pinta solo en su
+     * capa. FONDO es la primera capa, tierra, madera y acero la segunda (el mapa) y SOBRE la tercera; el balde mira solo
+     * la capa del material elegido y nunca borra las otras. En esa capa toma lo que hay en el punto tocado (vacío o un
+     * color) y pinta la zona unida igual (mismo material y mismo color; en el mapa, la tierra con vetas cuenta por su
+     * color de base). Por eso, si se rompe la madera, debajo aparece el fondo que se dibujó.
      * Devuelve false si se toca un bloque o un objeto (no se pintan con el balde).
      */
     public boolean bucket(int x, int y, int mat, int color) {
         if (!inside(x, y)) return false;
-        final int AIR = 0, FR = 1, MAP = 2, BK = 3;
-        int i0 = y * W + x, src = kindAt(i0), k0 = m[i0];
-        if (src == MAP && k0 != EARTH && k0 != WOOD && k0 != STEEL) return false; // bloques y objetos no se pintan con el balde
-        final int LIMIT = W * H; int[] q = new int[4096]; int n = 0, head = 0; java.util.BitSet seen = new java.util.BitSet(W * H);
+        boolean lay = mat == BACKDROP || mat == OVERLAY; int[] L = lay ? (mat == BACKDROP ? back : front) : null;
+        int i0 = y * W + x, k0 = m[i0], v0 = L == null ? 0 : L[i0];
+        boolean empty0 = k0 == 0 || k0 == DEBRIS || k0 == DECOR;
+        if (!lay && !empty0 && k0 != EARTH && k0 != WOOD && k0 != STEEL) return false; // bloques y objetos no se pintan con el balde
+        if (lay && v0 == (color | 0xFF000000)) return true; // ya es de ese color
+        int[] q = new int[4096]; int n = 0, head = 0; java.util.BitSet seen = new java.util.BitSet(W * H);
         q[n++] = i0; seen.set(i0); int x0 = x, x1 = x, y0 = y, y1 = y;
         while (head < n) {
             int p = q[head++], px = p % W, py = p / W;
@@ -392,19 +396,17 @@ public final class Terrain {
                 int ox = px + (d == 0 ? 1 : d == 1 ? -1 : 0), oy = py + (d == 2 ? 1 : d == 3 ? -1 : 0);
                 if (!inside(ox, oy)) continue;
                 int o = oy * W + ox; if (seen.get(o)) continue;
-                boolean same = src == FR ? front[o] == front[i0] : src == BK ? back[o] == back[i0] && kindAt(o) == BK : src == MAP ? m[o] == k0 && (front == null || front[o] == 0) && sameColor(i0, o) : kindAt(o) == AIR;
+                int ko = m[o];
+                boolean same = lay ? (L == null ? 0 : L[o]) == v0 : empty0 ? ko == 0 || ko == DEBRIS || ko == DECOR : ko == k0 && sameColor(i0, o);
                 if (!same) continue;
-                seen.set(o); if (n >= LIMIT) return false;
+                seen.set(o);
                 if (n == q.length) q = java.util.Arrays.copyOf(q, q.length * 2);
                 q[n++] = o;
             }
         }
-        boolean toLayer = mat == BACKDROP || mat == OVERLAY;
+        int[] T = lay ? layer(mat) : null;
         for (int j = 0; j < n; j++) { int p = q[j], px = p % W, py = p / W;
-            if (src == FR && mat != OVERLAY) front[p] = 0; // sale de la capa donde estaba
-            if (src == BK && mat != BACKDROP) back[p] = 0;
-            if (src == MAP && toLayer) m[p] = 0;
-            if (toLayer) layer(mat)[p] = color | 0xFF000000;
+            if (lay) T[p] = color | 0xFF000000;
             else { m[p] = (byte) mat; tex[p] = mat == WOOD || mat == STEEL ? color | 0xFF000000 : earthTex(color, px, py); }
         }
         mark(x0, y0, x1, y1); return true;
@@ -424,13 +426,6 @@ public final class Terrain {
     static boolean near(int a, int ka, int b, int kb) {
         for (int s = 0; s <= 16; s += 8) if (Math.abs(((a >> s & 255) - ka) - ((b >> s & 255) - kb)) > 6) return false;
         return true;
-    }
-    /** Lo que se ve en un píxel: 1 lo de encima, 2 el mapa (tierra, madera, acero), 3 el fondo, 0 aire. Otros materiales del mapa (bloques, objetos) cuentan como mapa. */
-    int kindAt(int i) {
-        if (front != null && front[i] != 0) return 1;
-        int k = m[i]; if (k != 0 && k != DEBRIS && k != DECOR) return 2;
-        if (back != null && back[i] != 0) return 3;
-        return 0;
     }
     /** Borra todo lo que no sea el marco ni un objeto (los objetos los quita el mundo). */
     public void wipe(int cx, int cy, int r) { wipe(cx, cy, r, 0); }

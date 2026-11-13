@@ -221,10 +221,15 @@ public class Sim {
          {Terrain e=new Terrain();e.frame2();e.rect(300,300,800,800,true,4,Terrain.EARTH,0xFF8B5A2B);e.oval(450,450,650,650,false,6,Terrain.EARTH,0xFF3E6FB0);check(e.bucket(550,550,Terrain.EARTH,0xFFE03C3C)&&e.tex[350*Terrain.W+350]!=Terrain.earthTexT(0xFFE03C3C,350,350)&&e.tex[550*Terrain.W+550]==Terrain.earthTexT(0xFFE03C3C,550,550),"tierra con vetas: el balde respeta un contorno de otro color");
           check(e.bucket(350,350,Terrain.EARTH,0xFFFFD93D)&&e.tex[790*Terrain.W+790]==Terrain.earthTexT(0xFFFFD93D,790,790),"tierra con vetas: el balde pinta toda la zona del mismo color");}
          u.oval(400,400,600,600,false,9,Terrain.EARTH,0xFF8B5A2B);check(u.bucket(500,500,Terrain.EARTH,0xFFE03C3C)&&u.at(500,500)==Terrain.EARTH&&u.at(700,700)==0,"balde en un hueco cerrado: lo rellena");
-         check(u.bucket(500,500,Terrain.BACKDROP,0xFF7FD6FF)&&u.at(500,500)==0&&u.at(500,405)==Terrain.EARTH&&u.back[500*Terrain.W+500]==0xFF7FD6FF,"balde con FONDO sobre tierra: esa zona (del mismo color) pasa a ser fondo");
-         check(u.bucket(500,500,Terrain.BACKDROP,0xFFE03C3C)&&u.back[500*Terrain.W+500]==0xFFE03C3C,"balde con FONDO sobre fondo: le cambia el color");
-         check(u.bucket(500,500,Terrain.OVERLAY,0xFF3FB34F)&&u.back[500*Terrain.W+500]==0&&u.front[500*Terrain.W+500]==0xFF3FB34F,"balde con SOBRE sobre el fondo: lo pasa encima");
-         check(u.bucket(500,500,Terrain.STEEL,0xFF7D8590)&&u.front[500*Terrain.W+500]==0&&u.at(500,500)==Terrain.STEEL,"balde con ACERO sobre lo de encima: lo vuelve acero");
+         {Terrain c=new Terrain();c.frame2();c.bucket(500,500,Terrain.BACKDROP,0xFF7FD6FF);c.rect(400,400,600,600,true,4,Terrain.WOOD,0xFFC8955A);
+          check(c.back[500*Terrain.W+500]==0xFF7FD6FF,"capas: la madera pintada encima no borra el fondo");
+          c.wipe(500,500,30);check(c.at(500,500)==0&&c.back[500*Terrain.W+500]==0xFF7FD6FF,"capas: al romper la madera aparece el fondo dibujado");
+          {App q=new App(store,mute);q.seed(6);q.openEditor(Level.empty("ROMPER"));World ew=q.editorWorld();ew.t.bucket(600,500,Terrain.BACKDROP,0xFF7FD6FF);ew.t.rect(500,400,700,600,true,4,Terrain.WOOD,0xFFC8955A);
+           Level l2=Level.load(Level.of(ew,"ROMPER").save());World g2=new World(3,1,set("GRENADE","BAZOOKA","SHOTGUN","MINE","CHAINGUN"),set("GRENADE","BAZOOKA","SHOTGUN","MINE","CHAINGUN"),l2);
+           for(int i=0;i<30;i++)g2.explode(600,500,40,60,40,1,-1);check(g2.t.at(600,500)!=Terrain.WOOD&&g2.t.back[500*Terrain.W+600]==0xFF7FD6FF,"en la partida, al romper la madera con explosiones queda el fondo dibujado");}
+          c.bucket(450,450,Terrain.WOOD,0xFF6B4226);check(c.back[450*Terrain.W+450]==0xFF7FD6FF,"capas: el balde de madera no toca el fondo");
+          c.bucket(450,450,Terrain.BACKDROP,0xFFE03C3C);check(c.at(450,450)==Terrain.WOOD&&c.back[450*Terrain.W+450]==0xFFE03C3C&&c.back[100*Terrain.W+100]==0xFFE03C3C,"capas: el balde de fondo pinta su capa (también detrás de la madera) sin tocar la madera");
+          c.bucket(700,700,Terrain.OVERLAY,0xFF3FB34F);check(c.at(450,450)==Terrain.WOOD&&c.back[450*Terrain.W+450]==0xFFE03C3C&&c.front[700*Terrain.W+700]==0xFF3FB34F,"capas: el balde de sobre pinta su capa sin borrar las otras");}
          u.oval(1000,400,1200,600,false,6,Terrain.BACKDROP,0xFF7FD6FF);check(u.bucket(1100,500,Terrain.BACKDROP,0xFF7FD6FF)&&u.back[500*Terrain.W+1100]!=0&&u.back[300*Terrain.W+1100]==0,"balde con FONDO dentro de un contorno de fondo: lo rellena");
 }
         {App q=new App(store,mute);q.seed(4);q.openEditor(Level.empty("DESHACER"));q.editorTool(0);int c0=q.editorSolidCount();
