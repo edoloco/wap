@@ -555,16 +555,28 @@ public final class Renderer {
         g.restore();
     }
     /** Dron: cuerpo del color del piloto, dos rotores que giran, luz que parpadea y una antena; mira hacia donde va. */
+    /** Dron: se mece en el aire, las hélices giran, se inclina al virar y la luz de cola parpadea más rápido cuando se le acaba la batería. */
     void drone(Gfx g, Shot s) {
-        int col = RobotArt.COLOR[s.owner]; float c = (float) Math.cos(s.ang); boolean left = c < 0;
-        g.save(); g.translate(s.x, s.y); g.rotate(left ? s.ang - (float) Math.PI : s.ang); g.scale(left ? -1.5f : 1.5f, 1.5f);
+        int col = RobotArt.COLOR[s.owner]; float c = (float) Math.cos(s.ang); boolean left = c < 0; int t = s.age;
+        float bob = (float) Math.sin(t * .16f) * .7f, tilt = (float) Math.sin(t * .11f) * .06f; // meneo suave de estar flotando
+        g.save(); g.translate(s.x, s.y); g.rotate((left ? s.ang - (float) Math.PI : s.ang) + tilt); g.scale(left ? -1.5f : 1.5f, 1.5f); g.translate(0, bob);
         g.line(-8, -4, 8, -4, 0xFF1A1A20, 1.4f); // brazos de los rotores
-        for (int k = -1; k <= 1; k += 2) { float w = 6 * Math.abs((float) Math.cos(s.age * .9f + k)); g.line(k * 8 - w, -6, k * 8 + w, -6, 0xCCE8EEF8, 1.2f); g.line(k * 8, -5.5f, k * 8, -4, 0xFF1A1A20, 1); }
+        for (int k = -1; k <= 1; k += 2) {
+            float x = k * 8, ph = t * .55f + k * 1.3f;
+            g.poly(ellipse(x, -6, 6.5f, 1.1f), 0x30E8EEF8, 0, 0); // disco borroso de la hélice
+            for (int b = 0; b < 2; b++) { float w = 6 * (float) Math.cos(ph + b * 1.5708f); g.line(x - w, -6, x + w, -6, b == 0 ? 0xE0E8EEF8 : 0x90C8D0E0, 1.1f); } // dos aspas que se cruzan
+            g.line(x, -5.5f, x, -4, 0xFF1A1A20, 1); g.circle(x, -6, .8f, 0xFF1A1A20, 0, 0);
+        }
         g.rrect(-7, -4, 14, 7, 3, col, 0xFF000000, .9f); // cuerpo
-        g.rrect(1.5f, -2.5f, 5, 3.5f, 1.5f, 0xFF2A2F3A, 0, 0); g.circle(4, -.8f, 1, 0xFF7FE0FF, 0, 0); // cámara
-        g.line(-5, 3, -6.5f, 6, 0xFF1A1A20, 1); g.line(5, 3, 6.5f, 6, 0xFF1A1A20, 1); // patas
+        g.rrect(-5.5f, -3, 6, 1.4f, .7f, 0x40FFFFFF, 0, 0); // brillo del cuerpo
+        float scan = (float) Math.sin(t * .09f) * .9f; // la cámara mira de un lado a otro
+        g.rrect(1.5f, -2.5f, 5, 3.5f, 1.5f, 0xFF2A2F3A, 0, 0); g.circle(4 + scan * .6f, -.8f, 1, 0xFF7FE0FF, 0, 0); g.circle(3.7f + scan * .6f, -1.1f, .35f, 0xFFFFFFFF, 0, 0);
+        int per = s.life > 0 && s.life < 120 ? 8 : s.life > 0 && s.life < 300 ? 18 : 36; // con poca batería parpadea más rápido
+        boolean on = t % per < per / 2; g.circle(-6.2f, -.5f, .9f, on ? (s.life > 0 && s.life < 120 ? 0xFFFF3030 : 0xFF40FF70) : 0xFF303038, 0, 0);
+        float sw = (float) Math.sin(t * .2f) * .6f; g.line(-5, 3, -6.5f + sw, 6, 0xFF1A1A20, 1); g.line(5, 3, 6.5f + sw, 6, 0xFF1A1A20, 1); // patas que cuelgan y se balancean
         g.restore();
     }
+    static float[] ellipse(float cx, float cy, float rx, float ry) { float[] p = new float[24]; for (int i = 0; i < 12; i++) { double a = i * Math.PI / 6; p[2 * i] = cx + rx * (float) Math.cos(a); p[2 * i + 1] = cy + ry * (float) Math.sin(a); } return p; }
     void shot(Gfx g, Shot s) {
         if (s.wait > 0) return;
         Wpn w = s.w; float a = (float) Math.atan2(s.vy, s.vx);
