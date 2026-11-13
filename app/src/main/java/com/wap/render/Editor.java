@@ -66,7 +66,7 @@ final class Editor {
             case BRUSH: w.t.brush(ix, iy, r, mat(), col()); break;
             case PIXEL: w.t.cell((int) Math.floor(x), (int) Math.floor(y), CELLS[size], mat(), col(), pixErase); break;
             case ERASE: if (eraseLayer == 0) w.removeProps(ix, iy, r); w.t.wipe(ix, iy, r, eraseLayer == 1 ? Terrain.BACKDROP : eraseLayer == 2 ? Terrain.OVERLAY : 0); break;
-            case BUCKET: if (!w.t.bucket(ix, iy, mat(), col())) { drop(); app.toast = mat >= 3 ? "TOCA UN HUECO CERRADO O ESA CAPA" : "ESE HUECO NO ESTÁ CERRADO"; app.toastT = 120; return; } break;
+            case BUCKET: if (!w.t.bucket(ix, iy, mat(), col())) { drop(); app.toast = "ESE HUECO NO ESTÁ CERRADO: LLEGA AL BORDE"; app.toastT = 120; return; } break;
             case PANEL: case STEEL: w.t.block(ix, iy, tool == STEEL ? Terrain.STEEL : Terrain.PANEL); break;
             case WATER: w.water = Math.max(Terrain.EDGE + 40, Math.min(Terrain.H - Terrain.EDGE - 8, iy)); break;
             case VENT: w.t.vent(ix, iy); break;

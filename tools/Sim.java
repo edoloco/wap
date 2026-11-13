@@ -216,7 +216,13 @@ public class Sim {
         t.polygon(new int[]{1200,200,1300,260,1200,320},false,false,4,Terrain.EARTH,0xFF8B5A2B);check(t.at(1250,230)==Terrain.EARTH&&t.at(1240,260)==0,"puntos: el contorno abierto dibuja solo las líneas");
         check(t.bucket(1050,250,Terrain.STEEL,0xFF7D8590)&&t.at(1050,250)==Terrain.STEEL,"el balde cambia la zona al material elegido (acero)");
         {Terrain u=new Terrain();u.frame2();check(!u.bucket(500,500,Terrain.EARTH,0xFFE03C3C)&&u.at(500,500)==0,"balde en el aire abierto del nivel: no lo pinta entero");
-         u.oval(400,400,600,600,false,9,Terrain.EARTH,0xFF8B5A2B);check(u.bucket(500,500,Terrain.EARTH,0xFFE03C3C)&&u.at(500,500)==Terrain.EARTH&&u.at(700,700)==0,"balde en un hueco cerrado: lo rellena");}
+         u.oval(400,400,600,600,false,9,Terrain.EARTH,0xFF8B5A2B);check(u.bucket(500,500,Terrain.EARTH,0xFFE03C3C)&&u.at(500,500)==Terrain.EARTH&&u.at(700,700)==0,"balde en un hueco cerrado: lo rellena");
+         check(u.bucket(500,500,Terrain.BACKDROP,0xFF7FD6FF)&&u.at(500,500)==0&&u.at(500,405)==0&&u.back[500*Terrain.W+500]==0xFF7FD6FF,"balde con FONDO sobre tierra: toda esa zona pasa a ser fondo");
+         check(u.bucket(500,500,Terrain.BACKDROP,0xFFE03C3C)&&u.back[405*Terrain.W+500]==0xFFE03C3C,"balde con FONDO sobre fondo: le cambia el color");
+         check(u.bucket(500,500,Terrain.OVERLAY,0xFF3FB34F)&&u.back[500*Terrain.W+500]==0&&u.front[500*Terrain.W+500]==0xFF3FB34F,"balde con SOBRE sobre el fondo: lo pasa encima");
+         check(u.bucket(500,500,Terrain.STEEL,0xFF7D8590)&&u.front[500*Terrain.W+500]==0&&u.at(500,500)==Terrain.STEEL,"balde con ACERO sobre lo de encima: lo vuelve acero");
+         u.oval(1000,400,1200,600,false,6,Terrain.BACKDROP,0xFF7FD6FF);check(u.bucket(1100,500,Terrain.BACKDROP,0xFF7FD6FF)&&u.back[500*Terrain.W+1100]!=0&&u.back[300*Terrain.W+1100]==0,"balde con FONDO dentro de un contorno de fondo: lo rellena");
+         check(!u.bucket(200,900,Terrain.BACKDROP,0xFF7FD6FF),"balde con FONDO en el aire abierto: no pinta el nivel entero");}
         {App q=new App(store,mute);q.seed(4);q.openEditor(Level.empty("DESHACER"));q.editorTool(0);int c0=q.editorSolidCount();
          q.editorStroke(400,500,800,500);int c1=q.editorSolidCount();q.editorStroke(400,700,800,700);int c2=q.editorSolidCount();
          q.editorUndo();check(q.editorSolidCount()==c1,"deshacer quita el último trazo ("+c2+"→"+q.editorSolidCount()+", esperado "+c1+")");
