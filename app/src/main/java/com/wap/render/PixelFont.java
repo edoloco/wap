@@ -58,6 +58,8 @@ public final class PixelFont {
         put('x', 18593694720L);
     }
     private PixelFont() {}
+    /** Si el punto (col 0-4, fila 0-6) de la letra está encendido. */
+    public static boolean bit(char c, int col, int row) { Long v = G.get(base(Character.toUpperCase(c))); return v != null && col >= 0 && col < 5 && row >= 0 && row < 7 && (v >> (row * 5 + col) & 1) != 0; }
     /** Escala entera según el tamaño pedido: 8 unidades = 1 píxel por punto. */
     public static int scale(float size) { return Math.max(1, Math.round(size / 8f)); }
     public static float width(String s, float size) { int k = scale(size); return s.length() * 6 * k - k; }

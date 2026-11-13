@@ -44,10 +44,10 @@ final class Editor {
     void open(Level l) {
         name = l.name; Wpn[] k = new Wpn[Robot.SLOTS]; java.util.Arrays.fill(k, Wpn.ALL[0]);
         w = new World(1, 1, k, k, l); for (Robot r : w.robots) r.deadT = Integer.MAX_VALUE; // sin personajes
-        app.ren.reset(w); app.ren.freeCam = true; app.ren.zoomMul = .7f; app.ren.camX = 900; app.ren.camY = 600; app.ren.shake = 0;
+        app.ren.marks = true; app.ren.reset(w); app.ren.freeCam = true; app.ren.zoomMul = .7f; app.ren.camX = 900; app.ren.camY = 600; app.ren.shake = 0;
         dirty = false; confirmDelete = false; mode = NONE; fingers.clear(); pts.clear(); panel = 0;
     }
-    void close() { app.ren.freeCam = false; app.ren.zoomMul = 1; fingers.clear(); mode = NONE; pts.clear(); panel = 0; }
+    void close() { app.ren.marks = false; app.ren.freeCam = false; app.ren.zoomMul = 1; fingers.clear(); mode = NONE; pts.clear(); panel = 0; }
     Level level() { return Level.of(w, name); }
     int mat() { return MATS[mat]; }
     int col() { return COLORS[color]; }

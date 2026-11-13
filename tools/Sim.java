@@ -218,6 +218,9 @@ public class Sim {
         // nivel con capas: guardar y leer
         App q=new App(store,mute);q.seed(2);q.openEditor(Level.empty("CAPAS"));World ew=q.editorWorld();
         ew.t.brush(400,600,40,Terrain.BACKDROP,0xFF7FD6FF);ew.t.brush(900,850,30,Terrain.OVERLAY,0xFF3FB34F);ew.t.brush(1300,860,20,Terrain.STEEL,0xFFE03C3C);
+        ew.t.rect(300,700,700,900,true,4,Terrain.BACKDROP,0xFF7FD6FF);ew.t.rect(760,700,1100,900,true,4,Terrain.STEEL,0xFF3E6FB0);ew.t.rect(1150,700,1500,900,true,4,Terrain.OVERLAY,0xFF3FB34F);
+        {BufferedImage mb=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);J mg=new J(mb);q.ren.camX=900;q.ren.camY=800;q.ren.zoomMul=.45f;q.draw(mg);ImageIO.write(mb,"png",new File(out,"19_marcas_editor.png"));}
+        check(ew.t.tex[800*Terrain.W+900]==0xFF3E6FB0&&ew.t.back[800*Terrain.W+500]==0xFF7FD6FF,"acero y fondo se pintan en color plano");
         Level l=Level.load(Level.of(ew,"CAPAS").save());check(l.back!=null&&l.front!=null&&l.back[600*Terrain.W+400]!=0&&l.front[850*Terrain.W+900]!=0&&l.m[860*Terrain.W+1300]==Terrain.STEEL,"el nivel guarda y lee el fondo, lo de encima y el acero");
         Level plain=Level.load(Level.empty("SIN CAPAS").save());check(plain.back==null&&plain.front==null,"un nivel sin capas no las guarda");
         q.draw(new J(new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB)));
@@ -229,8 +232,11 @@ public class Sim {
         // partida con capas: se ven, no chocan
         q.leaveEditor(false);
         World pw=new World(3,1,set("GRENADE","BAZOOKA","SHOTGUN","MINE","CHAINGUN"),set("GRENADE","BAZOOKA","SHOTGUN","MINE","CHAINGUN"),l);
-        check(pw.t.back!=null&&!pw.t.solid(900,850),"en la partida, las capas no chocan");
+        check(pw.t.back!=null&&!pw.t.solid(1300,800)&&!pw.t.solid(500,800)&&pw.t.solid(900,800),"en la partida, las capas no chocan");
         Renderer rd=new Renderer();rd.reset(pw);rd.freeCam=true;rd.camX=900;rd.camY=760;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J gi=new J(im);rd.drawWorld(gi,pw,0);rd.drawWorld(gi,pw,0);ImageIO.write(im,"png",new File(out,"18_capas_juego.png"));
+        {java.util.HashSet<Integer> cs=new java.util.HashSet<>();for(int y=300;y<420;y++)for(int x=400;x<700;x++)cs.add(im.getRGB(x,y));
+         rd.camX=930;rd.camY=800;rd.reset(pw);rd.freeCam=true;rd.drawWorld(gi,pw,0);rd.drawWorld(gi,pw,0);ImageIO.write(im,"png",new File(out,"18b_capas_juego.png"));
+         java.util.HashSet<Integer> st=new java.util.HashSet<>();int sx=640,sy=360;for(int y=sy-30;y<sy+30;y++)for(int x=sx-30;x<sx+30;x++)st.add(im.getRGB(x,y));check(st.size()==1,"en la partida el acero se ve plano, sin marca ("+st.size()+" colores)");}
     }
     static void Editor_test(App q){q.editorTool(0);q.editorApply(300,300);q.editorApply(310,305);q.editorTool(16);q.editorApply(500,640);q.editorTool(11);q.editorApply(700,200);}
     static void piezas(String out)throws Exception{

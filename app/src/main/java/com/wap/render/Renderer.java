@@ -39,14 +39,13 @@ public final class Renderer {
         for (int wy = ty * S; wy < ty * S + S; wy++) for (int wx = tx * S; wx < tx * S + S; wx++) {
             int c = 0;
             if (wx < Terrain.W && wy < Terrain.H) { int v = a[wy * Terrain.W + wx];
-                if (v != 0) { any = true;
-                    if (!front) c = Level.backTone(v);
-                    else { boolean edge = lay(a, wx - 1, wy) || lay(a, wx + 1, wy) || lay(a, wx, wy - 1) || lay(a, wx, wy + 1); c = edge ? 0xF0101018 : Level.frontTone(v) & 0xFFFFFF | 0xF0000000; } } }
+                if (v != 0) { any = true; // color plano: el fondo más claro, lo de encima más oscuro
+                    c = front ? Level.frontTone(v) : Level.backTone(v); if (marks) c = mark(c, front ? "SOBRE" : "FONDO", wx, wy);
+                    if (front) c = c & 0xFFFFFF | 0xF0000000; } }
             pxL[q++] = c;
         }
         return any;
     }
-    static boolean lay(int[] a, int x, int y) { return x >= 0 && y >= 0 && x < Terrain.W && y < Terrain.H && a[y * Terrain.W + x] == 0; }
     final int[] pxL = new int[Terrain.TILE * Terrain.TILE]; final boolean[] fresh = new boolean[Terrain.TW * Terrain.TH], hasB = new boolean[Terrain.TW * Terrain.TH], hasF = new boolean[Terrain.TW * Terrain.TH], okB = new boolean[Terrain.TW * Terrain.TH], okF = new boolean[Terrain.TW * Terrain.TH];
     /** Dibuja una capa (fondo o encima) en los cuadros visibles. */
     void layerPass(Gfx g, Terrain t, boolean front, float x0, float y0) {
@@ -58,6 +57,18 @@ public final class Renderer {
                 if (has[id]) g.tile((front ? 200000 : 100000) + id, pxL, S, d, tx * S, ty * S);
             }
     }
+    /** En el editor de niveles: acero, fondo y sobre llevan su nombre repetido en diagonal, como marca de agua. */
+    public boolean marks;
+    static int mark(int c, String word, int x, int y) {
+        final int K = 2, L = 7 * K + 14, wl = word.length() * 6 * K + 8 * K; // letras de 2 px, filas cada 28 px, espacio entre palabras
+        float u = (x - y) * .7071f, v = (x + y) * .7071f; // texto que sube hacia la derecha
+        int row = (int) Math.floor(v / L), gy = (int) Math.floor((v - row * L) / K); if (gy < 0 || gy > 6) return c;
+        float pu = u + row * wl * .5f; int col = (int) Math.floor((pu % wl + wl) % wl / K), li = col / 6, gx = col % 6;
+        if (li >= word.length() || !PixelFont.bit(word.charAt(li), gx, gy)) return c;
+        int r = c >> 16 & 255, g = c >> 8 & 255, b = c & 255, lum = (r * 3 + g * 6 + b) / 10;
+        if (lum > 110) { r = r * 80 / 100; g = g * 80 / 100; b = b * 80 / 100; } else { r += (255 - r) * 20 / 100; g += (255 - g) * 20 / 100; b += (255 - b) * 20 / 100; }
+        return c & 0xFF000000 | r << 16 | g << 8 | b;
+    }
     void fillTile(Terrain t, int tx, int ty) {
         final int S = Terrain.TILE; int q = 0;
         for (int wy = ty * S; wy < ty * S + S; wy++) for (int wx = tx * S; wx < tx * S + S; wx++) {
@@ -66,6 +77,7 @@ public final class Renderer {
             else if (Terrain.isProp(k)) c = 0;
             else if (k == Terrain.DEBRIS) c = t.tex[wy * Terrain.W + wx] & 0xFFFFFF | 0x80000000;
             else if (air(t, wx - 1, wy) || air(t, wx + 1, wy) || air(t, wx, wy - 1) || air(t, wx, wy + 1) || Terrain.isProp(t.at(wx, wy - 1))) c = INK;
+            else if (k == Terrain.STEEL) { c = t.tex[wy * Terrain.W + wx]; if (marks) c = mark(c, "ACERO", wx, wy); } // plano; en el editor, con su marca de agua
             else if (!Terrain.isProp(k) && air(t, wx, wy - 2)) c = tone(t.tex[wy * Terrain.W + wx], 1.25f, 30);
             else c = t.tex[wy * Terrain.W + wx];
             px[q++] = c;

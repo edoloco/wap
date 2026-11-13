@@ -291,22 +291,15 @@ public final class Terrain {
             if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r) paint(x, y, mat, color);
         mark(cx - r, cy - r, cx + r, cy + r);
     }
-    /** Pinta un píxel: tierra (con vetas), madera (lisa), acero (planchas) o una capa (fondo o sobre). No tapa bloques ni objetos. */
+    /** Pinta un píxel: tierra (con vetas), madera, acero o una capa (fondo o sobre); estos tres últimos en color plano. No tapa bloques ni objetos. */
     public void paint(int x, int y, int mat, int color) { put(x, y, mat, color, false); }
     /** flat = color parejo, sin vetas (pixel art). */
     void put(int x, int y, int mat, int color, boolean flat) {
         if (!inside(x, y)) return;
         int i = y * W + x;
-        if (mat == BACKDROP || mat == OVERLAY) { layer(mat)[i] = flat ? color | 0xFF000000 : earthTex(color, x, y); return; }
+        if (mat == BACKDROP || mat == OVERLAY) { layer(mat)[i] = color | 0xFF000000; return; }
         int k = m[i]; if (k != 0 && k != DEBRIS && k != DECOR && k != EARTH && k != WOOD && !(k == STEEL && mat == STEEL)) return;
-        m[i] = (byte) mat; tex[i] = flat || mat == WOOD ? color | 0xFF000000 : mat == STEEL ? steelTex(color, x, y) : earthTex(color, x, y);
-    }
-    /** Acero pintado: planchas de 16 px con juntas oscuras, un brillo arriba y remaches en las esquinas. */
-    static int steelTex(int c, int x, int y) {
-        int u = Math.floorMod(x, 16), v = Math.floorMod(y, 16), k = 0;
-        if (u == 0 || v == 0) k = -55; else if (v == 1) k = 28; else if ((u == 3 || u == 13) && (v == 3 || v == 13)) k = -40; else if ((u == 4 || u == 14) && (v == 4 || v == 14)) k = 20; else if (u == 15 || v == 15) k = -18;
-        int r = Math.max(0, Math.min(255, (c >> 16 & 255) + k)), g = Math.max(0, Math.min(255, (c >> 8 & 255) + k)), b = Math.max(0, Math.min(255, (c & 255) + k));
-        return 0xFF000000 | r << 16 | g << 8 | b;
+        m[i] = (byte) mat; tex[i] = flat || mat == WOOD || mat == STEEL ? color | 0xFF000000 : earthTex(color, x, y);
     }
     /** Pixel art: llena la celda de la grilla (de lado cell) que contiene el punto, con color parejo. erase = la vacía. */
     public void cell(int x, int y, int cell, int mat, int color, boolean erase) {
@@ -399,8 +392,8 @@ public final class Terrain {
             }
         }
         for (int j = 0; j < n; j++) { int p = q[j], px = p % W, py = p / W;
-            if (lay) layer(mat)[p] = earthTex(color, px, py);
-            else { m[p] = (byte) mat; tex[p] = mat == WOOD ? color : mat == STEEL ? steelTex(color, px, py) : earthTex(color, px, py); } }
+            if (lay) layer(mat)[p] = color | 0xFF000000;
+            else { m[p] = (byte) mat; tex[p] = mat == WOOD || mat == STEEL ? color | 0xFF000000 : earthTex(color, px, py); } }
         mark(x0, y0, x1, y1); return true;
     }
     /** Borra todo lo que no sea el marco ni un objeto (los objetos los quita el mundo). */
