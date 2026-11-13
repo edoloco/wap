@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 15;
+    public static final int RULES = 16;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
@@ -82,7 +82,18 @@ public final class World {
     }
     public void explode(float x, float y, int r, float dmg, int dig, float knock, int owner) { explode(x, y, r, dmg, dig, knock, owner, 0); }
     /** style: 0 fuego, 1 celeste (Death Ray), 2 verde (Bouncy Laser). */
+    /** Un disparo que toca un dron lo hace explotar (sus propios misiles no). */
+    void droneHits() {
+        for (int i = 0; i < shots.size(); i++) {
+            Shot d = shots.get(i); if (!d.w.drone || d.dead) continue;
+            for (int j = 0; j < shots.size(); j++) {
+                Shot o = shots.get(j); if (o == d || o.dead || o.wait > 0 || o.w.fan || o.owner == d.owner && o.w == d.w.splinter) continue;
+                if (Math.abs(o.x - d.x) < 7 && Math.abs(o.y - d.y) < 7) { if (o.w.radius > 0 || o.w.drone) o.explode(this); else o.dead = true; d.explode(this); break; }
+            }
+        }
+    }
     public void explode(float x, float y, int r, float dmg, int dig, float knock, int owner, int style) {
+        for (int i = 0; i < shots.size(); i++) { Shot d = shots.get(i); if (d.w.drone && !d.dead && StrictMath.hypot(d.x - x, d.y - y) < r + 6) d.explode(this); } // la explosión alcanza a los drones
         if (dig > 0) t.carve((int) x, (int) y, dig);
         fx(Fx.EXPLODE, x, y, r, owner).b = style;
         blastWood(x, y, Math.max(r, dig), Math.max(dmg, 8));
@@ -206,6 +217,8 @@ public final class World {
         float cx = x, cy = y; int n = w.pierce ? 300 : 240; boolean hit = false;
         for (int i = 0; i < n; i++) {
             cx += dx * 3; cy += dy * 3;
+            boolean droneHit = false; for (int k = 0; k < shots.size(); k++) { Shot d = shots.get(k); if (d.w.drone && !d.dead && Math.abs(d.x - cx) < 6 && Math.abs(d.y - cy) < 6) { d.explode(this); droneHit = true; } }
+            if (droneHit && !w.pierce) break;
             if (!hit) for (Robot r : robots) if (r.id != owner && r.alive() && r.hits(cx, cy)) {
                 r.damage(this, w.dmg, dx * w.knock, dy * w.knock - .2f, owner, cx, cy); hit = true; if (!w.pierce) { i = n; }
             }
@@ -223,6 +236,7 @@ public final class World {
         tick++;
         for (int i = 0; i < robots.length; i++) robots[i].step(this, i < in.length ? in[i] : 0);
         for (int i = 0; i < shots.size(); i++) { Shot s = shots.get(i); if (!s.dead) s.step(this); }
+        droneHits();
         for (int i = shots.size() - 1; i >= 0; i--) if (shots.get(i).dead) shots.remove(i);
         if (--bonusT <= 0 && bonus.size() < 4) {
             bonusT = 500 + rng.i(400);

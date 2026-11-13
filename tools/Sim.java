@@ -240,5 +240,46 @@ public class Sim {
         Wpn.load("nueva BAZOOKA UZI\n");check(Wpn.error!=null&&Wpn.ALL.length==n0,"no se puede crear un arma con un nombre que ya existe");
         Wpn.load("nueva X PISTOLA\n");check(Wpn.error!=null,"la base del arma nueva debe existir");
         Wpn.reset();check(bz.dmg==d0&&bz.label.equals("BAZOOKA")&&Wpn.enabled().length==Wpn.ALL.length&&World.rules()==World.RULES,"sin armas.txt, todo vuelve a como era");Wpn.load("nueva OTRA UZI\n");Wpn.reset();check(Wpn.ALL.length==n0,"al volver a lo de siempre se quitan las armas creadas");}
-    public static void main(String[] a)throws Exception{armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void dron(String out)throws Exception{
+        Wpn dr=Wpn.ALL[Wpn.index("DRONE")];check(dr.drone&&dr.name.equals("DRONE"),"existe el arma DRONE");
+        World w=flat();Robot r=w.robots[0],e=w.robots[1];for(int i=0;i<Robot.SLOTS;i++){r.loadout[i]=dr;r.ammo[i]=1;}e.px=r.px+600;
+        run(w,0,2);run(w,Input.A,1);run(w,0,8);check(r.piloting(),"al disparar el dron, el jugador lo maneja");
+        int x0=r.px;Shot d=r.droneShot;float dx0=d.x;run(w,Input.RIGHT,30);check(Math.abs(r.px-x0)<=1&&d.x>dx0+60,"mientras lo maneja, el personaje se queda quieto y el dron avanza ("+(int)(d.x-dx0)+")");
+        run(w,Input.UP,40);check(d.vy<-2,"la cruceta lo gira hacia arriba (vy "+d.vy+")");
+        run(w,Input.DOWN|Input.RIGHT,20);int mis=0;
+        for(int k=0;k<40;k++){w.step(new int[]{Input.A|Input.RIGHT,0});for(Shot q:w.shots)if(q.w.look==Wpn.MISSILE&&q.age==1)mis++;}
+        check(mis>=3,"A dispara misiles desde el dron ("+mis+")");
+        float hp=e.hp;run(w,0,1);run(w,Input.B,1);run(w,0,2);check(d.dead&&!r.piloting(),"B lo explota y vuelve el control");
+        int x1=r.px;run(w,Input.RIGHT,20);check(r.px>x1+10,"después de explotar, el personaje se mueve otra vez");
+        // choca contra el rival
+        w=flat();r=w.robots[0];e=w.robots[1];for(int i=0;i<Robot.SLOTS;i++){r.loadout[i]=dr;r.ammo[i]=1;}e.px=r.px+150;e.py=r.py;hp=e.hp;
+        run(w,0,2);run(w,Input.A,1);run(w,0,7);int t=0;while(r.piloting()&&t++<200)w.step(new int[]{0,0});
+        check(!r.piloting()&&e.hp<hp-20,"si toca al rival, explota y lo daña ("+(hp-e.hp)+")");
+        // le disparan
+        w=flat();r=w.robots[0];e=w.robots[1];for(int i=0;i<Robot.SLOTS;i++){r.loadout[i]=dr;r.ammo[i]=1;e.loadout[i]=Wpn.ALL[Wpn.index("RIFLE")];e.ammo[i]=1;}e.px=r.px+500;e.facing=-1;
+        run(w,0,2);run(w,Input.A,1);run(w,0,8);d=r.droneShot;d.y=e.py-33;d.x=e.px-200;d.ang=0;e.loadout[0].speed=34;
+        boolean shotDown=false;for(int k=0;k<40&&!shotDown;k++){w.step(new int[]{0,k==2?Input.A:0});shotDown=d.dead;}
+        check(shotDown&&!r.piloting(),"si le disparan, explota");
+        // batería
+        w=flat();r=w.robots[0];for(int i=0;i<Robot.SLOTS;i++){r.loadout[i]=dr;r.ammo[i]=1;}w.robots[1].px=r.px-400;run(w,0,2);run(w,Input.A,1);run(w,0,8);d=r.droneShot;
+        t=0;while(r.piloting()&&t++<1000){int in=t/12%2==0?Input.UP:Input.DOWN;w.step(new int[]{in,0});if(d.y<300)d.y=300;if(d.x>1500)d.x=300;}
+        check(!r.piloting()&&t<=dr.fuse+5,"se acaba la batería y explota ("+t+" cuadros)");
+        // el robot piloto se muere: el dron explota
+        w=flat();r=w.robots[0];for(int i=0;i<Robot.SLOTS;i++){r.loadout[i]=dr;r.ammo[i]=1;}run(w,0,2);run(w,Input.A,1);run(w,0,8);d=r.droneShot;r.damage(w,999,0,0,1,r.px,r.py);w.step(new int[]{0,0});
+        check(d.dead&&r.droneShot==null,"si muere el piloto, el dron explota");
+        // el bot lo usa y lo suelta
+        w=flat();r=w.robots[0];Robot b=w.robots[1];for(int i=0;i<Robot.SLOTS;i++){b.loadout[i]=dr;b.ammo[i]=1;}b.px=r.px+300;Bot bot=new Bot(5,1,.8f);int used=0,back=0;boolean was=false;
+        for(int k=0;k<1500;k++){w.step(new int[]{0,bot.think(w)});if(b.piloting()&&!was)used++;if(!b.piloting()&&was)back++;was=b.piloting();}
+        check(used>0&&back>0,"el rival de la máquina lanza el dron, lo maneja y vuelve ("+used+" veces)");
+        // mismo resultado en los dos teléfonos
+        int[] hs=new int[2];for(int k=0;k<2;k++){World q=flat();Robot qr=q.robots[0];for(int i=0;i<Robot.SLOTS;i++){qr.loadout[i]=dr;qr.ammo[i]=1;}q.robots[1].px=qr.px+300;
+          for(int j=0;j<300;j++)q.step(new int[]{j==3?Input.A:j%40<20?Input.UP|Input.A:Input.RIGHT,0});hs[k]=q.hash();}
+        check(hs[0]==hs[1],"el dron es determinista (mismo resultado con las mismas entradas)");
+        // imagen
+        w=flat();r=w.robots[0];for(int i=0;i<Robot.SLOTS;i++){r.loadout[i]=dr;r.ammo[i]=1;}w.robots[1].px=r.px+400;Renderer rd=new Renderer();rd.reset(w);
+        BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);
+        for(int k=0;k<70;k++){w.step(new int[]{k==3?Input.A:k<40?Input.RIGHT:Input.UP|Input.RIGHT|Input.A,0});rd.tick(w);rd.consume(w,false);if(k%5==0)rd.drawWorld(g,w,0);}
+        rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"dron.png"));
+        check(r.piloting()&&Math.abs(rd.camX-r.droneShot.x)<Math.abs(rd.camX-r.px),"la cámara sigue al dron");}
+    public static void main(String[] a)throws Exception{dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

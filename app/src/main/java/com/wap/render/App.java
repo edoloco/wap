@@ -421,7 +421,7 @@ public final class App {
     void sounds() {
         for (Fx f : w.fx) switch (f.type) {
             case Fx.EXPLODE: au.play(f.a > 50 ? Audio.BIG : Audio.BOOM); break;
-            case Fx.FLASH: { String n = Wpn.ALL[(int) f.b].base; au.play(n.endsWith("SHOTGUN") ? Audio.BLAST : Audio.SHOT); break; }
+            case Fx.FLASH: { if (f.b < 0) { au.play(Audio.SHOT); break; } String n = Wpn.ALL[(int) f.b].base; au.play(n.endsWith("SHOTGUN") ? Audio.BLAST : Audio.SHOT); break; }
             case Fx.ARMOR: au.play(Audio.ARMOR); break;
             case Fx.HIT: au.play(Audio.HURT); break;
             case Fx.STOMP: case Fx.SLAM: au.play(Audio.BOOM); break;
@@ -758,6 +758,11 @@ public final class App {
         float bw = 168 * u; bar(g, 4, 4, bw, me, this.me);
         if (w.robots.length == 2) bar(g, W - 4 - bw, 4, bw, w.robots[1 - this.me], 1 - this.me);
         else { float y = 4; for (Robot o : w.robots) if (o != me) { mini(g, W - 4 - bw, y, bw, o); y += 15; } } // varios rivales: barras chicas
+        if (me.piloting()) { // manejando el dron: cómo se usa y cuánta batería le queda
+            Shot d = me.droneShot; float k = d.w.fuse > 0 ? d.life / (float) d.w.fuse : 1;
+            txtS(g, "DRON: CRUCETA GIRA   A MISILES   B EXPLOTA", W / 2, 52, 8, GOLD, 0);
+            g.rect(W / 2 - 40, 56, 80, 4, 0xFF0B0F2A); g.rect(W / 2 - 40, 56, 80 * k, 4, k < .2f ? RED : MINT);
+        }
         if (online && ls != null) { // calidad de la conexión, para saber si la lentitud es de la red
             float p = ls.ping(); int c = p < 0 ? MUTE : p < 60 ? MINT : p < 120 ? GOLD : RED;
             txt(g, p < 0 ? "RED ..." : "RED " + Math.round(p) + " MS", 6, 42, 8, c, -1);

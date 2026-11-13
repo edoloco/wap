@@ -34,6 +34,9 @@ public final class Robot {
 
     Robot(int id, int lives) { this.id = id; this.lives = lives; }
     public boolean alive() { return deadT == 0 && lives >= 0; }
+    /** El dron que está piloteando (o null): mientras vuela, los controles lo manejan a él y el personaje se queda quieto. */
+    public Shot droneShot;
+    public boolean piloting() { return droneShot != null && !droneShot.dead; }
     public boolean sliding() { return slideT > 0 || h != STAND_H; }
     public boolean hits(float x, float y) { return Math.abs(x - px) < 10 && y >= py - h && y <= py; }
     public int armorCount() { return Integer.bitCount(armor); }
@@ -86,7 +89,7 @@ public final class Robot {
         if (n >= 0 && vy >= 0 && !free(t, px, py + 1, h)) grounded = true;
     }
     public void spawnAt(World g) {
-        hp = MAX_HP; armor = (1 << PIECES) - 1; deadT = 0; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
+        hp = MAX_HP; armor = (1 << PIECES) - 1; deadT = 0; droneShot = null; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
         int[] p = g.freeSpot(this); px = p[0]; py = p[1];
         for (int i = 0; i < SLOTS; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
         wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; stompCd = 0; thrownT = 0; rollT = 0; aim = 60;
@@ -116,6 +119,7 @@ public final class Robot {
             Fx f = g.lastFx; f.c = (hx < px ? 1.5f : -1.5f) + kx; f.d = -3;
         }
         if (hp <= 0) {
+            if (droneShot != null) { Shot ds = droneShot; droneShot = null; if (!ds.dead) ds.explode(g); } // si muere el piloto, el dron explota
             hp = 0; rope = 0; deadT = 150; stunT = 0; thrownT = 0; windT = 0; lassoT = 0; killedBy = by; java.util.Arrays.fill(charge, 0); lives--; deaths++;
             if (by != id) g.robots[by].kills++;
             g.fx(Fx.DEATH, px, py - 27, id, 0).b = by; // b: quién lo eliminó (él mismo si se mató solo)
@@ -139,6 +143,7 @@ public final class Robot {
             float v = w.speed * (w.parts > 1 && w.stagger == 0 ? g.rng.r(.82f, 1.1f) : 1);
             float dx = (float) StrictMath.cos(a) * facing, dy = (float) StrictMath.sin(a);
             if (w.lasso) g.proton(this, mx, my);
+            else if (w.drone) { if (droneShot == null || droneShot.dead) { Shot sh = g.spawn(w, id, mx, my, facing * w.speed, 0); if (sh != null) { droneShot = sh; sh.ang = facing > 0 ? 0 : 3.14159265f; } } }
             else if (w.trap) { float[] tv = TRAP_V[trapAim]; g.spawn(w, id, mx, my, facing * tv[0] + vx * .3f, tv[1]); }
             else if (w.beam) g.beam(w, id, mx, my, dx, dy);
             else { Shot sh = g.spawn(w, id, mx, my, dx * v + (w.grav > .1f ? vx * .4f : 0), dy * v); if (sh != null) sh.wait = i * w.stagger; }
@@ -210,6 +215,9 @@ public final class Robot {
         }
         if (lives < 0) return;
         if (deadT > 0) { if (--deadT == 0) spawnAt(g); prev = in; return; }
+        if (droneShot != null) { // piloteando: la cruceta y los botones van al dron; al explotar, vuelve el control
+            if (droneShot.dead) droneShot = null; else { droneShot.ctlPrev = droneShot.ctl; droneShot.ctl = in; in = 0; }
+        }
         Terrain t = g.t;
         all = g.robots; ghost = false; ghost = body(px, py, h); // si aparecieron encimados, se separan solos
         if (ghost) { Robot o = hitBody; vx += (px != o.px ? Math.signum(px - o.px) : id < o.id ? -1 : 1) * .4f; }

@@ -72,7 +72,8 @@ public final class Renderer {
                 break; }
             case Fx.CHIPS: for (int i = 0; i < f.a; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 4, -r.nextFloat() * 3, 24, 1.6f, DIRT2); break;
             case Fx.SMOKE: { P p = part(f.a > 0 ? FIRE : SMOKE, f.x, f.y, 0, -.2f, f.a > 0 ? 14 : 30, f.a > 0 ? 3 : 2.5f, f.a > 0 ? 0xFFFF8A1A : 0x5A3A3E48); p.g = 0; break; }
-            case Fx.FLASH: { RobotArt.View v = views[f.who]; v.label = Wpn.ALL[(int) f.b].label; v.labelT = LABEL; if (v.shotT <= 0) v.shotT = 12; break; }
+            case Fx.FLASH: { if (f.b < 0) { P q = part(TRAIL, f.x, f.y, 0, 0, 8, 5, 0xFFFFD27A); q.g = 0; break; } // misil del dron: solo un destello
+                RobotArt.View v = views[f.who]; v.label = Wpn.ALL[(int) f.b].label; v.labelT = LABEL; if (v.shotT <= 0) v.shotT = 12; break; }
             case Fx.WOOD: { // astillas del color de la madera
                 int n = Math.min(26, 5 + (int) f.a / 18), c = (int) f.b, d = RobotArt.mixDark(c);
                 for (int i = 0; i < n; i++) {
@@ -179,6 +180,7 @@ public final class Renderer {
                 case Wpn.ORB: c = 0xFF3FD8FF; z = 3; break;
                 case Wpn.PLASMA: c = 0xFFFFC23A; z = 8; break;
                 case Wpn.SPARK: c = 0xFFFF9A2A; z = 2; break;
+                case Wpn.MISSILE: c = 0xFFFF9A3A; z = 1.6f; if (w.tick % 2 == 0) { P q = part(SMOKE, s.x, s.y, 0, -.1f, 22, 1.4f, 0x40404650); q.g = 0; } break;
                 default: continue;
             }
             P p = part(TRAIL, s.x, s.y, (r.nextFloat() - .5f) * .4f, (r.nextFloat() - .5f) * .4f, 18, z, c); p.g = 0;
@@ -194,6 +196,7 @@ public final class Renderer {
     void camera(World w, int who) {
         Robot me = w.robots[who];
         float tx = me.px + me.facing * vw * .1f + me.vx * 12, ty = me.py - 36;
+        if (me.piloting()) { Shot d = me.droneShot; tx = d.x + (float) Math.cos(d.ang) * vw * .15f; ty = d.y + (float) Math.sin(d.ang) * vh * .12f; } // la cámara sigue al dron
         if (first) { camX = tx; camY = ty; first = false; }
         camX += (tx - camX) * .1f; camY += (ty - camY) * .12f;
         camX = Math.max(vw / 2f, Math.min(Terrain.W - vw / 2f, camX)); camY = Math.max(vh / 2f, Math.min(Terrain.H - vh / 2f, camY));
@@ -467,6 +470,8 @@ public final class Renderer {
             case Wpn.SPARK: g.glow(s.x, s.y, 5, 0xEEFF9A2A); g.circle(s.x, s.y, 1, 0xFFFFF0C0, 0, 0); break;
             case Wpn.DIRT: g.glow(s.x, s.y, 12, 0xEEB98CFF); g.glow(s.x, s.y, 5, 0xFFFFFFFF); break;
             case Wpn.MINE: if (s.age / 12 % 2 == 0) g.glow(s.x, s.y - 1, 6, 0xEEFF2A2A); break;
+            case Wpn.DRONE: { g.glow(s.x, s.y, 12, 0x30FFFFFF); boolean low = s.life > 0 && s.life < 120; if (s.age / (low ? 4 : 10) % 2 == 0) g.glow(s.x, s.y - 4, 5, low ? 0xEEFF3A3A : 0xEE6AFF6A); break; } // luz: verde; roja y rápida si se acaba la batería
+            case Wpn.MISSILE: { float n = Math.max(1, sp); g.glow(s.x - s.vx / n * 4, s.y - s.vy / n * 4, 4 + (s.age % 2), 0xEEFF8A2A); break; }
             case Wpn.GRENADE: if (s.age % 8 < 4) g.glow(s.x, s.y - 4, 3, 0xCCFFB02A); break;
             default:
         }
@@ -529,6 +534,17 @@ public final class Renderer {
         g.line(-4, 3, 4, 3, dark, 1);
         g.restore();
     }
+    /** Dron: cuerpo del color del piloto, dos rotores que giran, luz que parpadea y una antena; mira hacia donde va. */
+    void drone(Gfx g, Shot s) {
+        int col = RobotArt.COLOR[s.owner]; float c = (float) Math.cos(s.ang); boolean left = c < 0;
+        g.save(); g.translate(s.x, s.y); g.rotate(left ? s.ang - (float) Math.PI : s.ang); g.scale(left ? -1.5f : 1.5f, 1.5f);
+        g.line(-8, -4, 8, -4, 0xFF1A1A20, 1.4f); // brazos de los rotores
+        for (int k = -1; k <= 1; k += 2) { float w = 6 * Math.abs((float) Math.cos(s.age * .9f + k)); g.line(k * 8 - w, -6, k * 8 + w, -6, 0xCCE8EEF8, 1.2f); g.line(k * 8, -5.5f, k * 8, -4, 0xFF1A1A20, 1); }
+        g.rrect(-7, -4, 14, 7, 3, col, 0xFF000000, .9f); // cuerpo
+        g.rrect(1.5f, -2.5f, 5, 3.5f, 1.5f, 0xFF2A2F3A, 0, 0); g.circle(4, -.8f, 1, 0xFF7FE0FF, 0, 0); // cámara
+        g.line(-5, 3, -6.5f, 6, 0xFF1A1A20, 1); g.line(5, 3, 6.5f, 6, 0xFF1A1A20, 1); // patas
+        g.restore();
+    }
     void shot(Gfx g, Shot s) {
         if (s.wait > 0) return;
         Wpn w = s.w; float a = (float) Math.atan2(s.vy, s.vx);
@@ -545,6 +561,8 @@ public final class Renderer {
                 g.rect(s.x - 7 - k * 6, s.y - 15, 7, 2.2f, 0xFF2A2A32); g.rect(s.x + k * 6, s.y - 15, 7, 2.2f, 0xFF2A2A32); // tapa que se abre
                 g.circle(s.x, s.y - 6.5f, 2.2f, trapLight(s), 0, 0); break; }
             case Wpn.GLOVE: glove(g, s.x, s.y, s.vx > 0 ? 1 : -1, RobotArt.COLOR[s.owner]); break;
+            case Wpn.DRONE: drone(g, s); break;
+            case Wpn.MISSILE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-3.5f,-1, 1.5f,-1, 3.5f,0, 1.5f,1, -3.5f,1}, 0xFFD8D8E0, 0x99000000, .5f); g.restore(); break;
             case Wpn.DIRT: case Wpn.LEMON: case Wpn.PLASMA: case Wpn.ORB: break; // son pura luz
             case Wpn.NUKE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 9,0, 5,3.4f, -8,3.4f}, 0xFFFFD020, 0, 0); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 7,-1.6f, -8,-1.6f}, 0xFFFFF09A, 0, 0); g.circle(-1, .8f, 1.8f, 0xFF8A5A10, 0, 0); g.restore(); break;
             case Wpn.SPARK: break;

@@ -1,13 +1,15 @@
 package com.wap.core;
 /** Definición de un arma: cargador, tiempo de recarga y comportamiento del proyectil, al estilo de la tabla de armas de Liero. */
 public final class Wpn {
-    public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12, GREEN = 13, BLASER = 14, LIGHT = 15, RAY = 16, GAS = 17, WIND = 18, GLOVE = 19, PROTON = 20, TRAP = 21;
+    public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12, GREEN = 13, BLASER = 14, LIGHT = 15, RAY = 16, GAS = 17, WIND = 18, GLOVE = 19, PROTON = 20, TRAP = 21, DRONE = 22, MISSILE = 23;
     /** name: identificador (no cambia; con él se guardan las armas elegidas). label: nombre que se muestra. */
     public String name, desc = "", label;
     /** Arma original de la que viene (para las creadas en armas.txt; decide, por ejemplo, el sonido). */
     public String base;
     /** Quitada del juego con armas.txt: no aparece para elegir ni al azar. */
     public boolean off;
+    /** Dron teledirigido: mientras vuela, los controles del dueño lo manejan (ver Shot.droneMove). */
+    public boolean drone;
     public int charge, clip = 1, delay = 20, reload = 100, parts = 1, fuse = 0, look = BULLET;
     public float spread, speed = 10, grav, bounce, drag = 1, accel, dmg, knock = 1, recoil, lob, jitter;
     public int radius, dig;          // radio de explosión (0 = sin explosión) y radio de excavación
@@ -44,6 +46,7 @@ public final class Wpn {
         Wpn chiq = sub("chiq").shot(1, 180, 4.5f).phys(.14f, .35f, 1).boom(24, 16, 20, 2.2f).fuse(55).look(GRENADE).split(frag, 4);
         Wpn chiqBig = sub("chiqb").shot(1, 180, 4.5f).phys(.14f, .35f, 1).boom(24, 16, 20, 2.2f).fuse(55).look(GRENADE).split(frag, 8);
         Wpn hop = sub("");
+        Wpn missile = sub("misil").shot(1, 0, 8.5f).boom(8, 7, 6, 1).look(MISSILE); missile.impact = true;
         ALL = new Wpn[] {
             new Wpn("PLASMA GUN", "Ráfaga de disparos de energía").mag(30, 9, 90).shot(1, 0, 9.5f).hit(5, 4, .5f).look(LEMON),
             new Wpn("CANNON PUNCH", "Guante que sale volando y lanza al rival").mag(1, 20, 80).shot(1, 0, 7.5f).hit(4, 0, 0).fuse(48).look(GLOVE),
@@ -78,6 +81,7 @@ public final class Wpn {
             new Wpn("MINI NUKE", "Cráter enorme").mag(1, 40, 300).shot(1, 1, 5).phys(.05f, 0, 1).boom(68, 64, 66, 6).look(NUKE).rec(2),
             new Wpn("BIG NUKE", "Lenta y devastadora").mag(1, 40, 480).shot(1, 1, 2.6f).boom(125, 100, 120, 9).look(NUKE).rec(2),
             new Wpn("FAN", "Desvía balas y empuja; nunca se acaba").mag(1, 1, 0).shot(1, 12, 8).phys(0, 0, .96f).hit(0, 0, .35f).fuse(36).look(WIND),
+            new Wpn("DRONE", "Teledirigido: la cruceta lo maneja, A dispara misiles, B lo explota").mag(1, 30, 420).shot(1, 0, 3.2f).boom(34, 45, 26, 3.5f).fuse(600).look(DRONE),
         };
         for (Wpn w : ALL) {
             if (w.name.equals("BAZOOKA") || w.name.equals("DOOMSDAY")) { w.accel = .24f; w.smoke = true; }
@@ -96,6 +100,7 @@ public final class Wpn {
             if (w.name.equals("FAN")) w.fan = true;
             if (w.name.equals("ZIMM")) w.angle = 40;
             if (w.name.equals("ZIMM") || w.name.equals("SPIKEBALLS") || w.name.equals("HELLRAIDER")) w.impact = true;
+            if (w.name.equals("DRONE")) { w.drone = true; w.splinter = missile; w.nSplinter = 0; }
         }
     }
     /** Nombres antiguos guardados en el teléfono. */

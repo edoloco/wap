@@ -2,9 +2,14 @@ package com.wap.core;
 /** Un proyectil en vuelo. */
 public final class Shot {
     public Wpn w; public int owner, age, hops, life, wait; public float x, y, vx, vy; public boolean stuck, dead;
+    /** Dron: controles de su piloto en este cuadro y el anterior, enfriamiento de los misiles y rumbo. */
+    public int ctl, ctlPrev, cool; public float ang;
+    /** Cuánto gira el dron por cuadro (radianes) y cada cuántos cuadros dispara un misil. */
+    public static final float DRONE_TURN = .085f; public static final int DRONE_COOL = 12;
     public void step(World g) {
         if (wait > 0) { wait--; return; } // cargas del Death Ray que salen después
         age++;
+        if (w.drone) { droneMove(g); return; }
         if (w.trap) { trapMove(g); return; }
         if (w.fan) for (Shot o : g.shots) if (o != this && !o.w.fan && o.wait == 0 && Math.abs(o.x - x) < 12 && Math.abs(o.y - y) < 12) { o.vx += vx * .14f; o.vy += vy * .14f; o.stuck = false; } // el ventilador desvía balas
         if (w.accel != 0) { float s = (float) StrictMath.hypot(vx, vy); if (s > .01f && s < 14) { vx += vx / s * w.accel; vy += vy / s * w.accel; } }
@@ -51,6 +56,37 @@ public final class Shot {
                 if (w.look == Wpn.BULLET) g.fx(Fx.CHIPS, x, y, 4, 0);
                 dead = true; return;
             }
+        }
+        if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
+    }
+    /**
+     * Dron: siempre avanza; la cruceta elige hacia dónde gira (las 8 direcciones), A dispara misiles y B lo explota.
+     * Explota al tocar el suelo o a alguien, al recibir un disparo o una explosión, o cuando se le acaba la batería (mecha).
+     */
+    private void droneMove(World g) {
+        Robot o = g.robots[owner];
+        if (o.droneShot != this || !o.alive()) { explode(g); return; } // sin piloto, explota
+        int in = ctl, dx = ((in & Input.RIGHT) != 0 ? 1 : 0) - ((in & Input.LEFT) != 0 ? 1 : 0), dy = ((in & Input.DOWN) != 0 ? 1 : 0) - ((in & Input.UP) != 0 ? 1 : 0);
+        if (dx != 0 || dy != 0) {
+            float d = (float) StrictMath.atan2(dy, dx) - ang;
+            while (d > 3.14159265f) d -= 6.2831853f; while (d < -3.14159265f) d += 6.2831853f;
+            ang += Math.max(-DRONE_TURN, Math.min(DRONE_TURN, d));
+        }
+        float c = (float) StrictMath.cos(ang), s = (float) StrictMath.sin(ang), sp = w.speed * (g.wet(y) ? .6f : 1);
+        vx = c * sp; vy = s * sp;
+        if (cool > 0) cool--;
+        if ((in & Input.A) != 0 && cool == 0 && w.splinter != null) {
+            cool = DRONE_COOL; float ms = w.splinter.speed;
+            g.spawn(w.splinter, owner, x + c * 8, y + s * 8, c * ms, s * ms);
+            g.fx(Fx.FLASH, x + c * 8, y + s * 8, (float) StrictMath.toDegrees(ang), owner).b = -1;
+        }
+        if ((in & Input.B) != 0 && (ctlPrev & Input.B) == 0 && age > 6) { explode(g); return; }
+        if (life > 0 && --life == 0) { explode(g); return; }
+        int n = (int) (sp / 2) + 1;
+        for (int i = 0; i < n; i++) {
+            x += vx / n; y += vy / n;
+            if (g.t.solid((int) x, (int) y)) { explode(g); return; }
+            for (Robot r : g.robots) if (r.alive() && (r.id != owner || age > 45) && r.hits(x, y)) { explode(g); return; }
         }
         if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
     }

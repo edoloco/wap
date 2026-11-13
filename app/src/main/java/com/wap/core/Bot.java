@@ -57,10 +57,25 @@ public final class Bot {
         }
         return found;
     }
+    /** Maneja el dron: gira hacia el enemigo esquivando paredes cercanas, dispara misiles si lo tiene enfrente y lo explota al llegar. */
+    private int pilot(World g, Shot d, Robot e) {
+        float tx = e.px - d.x, ty = e.py - 26 - d.y, dist = (float) StrictMath.hypot(tx, ty);
+        float want = (float) StrictMath.atan2(ty, tx);
+        // si adelante hay pared, prueba girar a un lado
+        float c = (float) StrictMath.cos(d.ang), s = (float) StrictMath.sin(d.ang);
+        if (g.t.solid((int) (d.x + c * 30), (int) (d.y + s * 30))) want = d.ang + (g.t.solid((int) (d.x - s * 30), (int) (d.y + c * 30)) ? -1.6f : 1.6f);
+        int dx = (int) Math.round(StrictMath.cos(want) * 1.3), dy = (int) Math.round(StrictMath.sin(want) * 1.3), out = 0;
+        if (dx > 0) out |= Input.RIGHT; if (dx < 0) out |= Input.LEFT; if (dy > 0) out |= Input.DOWN; if (dy < 0) out |= Input.UP;
+        float off = want - d.ang; while (off > 3.14159265f) off -= 6.2831853f; while (off < -3.14159265f) off += 6.2831853f;
+        if (Math.abs(off) < .25f && dist < 320 && clear(g, d.x, d.y, e.px, e.py - 26) && r.f() < .5f + skill * .4f) out |= Input.A;
+        if (dist < 22 || d.life > 0 && d.life < 20) out |= Input.B;
+        return out;
+    }
     public int think(World g) {
         Robot m = g.robots[me], e = g.nearest(m, true); // el enemigo más cercano
         if (!m.alive()) return 0;
         if (e == null) return 0;
+        if (m.piloting()) return pilot(g, m.droneShot, e);
         if (aimT > 0) { // mantiene X y mueve la mira; luego lanza el gancho
             aimT--; float d = aimGoal - m.aim;
             if (Math.abs(d) > Robot.AIM_SPEED && aimT > 0) return Input.X | (d > 0 ? Input.UP : Input.DOWN);
