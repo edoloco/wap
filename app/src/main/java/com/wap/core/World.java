@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 17;
+    public static final int RULES = 18;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
@@ -16,6 +16,8 @@ public final class World {
 
     /** Altura del agua (-1: sin agua). Bajo el agua se cae más lento y se corre más despacio. */
     public int water = -1;
+    /** Vida máxima de todos los personajes (para probar el equilibrio). Se llama antes del primer paso. */
+    public void setMaxHp(int v) { v = Math.max(25, Math.min(1000, v)); for (Robot r : robots) { r.maxHp = v; r.hp = v; } }
     public World(int seed, int lives, Wpn[] a, Wpn[] b) { this(seed, lives, a, b, null); }
     /** Partida en un nivel guardado (o aleatorio si level es null). */
     public World(int seed, int lives, Wpn[] a, Wpn[] b, Level level) { this(seed, lives, new Wpn[][]{a, b}, new int[]{0, 1}, level); }
@@ -250,8 +252,8 @@ public final class World {
             b.vy = Math.min(5, b.vy + .2f); float ny = b.y + b.vy;
             if (t.solid((int) b.x, (int) ny)) b.vy = 0; else b.y = ny;
             for (Robot r : robots) if (r.alive() && Math.abs(r.px - b.x) < 16 && b.y > r.py - r.h - 8 && b.y < r.py + 8) {
-                if (b.kind == 0) r.heal(40);
-                else for (int k = 0; k < Robot.SLOTS; k++) { r.reload[k] = 0; r.ammo[k] = r.loadout[k].clip; }
+                if (b.kind == 0) r.heal(r.maxHp * .4f);
+                else r.lives++; // la caja es una vida extra
                 fx(Fx.PICK, b.x, b.y, b.kind, r.id); bonus.remove(i); break;
             }
         }

@@ -367,5 +367,17 @@ public class Sim {
         Wpn.load("dibujo BAZOOKA\nforma relleno=FF000000\np 0 0 1 1 2 0\n");check(Wpn.error!=null,"un dibujo sin fin avisa el error");
         Wpn.load("arma BAZOOKA aspecto=PATO\n");check(Wpn.error!=null,"un aspecto desconocido avisa el error");
         Wpn.reset();check(bz.look==Wpn.ROCKET&&bz.tint==0&&bz.art==null&&bz.size==1&&bz.light,"sin armas.txt, el aspecto vuelve a ser el de siempre");}
-    public static void main(String[] a)throws Exception{editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void vidaGancho(){
+        World w=flat();w.setMaxHp(250);Robot a=w.robots[0],b=w.robots[1];check(a.hp==250&&b.maxHp==250,"vida máxima elegida: todos parten con 250");
+        b.invuln=0;b.damage(w,100,0,0,0,b.px,b.py-30);check(b.hp==150&&b.armorCount()>0,"con 250 de vida, un golpe de 100 no lo deja en el esqueleto ("+b.hp+", armadura "+b.armorCount()+")");
+        int lv=b.lives;for(int i=0;i<60&&b.lives==lv;i++){b.invuln=0;b.damage(w,60,0,0,0,b.px,b.py-30);}for(int i=0;i<200;i++)w.step(new int[2]);check(b.hp==250,"reaparece con la vida máxima elegida");
+        w=flat();w.setMaxHp(10);check(w.robots[0].hp==25,"la vida máxima no baja de 25");
+        w=flat();a=w.robots[0];int l0=a.lives;Bonus bx=new Bonus();bx.kind=1;bx.x=a.px;bx.y=a.py-10;w.bonus.add(bx);run(w,0,2);check(a.lives==l0+1&&w.bonus.isEmpty(),"la caja que cae al azar da una vida extra");
+        w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+560;a.aim=0;a.facing=1;run(w,0,1);{int[] in={Input.UP|Input.B,0};w.step(in);}
+        boolean hooked=false;int ax0=a.px,bx0=b.px;for(int i=0;i<60;i++){w.step(new int[]{Input.B,0});hooked|=a.rope==3;}
+        check(hooked,"el gancho alcanza a un personaje a 560 de distancia y lo engancha");check(a.px>ax0+150,"con B mantenido te lleva hacia él ("+ax0+"→"+a.px+")");check(b.px<bx0,"y a él lo tira un poco hacia ti ("+bx0+"→"+b.px+")");
+        w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+300;a.aim=0;a.facing=1;run(w,0,1);w.step(new int[]{Input.UP|Input.B,0});for(int i=0;i<25&&a.rope!=3;i++)w.step(new int[]{Input.B,0});boolean h2=a.rope==3;w.step(new int[]{0,0});check(h2&&a.rope==0,"soltar B suelta al personaje enganchado");
+        check(Robot.HOOK_RANGE>=600,"el gancho es más largo (alcance "+Robot.HOOK_RANGE+")");
+    }
+    public static void main(String[] a)throws Exception{vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

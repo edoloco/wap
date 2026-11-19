@@ -546,8 +546,10 @@ public final class Renderer {
     /** Bonus: píldoras de colores para curar, caja de balas para recargar. */
     void crate(Gfx g, float x, float y, int kind) {
         if (kind == 0) { pill(g, x - 2, y - 5, -.5f, 0xFFE8323C, 0xFFFFD23D); pill(g, x + 3, y - 10, .6f, 0xFF2F7BFF, 0xFFFFFFFF); return; }
-        g.rect(x - 8, y - 15, 16, 15, INK); g.rect(x - 7, y - 14, 14, 13, 0xFF6B7A3A); g.rect(x - 7, y - 14, 14, 2, 0xFF93A55A);
-        for (int i = 0; i < 3; i++) { g.rect(x - 5 + i * 4, y - 11, 2, 7, 0xFFFFC83D); g.rect(x - 5 + i * 4, y - 12, 2, 1, 0xFFB8862A); }
+        // vida extra: caja con la cabeza del robot y un "+"
+        g.rect(x - 9, y - 17, 18, 17, INK); g.rect(x - 8, y - 16, 16, 15, 0xFF2A9D6A); g.rect(x - 8, y - 16, 16, 2, 0xFF6FE0A8); g.rect(x - 8, y - 3, 16, 2, 0xFF1C6B48);
+        g.circle(x - 1, y - 8, 4.6f, 0xFFB9C2CE, INK, .9f); g.circle(x - 2.4f, y - 9.6f, 1.3f, 0xFFFFFFFF, 0, 0); g.rect(x - 4, y - 4, 6, 2, 0xFFFFFFFF);
+        g.rect(x + 4, y - 15, 3, 1, 0xFFFFF4D6); g.rect(x + 5, y - 16, 1, 3, 0xFFFFF4D6);
     }
     /** Cápsula de dos colores, al estilo de los juegos de píldoras. */
     void pill(Gfx g, float x, float y, float rot, int a, int b) {

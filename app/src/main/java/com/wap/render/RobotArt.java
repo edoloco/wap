@@ -142,9 +142,9 @@ public final class RobotArt {
     }
     /** Avanza la animación. El cuerpo se mueve a 60, pero el dibujo cambia por cuadros, como un sprite. */
     public static void update(View v, Robot r, World g) {
-        float sp = Math.abs(r.vx); boolean run = r.grounded && sp > .3f && !r.sliding() && r.rope != 2;
+        float sp = Math.abs(r.vx); boolean run = r.grounded && sp > .3f && !r.sliding() && r.rope < 2;
         if (run) v.phase = (v.phase + sp) % (STRIDE * 4);
-        int st = r.thrownT > 0 ? 3 : r.rollT > 9 && !r.grounded ? 7 : r.rollT > 0 && !r.grounded ? 8 : r.sliding() ? 4 : r.rope == 2 ? 5 : r.wallDir != 0 ? 6 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
+        int st = r.thrownT > 0 ? 3 : r.rollT > 9 && !r.grounded ? 7 : r.rollT > 0 && !r.grounded ? 8 : r.sliding() ? 4 : r.rope >= 2 ? 5 : r.wallDir != 0 ? 6 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
         boolean act = r.windT > 0 || r.fireT > 0;
         if (act) st = st == 0 ? (r.windT > 3 ? 20 : r.windT > 0 ? 22 : 21) : st + 10;
         if (st % 10 == 4) st = r.slideT > 14 ? 4 : 9;
@@ -168,7 +168,7 @@ public final class RobotArt {
                 case 1: pose(v, RUN_F[(int) (v.phase / STRIDE) & 3]); break;
                 default: pose(v, v.clock / 25 % 2 == 0 ? IDLE_A : IDLE_B);
             }
-            if (st > 9 && st < 20 && !r.sliding() && r.rope != 2) { v.a1 = 0; v.a2 = 0; if (!r.grounded) { v.b1 = 105; v.b2 = 95; } }
+            if (st > 9 && st < 20 && !r.sliding() && r.rope < 2) { v.a1 = 0; v.a2 = 0; if (!r.grounded) { v.b1 = 105; v.b2 = 95; } }
             v.open = act && st != 20 && st != 22 && !r.sliding();
             v.ball = st % 10 == 7;
             v.gFront = r.grounded ? ground(g.t, r.px + (int) (v.fx * r.facing), r.py) : 0;

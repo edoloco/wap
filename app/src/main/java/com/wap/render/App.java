@@ -24,6 +24,8 @@ public final class App {
     static final int SLOTS = Robot.SLOTS;
     static String key(int i) { return "arma" + (i == 3 ? 4 : i); } // conserva lo elegido en versiones anteriores
     public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey; public Updater up; public Device dev;
+    /** Vida máxima de los personajes (PERSONALIZAR), para probar el equilibrio. */
+    int hpMax = 100; static final int HP_MIN = 25, HP_TOP = 1000, HP_STEP = 25;
     String myName = ""; String[] names = {"PLAYER 1", "PLAYER 2"};
     /** Niveles guardados: archivos de la app. levelName es el elegido para jugar ("" = aleatorio). */
     public Files files = new Files.Memory(); String levelName = ""; final Editor editor = new Editor(this);
@@ -70,6 +72,7 @@ public final class App {
         this.st = st; this.au = au;
         for (int i = 0; i < SLOTS; i++) { slots[i] = Wpn.index(st.get(key(i), DEF[i])); }
         try { myColor = 0xFF000000 | Integer.parseInt(st.get("traje", "5E5650"), 16); } catch (Exception e) { }
+        try { hpMax = Math.max(HP_MIN, Math.min(HP_TOP, Integer.parseInt(st.get("vidamax", "100")))); } catch (Exception e) { }
         myName = clean(st.get("nombre", "")); levelName = st.get("nivel", "");
         try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
         loadRivals();
@@ -91,7 +94,7 @@ public final class App {
         me = 0; online = false;
         Level lv = testing != null ? testLevel : levelName.isEmpty() ? null : loadLevel(levelName);
         if (lv == null && testing == null && !levelName.isEmpty()) { levelName = ""; save(); } // el nivel elegido ya no existe
-        w = new World(seed, LIVES[livesIx], loads, team, lv); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
+        w = new World(seed, LIVES[livesIx], loads, team, lv); w.setMaxHp(hpMax); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
         bots = new Bot[n]; for (int i = 1; i < n; i++) bots[i] = new Bot(seed + i, i, SKILL[rLevel[i - 1]]);
         String[] nm = new String[n]; nm[0] = or(myName, "PLAYER 1"); for (int i = 1; i < n; i++) nm[i] = "PLAYER " + (i + 1);
         setNames(nm, n > 2); ren.teams = teams;
@@ -326,7 +329,7 @@ public final class App {
                 server = ss; beacon = new Lan.Beacon(name, ss.getLocalPort(), World.rules());
                 netMsg = name + " está abierta. Esperando que el otro teléfono se una...";
                 Link l = Link.accept(ss);
-                seed = seed * 1103515245 + 12345; Link.Hello mine = hello(seed, LIVES[livesIx]); l.send(mine);
+                seed = seed * 1103515245 + 12345; Link.Hello mine = hello(seed, LIVES[livesIx] | hpMax << 16); l.send(mine); // la vida máxima del anfitrión va junto a las vidas
                 Link.Hello peer = l.readHello();
                 if (peer.rules != World.rules()) { l.close(); netMsg = "El otro teléfono tiene otra versión o armas distintas (armas.txt). Instalen el mismo APK en ambos."; busy = false; hosting = false; return; }
                 pendHost = mine; pendGuest = peer; pending = l;
@@ -354,7 +357,7 @@ public final class App {
         Level lv = null; received = null; receivedSaved = false;
         if (h.level.length > 0) try { lv = Level.load(h.level); } catch (Exception e) { endOnline("El nivel del otro teléfono no se pudo abrir."); return; }
         if (lv != null && me == 1) { received = lv; receivedSaved = levelNames().contains(lv.name) && java.util.Arrays.equals(loadLevel(lv.name).save(), h.level); } // se descarga solo para esta partida
-        w = new World(h.seed, h.lives, a, b, lv); bot = null; link = l; l.startReader(); ls = new Lockstep(l, me); online = true;
+        int hostHp = h.lives >>> 16; w = new World(h.seed, h.lives & 0xFFFF, a, b, lv); w.setMaxHp(hostHp == 0 ? 100 : hostHp); bot = null; link = l; l.startReader(); ls = new Lockstep(l, me); online = true;
         ren.reset(w); cd = 90; screen = PLAY; overT = 0; pad.clear();
         String hn = or(h.name, "PLAYER 1"), cn = or(c.name, "PLAYER 2"); if (hn.equals(cn)) cn = cn.length() < NAME_MAX - 1 ? cn + " 2" : "PLAYER 2";
         setNames(hn, cn, true); // en línea se ve el nombre de cada uno sobre su personaje
@@ -385,7 +388,7 @@ public final class App {
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); saveRivals(); go(armsFor >= 0 ? RIVALS : TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); }
+    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); st.put("vidamax", "" + hpMax); }
     public void go(int s) { screen = s; focus = 0; pad.clear(); }
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
     public void pointer(int id, float x, float y, boolean down) { if (screen == EDIT) editor.pointer(id, x, y, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
@@ -437,7 +440,7 @@ public final class App {
             case Fx.GRAB: au.play(Audio.HOOK); break;
             case Fx.JUMP: if (f.a == 0) au.play(Audio.JUMP); break;
             case Fx.HOOK: au.play(Audio.HOOK); break;
-            case Fx.PICK: au.play(Audio.PICK); break;
+            case Fx.PICK: au.play(Audio.PICK); if (f.a == 1 && f.who >= 0 && f.who < names.length) { toast = names[f.who] + " GANA UNA VIDA"; toastT = 120; } break;
             case Fx.DEATH: { au.play(Audio.DEATH); int d = (int) f.a, k = (int) f.b; // aviso arriba de la pantalla
                 ren.feed(k == d || k < 0 ? names[d] + " SE BANEÓ DE LA VIDA" : names[d] + " FUE ELIMINADO POR " + names[k], RobotArt.COLOR[d]); break; }
             case Fx.SPLASH: au.play(Audio.JUMP); break;
@@ -455,13 +458,19 @@ public final class App {
     }
     void channel(int ch, int v) { int s = (2 - ch) * 8, c = myColor; myColor = c & ~(255 << s) | Math.max(0, Math.min(255, v)) << s; }
     int channel(int ch) { return myColor >> (2 - ch) * 8 & 255; }
+    /** Tamaño de letra que cabe en ese ancho (achica hasta la mitad). */
+    float fit(String t, float size, float width) { float f = size; while (f > size * .5f && PixelFont.width(t, f) > width) f -= u; return f; }
     void askName() {
         if (dev == null) return;
         dev.askText("Tu nombre", myName, NAME_MAX, n -> { if (n != null) { myName = clean(n); save(); } });
     }
     void navPaint(int p, int held) {
-        if ((p & Input.DOWN) != 0) paintRow = (paintRow + 1) % 4;
-        if ((p & Input.UP) != 0) paintRow = (paintRow + 3) % 4;
+        if ((p & Input.DOWN) != 0) paintRow = (paintRow + 1) % 5;
+        if ((p & Input.UP) != 0) paintRow = (paintRow + 4) % 5;
+        if (paintRow == 4) { // vida máxima
+            if ((p & Input.LEFT) != 0) { hpMax = Math.max(HP_MIN, hpMax - HP_STEP); save(); }
+            if ((p & Input.RIGHT) != 0) { hpMax = Math.min(HP_TOP, hpMax + HP_STEP); save(); }
+            if ((p & (Input.A | Input.B)) != 0) back(); return; }
         if (paintRow == 3) { if ((p & Input.A) != 0) askName(); else if ((p & Input.B) != 0) back(); return; }
         if ((held & Input.LEFT) != 0) channel(paintRow, channel(paintRow) - 3);
         if ((held & Input.RIGHT) != 0) channel(paintRow, channel(paintRow) + 3);
@@ -544,8 +553,19 @@ public final class App {
         txt(g, "NOMBRE", sliderX(), ny + nh / 2 + 5 * u, 14 * u, CREAM, -1);
         float lbl = PixelFont.width("NOMBRE", 14 * u) + 8 * u, nx = sliderX() + lbl, nw = sliderW() - lbl;
         box(g, nx, ny, nw, nh, sel ? 0xFF2E4BA8 : DEEP, NAVY, DEEP);
-        txt(g, myName.isEmpty() ? "TOCA PARA ESCRIBIR" : myName + (frames / 30 % 2 == 0 && sel ? "_" : ""), nx + 6 * u, ny + nh / 2 + 5 * u, myName.isEmpty() ? 10 * u : 14 * u, myName.isEmpty() ? MUTE : GOLD, -1);
+        { String nt = myName.isEmpty() ? (PixelFont.width("TOCA PARA ESCRIBIR", 10 * u) <= nw - 12 * u ? "TOCA PARA ESCRIBIR" : "TOCA AQUÍ") : myName + (frames / 30 % 2 == 0 && sel ? "_" : ""); float fs = fit(nt, myName.isEmpty() ? 10 * u : 14 * u, nw - 12 * u);
+          txt(g, nt, nx + 6 * u, ny + nh / 2 + fs * .36f, fs, myName.isEmpty() ? MUTE : GOLD, -1); }
         btn(nx, ny, nw, nh, this::askName);
+        // vida máxima: para probar el equilibrio del juego
+        float vy = ny + nh + 10 * u, vh = 30 * u, bw = 30 * u; boolean vsel = paintRow == 4 && padSeen;
+        float vx = sliderX(), vw = sliderW(), mid = vw - 2 * bw - 8 * u;
+        box(g, vx, vy, bw, vh, BLUE, SKY, NAVY); txtS(g, "-", vx + bw / 2, vy + vh / 2 + 5 * u, 16 * u, CREAM, 0);
+        btn(vx, vy, bw, vh, () -> { hpMax = Math.max(HP_MIN, hpMax - HP_STEP); save(); });
+        box(g, vx + bw + 4 * u, vy, mid, vh, vsel ? 0xFF2E4BA8 : DEEP, NAVY, DEEP);
+        String vt = "VIDA " + hpMax; float fs = fit(vt, 14 * u, mid - 8 * u);
+        txt(g, vt, vx + vw / 2, vy + vh / 2 + fs * .36f, fs, hpMax == 100 ? CREAM : GOLD, 0);
+        box(g, vx + vw - bw, vy, bw, vh, BLUE, SKY, NAVY); txtS(g, "+", vx + vw - bw / 2, vy + vh / 2 + 5 * u, 16 * u, CREAM, 0);
+        btn(vx + vw - bw, vy, bw, vh, () -> { hpMax = Math.min(HP_TOP, hpMax + HP_STEP); save(); });
         float by = H - 46 * u;
         box(g, sliderX(), by, sliderW(), 36 * u, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", sliderX() + sliderW() / 2, by + 24 * u, 16 * u, CREAM, 0);
         btn(sliderX(), by, sliderW(), 36 * u, this::back);
@@ -796,13 +816,13 @@ public final class App {
     void mini(Gfx g, float x, float y, float wd, Robot r) {
         int col = RobotArt.COLOR[r.id]; box(g, x, y, wd, 13, 0xE61B1F4A, r.team == w.robots[me].team ? MINT : BLUE, DEEP);
         g.rect(Math.round(x + 3), Math.round(y + 3), 7, 7, col);
-        int seg = 10, sx = Math.round(x + 13), sw = Math.max(2, Math.round((wd - 46) / seg)), full = (int) Math.ceil(Math.max(0, r.hp) / 10f);
+        int seg = 10, sx = Math.round(x + 13), sw = Math.max(2, Math.round((wd - 46) / seg)), full = (int) Math.ceil(Math.max(0, r.hp) / r.maxHp * 10);
         for (int i = 0; i < seg; i++) g.rect(sx + i * sw, Math.round(y + 4), sw - 1, 5, r.lives < 0 ? DEEP : i < full ? col : DEEP);
         txt(g, r.lives < 0 ? "FUERA" : "x" + r.lives, Math.round(x + wd - 4), Math.round(y + 10), 8, r.lives < 0 ? MUTE : CREAM, 1);
     }
     void bar(Gfx g, float x, float y, float w, Robot r, int id) {
         float h = 27; box(g, x, y, w, h, 0xE61B1F4A, BLUE, DEEP);
-        int seg = 10, sx = Math.round(x + 4), sy = Math.round(y + 4), sw = Math.max(2, Math.round((w - 8) / seg)), full = (int) Math.ceil(Math.max(0, r.hp) / 10f), col = RobotArt.COLOR[id];
+        int seg = 10, sx = Math.round(x + 4), sy = Math.round(y + 4), sw = Math.max(2, Math.round((w - 8) / seg)), full = (int) Math.ceil(Math.max(0, r.hp) / r.maxHp * 10), col = RobotArt.COLOR[id];
         for (int i = 0; i < seg; i++) {
             g.rect(sx + i * sw, sy, sw - 1, 6, i < full ? col : DEEP);
             if (i < full) g.rect(sx + i * sw, sy, sw - 1, 1, RobotArt.mixLight(col));
@@ -810,6 +830,7 @@ public final class App {
         int hx = sx, hy = Math.round(y + h - 9);
         g.rect(hx, hy, 2, 1, PINK); g.rect(hx + 3, hy, 2, 1, PINK); g.rect(hx, hy + 1, 5, 2, PINK); g.rect(hx + 1, hy + 3, 3, 1, PINK); g.rect(hx + 2, hy + 4, 1, 1, PINK);
         txt(g, "x" + Math.max(0, r.lives), hx + 7, hy + 5, 8, CREAM, -1);
+        txt(g, (int) Math.ceil(Math.max(0, r.hp)) + "/" + (int) r.maxHp, Math.round(x + w / 2), hy + 5, 8, MUTE, 0); // vida en números
         txt(g, "BAJAS " + r.kills, Math.round(x + w - 4), hy + 5, 8, GOLD, 1);
     }
 }

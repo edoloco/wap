@@ -114,7 +114,7 @@ public final class Bot {
             } else if (ad < 300) { moveDir = m.facing == to ? 0 : to; if (m.facing == to && fireHold == 0) fireHold = 20; }
         } else climbDir = 0;
         if (m.rope != 0) {
-            boolean arrived = m.rope == 2 && StrictMath.hypot(m.rx - m.px, m.ry - (m.py - 44)) < 34 || see && ady < 40;
+            boolean arrived = m.rope >= 2 && StrictMath.hypot(m.rx - m.px, m.ry - (m.py - 44)) < 34 || see && ady < 40;
             if (--hookHold > 0 && !arrived) out |= Input.B;
             if (moveDir > 0) out |= Input.RIGHT; else if (moveDir < 0) out |= Input.LEFT;
             if (fireHold > 0) { fireHold--; out |= Input.A; }
