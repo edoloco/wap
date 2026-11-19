@@ -379,5 +379,20 @@ public class Sim {
         w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+300;a.aim=0;a.facing=1;run(w,0,1);w.step(new int[]{Input.UP|Input.B,0});for(int i=0;i<25&&a.rope!=3;i++)w.step(new int[]{Input.B,0});boolean h2=a.rope==3;w.step(new int[]{0,0});check(h2&&a.rope==0,"soltar B suelta al personaje enganchado");
         check(Robot.HOOK_RANGE>=600,"el gancho es más largo (alcance "+Robot.HOOK_RANGE+")");
     }
-    public static void main(String[] a)throws Exception{vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void mandoSalto(){
+        TouchPad tp=new TouchPad();App q=new App(store,mute);q.seed(9);q.draw(new J(new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB)));TouchPad pd=q.pad;
+        float W=q.uiW(),H=q.uiH();pd.reset();pd.moveTo(1,W*.5f,H*.5f);pd.pointer(1,W*.5f,H*.5f,true);check(pd.mask()==Input.A,"mando: el botón A movido responde en su nuevo lugar");pd.clear();
+        pd.resize(2,1.5f);String sv=pd.save();TouchPad p2=q.pad;p2.load("x");p2.load(sv);p2.layout(W,H);check(Math.abs(p2.size[2]-1.5f)<.01f&&Math.abs(p2.cx(1)-W*.5f)<2,"mando: la configuración se guarda y se vuelve a leer ("+sv+")");
+        p2.kind=1;p2.layout(W,H);float cx=p2.cx(0),cy=p2.cy(0),r=p2.radius(0);p2.pointer(2,cx+r*.6f,cy,true);int m1=p2.mask();p2.clear();p2.pointer(2,cx+r*.5f,cy-r*.5f,true);int m2=p2.mask();p2.clear();p2.pointer(2,cx+2,cy+1,true);int m3=p2.mask();p2.clear();
+        check(m1==Input.RIGHT&&m2==(Input.RIGHT|Input.UP)&&m3==0,"joystick: derecha, diagonal y zona muerta ("+m1+","+m2+","+m3+")");p2.reset();
+        // gancho siempre llega a algo
+        World w=flat();Robot a=w.robots[0];w.robots[1].px=1700;a.aim=60;run(w,0,1);w.step(new int[]{Input.UP|Input.B,0});int t=0;for(;t<120&&a.rope==1;t++)w.step(new int[]{Input.B,0});
+        check(a.rope==2,"el gancho siempre engancha algo, aunque esté lejos ("+t+" cuadros)");
+        // pedacitos sobre la cabeza no frenan el salto
+        w=flat();a=w.robots[0];w.robots[1].px=1700;Terrain T=w.t;int hy=a.py-a.h-12;for(int x=a.px-3;x<=a.px+3;x+=2)T.m[hy*Terrain.W+x]=Terrain.EARTH;T.m[(hy-1)*Terrain.W+a.px]=Terrain.EARTH;
+        run(w,0,1);run(w,Input.B,1);int top=a.py;for(int i=0;i<30;i++){run(w,Input.B,1);top=Math.min(top,a.py);}check(top<hy-a.h+a.h/2,"unos pedacitos de tierra sobre la cabeza no frenan el salto (llegó a "+top+")");
+        w=flat();a=w.robots[0];w.robots[1].px=1700;T=w.t;hy=a.py-a.h-12;for(int y=hy-6;y<=hy;y++)for(int x=a.px-20;x<=a.px+20;x++)T.m[y*Terrain.W+x]=Terrain.EARTH;
+        run(w,0,1);run(w,Input.B,1);top=a.py;for(int i=0;i<30;i++){run(w,Input.B,1);top=Math.min(top,a.py);}check(top>=hy+1+a.h-1&&T.solid(a.px,hy),"un techo de verdad sí frena el salto");
+    }
+    public static void main(String[] a)throws Exception{mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

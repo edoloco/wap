@@ -305,6 +305,17 @@ public final class Terrain {
         int k = m[i]; if (k != 0 && k != DEBRIS && k != DECOR && k != EARTH && k != WOOD && !(k == STEEL && mat == STEEL)) return;
         m[i] = (byte) mat; tex[i] = flat || mat == WOOD || mat == STEEL ? color | 0xFF000000 : earthTex(color, x, y);
     }
+    /**
+     * Pedacitos sueltos: si en ese rectángulo hay como mucho max píxeles sólidos y ninguno es duro (acero, madera, objetos),
+     * los borra y devuelve true (así unas partículas de tierra no frenan un salto). Si hay más, es un techo de verdad: false.
+     */
+    public boolean crumble(int x0, int y0, int x1, int y1, int max) {
+        int n = 0;
+        for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) if (solid(x, y)) { if (!inside(x, y) || hard(m[y * W + x]) || m[y * W + x] == PANEL || ++n > max) return false; }
+        if (n == 0) return false;
+        for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) if (solid(x, y)) m[y * W + x] = 0;
+        mark(x0, y0, x1, y1); return true;
+    }
     /** Vetas de la tierra (pruebas). */
     public static int earthTexT(int c, int x, int y) { return earthTex(c, x, y); }
     /** Solo el marco (pruebas). */

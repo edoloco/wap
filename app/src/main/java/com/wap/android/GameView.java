@@ -34,11 +34,11 @@ final class GameView extends SurfaceView implements SurfaceHolder.Callback, Runn
             if (a == MotionEvent.ACTION_DOWN) app.down(e.getX(0), e.getY(0));
             if (a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_MOVE) app.drag(e.getX(0), e.getY(0));
             if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) app.up();
-            boolean multi = play || app.screen == App.EDIT; // en el editor también se usan varios dedos (gestos)
+            boolean multi = play || app.screen == App.EDIT || app.screen == App.PAD_EDIT; // en el editor también se usan varios dedos (gestos)
             if (a == MotionEvent.ACTION_DOWN || a == MotionEvent.ACTION_POINTER_DOWN) { if (!app.tap(e.getX(ix), e.getY(ix)) && multi) app.pointer(e.getPointerId(ix), e.getX(ix), e.getY(ix), true); else if (play) performClick(); }
             else if (a == MotionEvent.ACTION_MOVE && multi) { for (int i = 0; i < e.getPointerCount(); i++) app.pointer(e.getPointerId(i), e.getX(i), e.getY(i), true); }
             else if (a == MotionEvent.ACTION_POINTER_UP) app.pointer(e.getPointerId(ix), e.getX(ix), e.getY(ix), false);
-            else if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) { if (app.screen == App.EDIT) app.pointer(e.getPointerId(ix), e.getX(ix), e.getY(ix), false); app.pad.clear(); }
+            else if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) { if (app.screen == App.EDIT || app.screen == App.PAD_EDIT) app.pointer(e.getPointerId(ix), e.getX(ix), e.getY(ix), false); app.pad.clear(); }
         }
         return true;
     }

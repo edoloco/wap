@@ -4,7 +4,7 @@ import com.wap.net.*;
 import java.util.ArrayList; import java.util.List;
 /** Pantallas y flujo de la aplicación. No conoce Android; recibe entradas y dibuja por Gfx. */
 public final class App {
-    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8, RIVALS = 9, LEVEL_SEL = 10;
+    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8, RIVALS = 9, LEVEL_SEL = 10, PAD_EDIT = 11;
     /** Servicios del teléfono para jugar en red. */
     public interface Device { String name(); void listen(boolean on);
         /** Pide un texto con el teclado del teléfono; done recibe el texto o null si se cancela. */
@@ -73,6 +73,7 @@ public final class App {
         for (int i = 0; i < SLOTS; i++) { slots[i] = Wpn.index(st.get(key(i), DEF[i])); }
         try { myColor = 0xFF000000 | Integer.parseInt(st.get("traje", "5E5650"), 16); } catch (Exception e) { }
         try { hpMax = Math.max(HP_MIN, Math.min(HP_TOP, Integer.parseInt(st.get("vidamax", "100")))); } catch (Exception e) { }
+        pad.load(st.get("mando", ""));
         myName = clean(st.get("nombre", "")); levelName = st.get("nivel", "");
         try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
         loadRivals();
@@ -284,6 +285,8 @@ public final class App {
     public int editorSolidCount() { int c = 0; for (int i = 0; i < editor.w.t.m.length; i += 7) { int k = editor.w.t.m[i]; if (k == Terrain.EARTH || k == Terrain.WOOD) c++; } return c * 7; }
     public void editorApply(int x, int y) { editor.apply(x, y); }
     public World editorWorld() { return editor.w; }
+    public float uiW() { return W; }
+    public float uiH() { return H; }
     public int editorCell() { return editor.cellSize; }
     public void editorMat(int m) { editor.mat = m; }
     public long editorUndoBytes() { long b = 0; for (Editor.Snap e : editor.undo) b += e.bytes; for (Editor.Snap e : editor.redo) b += e.bytes; return b; }
@@ -381,6 +384,7 @@ public final class App {
         if (screen == LOBBY) { closeLobby(); go(TITLE); return; }
         if (screen == OVER && online) { endOnline(null); return; }
         if (screen == PAINT) { save(); go(TITLE); return; }
+        if (screen == PAD_EDIT) { save(); go(PAINT); return; }
         if (screen == EDIT) { leaveEditor(false); return; }
         if (screen == LEVEL_LIST || screen == LEVEL_SEL) { go(TITLE); return; }
         if (screen == RIVALS) { saveRivals(); go(TITLE); return; }
@@ -388,10 +392,10 @@ public final class App {
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); saveRivals(); go(armsFor >= 0 ? RIVALS : TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); st.put("vidamax", "" + hpMax); }
+    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); st.put("vidamax", "" + hpMax); st.put("mando", pad.save()); }
     public void go(int s) { screen = s; focus = 0; pad.clear(); }
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
-    public void pointer(int id, float x, float y, boolean down) { if (screen == EDIT) editor.pointer(id, x, y, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
+    public void pointer(int id, float x, float y, boolean down) { if (screen == EDIT) editor.pointer(id, x, y, down); else if (screen == PAD_EDIT) pad.editPointer(id, x / uiScale, y / uiScale, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
     public boolean tap(float x, float y) {
         if (gridScreen()) { swOn = true; swX0 = swX = x; swTapX = x / uiScale; swTapY = y / uiScale; return true; }
         return tapNow(x, y);
@@ -458,6 +462,35 @@ public final class App {
     }
     void channel(int ch, int v) { int s = (2 - ch) * 8, c = myColor; myColor = c & ~(255 << s) | Math.max(0, Math.min(255, v)) << s; }
     int channel(int ch) { return myColor >> (2 - ch) * 8 & 255; }
+    /** Editor del mando en pantalla: arrastrar mueve cada control; arriba se elige cruceta o joystick y el tamaño. */
+    void padEdit(Gfx g) {
+        sky(g); floor(g, 0, H * .93f, W);
+        txtS(g, "EDITAR MANDO", 8 * u, 22 * u, 16 * u, GOLD, -1);
+        { String t = PixelFont.width("ARRASTRA CADA CONTROL A DONDE QUIERAS", 10 * u) < W - 16 * u ? "ARRASTRA CADA CONTROL A DONDE QUIERAS" : "ARRASTRA LOS CONTROLES"; txt(g, t, 8 * u, 38 * u, 10 * u, CREAM, -1); }
+        float bh = 26 * u, gap = 4 * u, fs = 12 * u; float[] cur = {8 * u, 46 * u};
+        String[] k = {"CRUCETA", "JOYSTICK"};
+        for (int i = 0; i < 2; i++) { final int q = i; boolean on = pad.kind == i;
+            float bw = PixelFont.width(k[i], fs) + 14 * u, x = place(cur, bw, bh, gap);
+            box(g, x, cur[1], bw, bh, on ? GOLD : BLUE, on ? CREAM : SKY, on ? 0xFFB8862A : NAVY); txtS(g, k[i], x + bw / 2, cur[1] + bh / 2 + 4 * u, fs, on ? INK : CREAM, 0);
+            btn(x, cur[1], bw, bh, () -> { pad.kind = q; pad.layout(W, H); save(); }); }
+        { float bw = PixelFont.width("RESTABLECER", fs) + 14 * u, x = place(cur, bw, bh, gap);
+          box(g, x, cur[1], bw, bh, BLUE, SKY, NAVY); txtS(g, "RESTABLECER", x + bw / 2, cur[1] + bh / 2 + 4 * u, fs, CREAM, 0); btn(x, cur[1], bw, bh, () -> { pad.reset(); save(); }); }
+        { float bw = PixelFont.width("LISTO", fs) + 24 * u, x = place(cur, bw, bh, gap);
+          box(g, x, cur[1], bw, bh, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", x + bw / 2, cur[1] + bh / 2 + 4 * u, fs, CREAM, 0); btn(x, cur[1], bw, bh, this::back); }
+        // tamaño del control elegido
+        int sel = pad.editSel; String[] cn = {pad.kind == 1 ? "JOYSTICK" : "CRUCETA", "A", "B", "X"};
+        String lt = "TAMAÑO " + cn[sel] + " " + Math.round(pad.size[sel] * 100) + "%"; float lw = PixelFont.width("TAMAÑO JOYSTICK 180%", fs) + 12 * u, sw = 26 * u;
+        cur[0] = 8 * u; cur[1] += bh + gap; float y = cur[1], x = cur[0];
+        box(g, x, y, sw, bh, BLUE, SKY, NAVY); txtS(g, "-", x + sw / 2, y + bh / 2 + 4 * u, 14 * u, CREAM, 0); btn(x, y, sw, bh, () -> { pad.resize(pad.editSel, pad.size[pad.editSel] - .1f); save(); }); x += sw + gap;
+        box(g, x, y, lw, bh, DEEP, NAVY, DEEP); txt(g, lt, x + lw / 2, y + bh / 2 + 4 * u, fs, GOLD, 0); x += lw + gap;
+        box(g, x, y, sw, bh, BLUE, SKY, NAVY); txtS(g, "+", x + sw / 2, y + bh / 2 + 4 * u, 14 * u, CREAM, 0); btn(x, y, sw, bh, () -> { pad.resize(pad.editSel, pad.size[pad.editSel] + .1f); save(); });
+        pad.visible = true; pad.draw(g, 0, pad.editSel);
+    }
+    /** Coloca un botón a continuación en la fila; si no cabe, pasa a la fila siguiente. Devuelve su x (y queda en cur[1]). */
+    float place(float[] cur, float bw, float bh, float gap) {
+        if (cur[0] + bw > W - 8 * u && cur[0] > 8 * u) { cur[0] = 8 * u; cur[1] += bh + gap; }
+        float x = cur[0]; cur[0] += bw + gap; return x;
+    }
     /** Tamaño de letra que cabe en ese ancho (achica hasta la mitad). */
     float fit(String t, float size, float width) { float f = size; while (f > size * .5f && PixelFont.width(t, f) > width) f -= u; return f; }
     void askName() {
@@ -567,8 +600,12 @@ public final class App {
         box(g, vx + vw - bw, vy, bw, vh, BLUE, SKY, NAVY); txtS(g, "+", vx + vw - bw / 2, vy + vh / 2 + 5 * u, 16 * u, CREAM, 0);
         btn(vx + vw - bw, vy, bw, vh, () -> { hpMax = Math.min(HP_TOP, hpMax + HP_STEP); save(); });
         float by = H - 46 * u;
-        box(g, sliderX(), by, sliderW(), 36 * u, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", sliderX() + sliderW() / 2, by + 24 * u, 16 * u, CREAM, 0);
-        btn(sliderX(), by, sliderW(), 36 * u, this::back);
+        float mw = sliderW() * .5f - 4 * u; // EDITAR MANDO y LISTO
+        box(g, sliderX(), by, mw, 36 * u, BLUE, SKY, NAVY); { String t = "EDITAR MANDO"; txtS(g, t, sliderX() + mw / 2, by + 22 * u, fit(t, 14 * u, mw - 8 * u), CREAM, 0); }
+        btn(sliderX(), by, mw, 36 * u, () -> { pad.editSel = 0; go(PAD_EDIT); });
+        float lx = sliderX() + mw + 8 * u, lw = sliderW() - mw - 8 * u;
+        box(g, lx, by, lw, 36 * u, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", lx + lw / 2, by + 24 * u, 16 * u, CREAM, 0);
+        btn(lx, by, lw, 36 * u, this::back);
     }
     static final int COLS = 3, ROWS = 10;
     void navArms(int p) {
@@ -604,6 +641,7 @@ public final class App {
             case TITLE: title(g); break;
             case ARMS: arms(g); break;
             case PAINT: paint(g); break;
+            case PAD_EDIT: padEdit(g); break;
             case LOBBY: lobby(g); break;
             case EDIT: editor.draw(g); if (toastT > 0) { g.rect(0, 26, W, 14, MINT); txtS(g, toast, W / 2, 37, 8, CREAM, 0); } break;
             case LEVEL_LIST: levels(g); break;

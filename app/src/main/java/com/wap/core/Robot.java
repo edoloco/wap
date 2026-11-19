@@ -6,7 +6,7 @@ public final class Robot {
     public static final int SLOTS = 4, STAND_H = 54, SLIDE_H = 26, HW = 7;
     /** Margen en ticks para que dirección + botón cuente como habilidad y no como correr + acción. */
     public static final int SMASH_WINDOW = 9, BUFFER = 3;
-    public static final float HOOK_SHOT = 20, HOOK_PULL = 7.5f, HOOK_RANGE = 640, HOOK_TUG = 1f;
+    public static final float HOOK_SHOT = 30, HOOK_PULL = 7.5f, HOOK_RANGE = 4000, HOOK_TUG = 1f; // alcance mayor que el mapa: siempre llega a algo (el marco es de acero)
     /** Robot Trap: velocidad de lanzamiento según la cruceta (abajo: a los pies, adelante, arriba: lejos). */
     static final float[][] TRAP_V = {{1.2f, -2}, {5.2f, -3.2f}, {4.6f, -7.6f}};
     /** Punta del rayo de protones (para dibujarlo). */
@@ -86,6 +86,7 @@ public final class Robot {
         remY += d; int n = (int) remY; remY -= n; int s = n > 0 ? 1 : -1; grounded = false;
         for (int i = Math.abs(n); i > 0; i--) {
             if (free(t, px, py + s, h)) py += s;
+            else if (s < 0 && hitBody == null && t.crumble(px - HW, py - 1 - h - 3, px + HW, py - 1 - h + 2, 16) && free(t, px, py + s, h)) py += s; // pedacitos sueltos sobre la cabeza no frenan el salto: se deshacen
             else { if (s > 0) { grounded = true; Robot on = hitBody; if (d > 2.5f && freeT(t, px, py + 1, h) && on != null) { stompHit = true; stompOn = on; } } vy = 0; remY = 0; break; }
         }
         if (n >= 0 && vy >= 0 && !free(t, px, py + 1, h)) grounded = true;
@@ -289,8 +290,8 @@ public final class Robot {
         }
         if (rope != 0 && (in & Input.B) == 0) rope = 0; // soltar B suelta el gancho
         if (rope == 1) {
-            for (int i = 0; i < 3 && rope == 1; i++) {
-                rx += rvx / 3; ry += rvy / 3;
+            for (int i = 0; i < 6 && rope == 1; i++) {
+                rx += rvx / 6; ry += rvy / 6;
                 if (t.solid((int) rx, (int) ry)) { rope = 2; g.fx(Fx.HOOK, rx, ry, 1, id); break; }
                 for (Robot o : g.robots) if (o != this && o.alive() && Math.abs(rx - o.px) < 12 && ry > o.py - o.h && ry < o.py) { // engancha a otro personaje
                     rope = 3; hookId = o.id; hookDy = ry - o.py; g.fx(Fx.HOOK, rx, ry, 1, id); break; }
