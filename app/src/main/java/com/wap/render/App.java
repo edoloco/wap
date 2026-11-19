@@ -9,6 +9,8 @@ public final class App {
     public interface Device { String name(); void listen(boolean on);
         /** Pide un texto con el teclado del teléfono; done recibe el texto o null si se cancela. */
         default void askText(String title, String current, int max, java.util.function.Consumer<String> done) {}
+        /** Pide un número con el teclado numérico; done recibe el número o null si se cancela. */
+        default void askNumber(String title, int current, java.util.function.Consumer<Integer> done) { askText(title, "" + current, 3, t -> { try { done.accept(t == null ? null : Integer.valueOf(t.trim())); } catch (NumberFormatException e) { done.accept(null); } }); }
         /** WiFi en modo de baja latencia durante la partida en línea (sin ahorro de energía). */
         default void lowLatency(boolean on) {}
         /** Cierra el juego. */
@@ -19,7 +21,7 @@ public final class App {
     static final int NAVY = 0xFF1B1F4A, BLUE = 0xFF2E4BA8, SKY = 0xFF5FA8FF, GOLD = 0xFFFFC83D, CREAM = 0xFFFFF4D6, MINT = 0xFF3DDC97, PINK = 0xFFFF6FA0, DEEP = 0xFF101330, PURPLE = 0xFF8214FF;
     float uiScale = 1;
     static final String[] LEVELS = {"FÁCIL", "NORMAL", "DIFÍCIL"}; static final float[] SKILL = {.45f, .9f, 1.6f};
-    static final int[] LIVES = {3, 5, 10, 15, 30};
+    static final int[] LIVES = {3, 5, 10, 15, 30}; static final int LIVES_MAX = 999; // LIVES: opciones de antes (para leer lo guardado)
     static final String[] DEF = {"GRENADE", "BAZOOKA", "PLASMA CANNON", "PLASMA GUN"};
     static final int SLOTS = Robot.SLOTS;
     static String key(int i) { return "arma" + (i == 3 ? 4 : i); } // conserva lo elegido en versiones anteriores
@@ -63,7 +65,7 @@ public final class App {
     int myColor = 0xFF5E5650, me; boolean online, hosting; Lockstep ls; Link link; Lan.Browser browser; Lan.Beacon beacon; java.net.ServerSocket server;
     volatile Link pending; volatile Link.Hello pendHost, pendGuest; volatile String netMsg = ""; String toast = ""; int toastT; volatile boolean busy;
     final Store st; final Audio au; public final TouchPad pad = new TouchPad(); public final Renderer ren = new Renderer();
-    public World w; Bot bot; float W = 640, H = 360, u = 1; int cd; int paintRow, level = 1, livesIx = 2, selSlot = 3, cur, seed = 12345, overT; long frames;
+    public World w; Bot bot; float W = 640, H = 360, u = 1; int cd; int paintRow, level = 1, lives = 10, selSlot = 3, cur, seed = 12345, overT; long frames;
     final int[] slots = new int[SLOTS]; final int[] in = new int[2];
     final ArrayList<float[]> btns = new ArrayList<>(); final ArrayList<Runnable> acts = new ArrayList<>();
     final RobotArt.View hero = RobotArt.poster();
@@ -75,7 +77,7 @@ public final class App {
         try { hpMax = Math.max(HP_MIN, Math.min(HP_TOP, Integer.parseInt(st.get("vidamax", "100")))); } catch (Exception e) { }
         pad.load(st.get("mando", ""));
         myName = clean(st.get("nombre", "")); levelName = st.get("nivel", "");
-        try { level = Integer.parseInt(st.get("level", "1")); livesIx = Integer.parseInt(st.get("lives", "2")); } catch (Exception e) { }
+        try { level = Integer.parseInt(st.get("level", "1")); lives = Integer.parseInt(st.get("vidas", "" + LIVES[Math.max(0, Math.min(LIVES.length - 1, Integer.parseInt(st.get("lives", "2"))))])); lives = Math.max(1, Math.min(LIVES_MAX, lives)); } catch (Exception e) { }
         loadRivals();
     }
     public void seed(int s) { seed = s; }
@@ -95,7 +97,7 @@ public final class App {
         me = 0; online = false;
         Level lv = testing != null ? testLevel : levelName.isEmpty() ? null : loadLevel(levelName);
         if (lv == null && testing == null && !levelName.isEmpty()) { levelName = ""; save(); } // el nivel elegido ya no existe
-        w = new World(seed, LIVES[livesIx], loads, team, lv); w.setMaxHp(hpMax); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
+        w = new World(seed, lives, loads, team, lv); w.setMaxHp(hpMax); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
         bots = new Bot[n]; for (int i = 1; i < n; i++) bots[i] = new Bot(seed + i, i, SKILL[rLevel[i - 1]]);
         String[] nm = new String[n]; nm[0] = or(myName, "PLAYER 1"); for (int i = 1; i < n; i++) nm[i] = "PLAYER " + (i + 1);
         setNames(nm, n > 2); ren.teams = teams;
@@ -332,7 +334,7 @@ public final class App {
                 server = ss; beacon = new Lan.Beacon(name, ss.getLocalPort(), World.rules());
                 netMsg = name + " está abierta. Esperando que el otro teléfono se una...";
                 Link l = Link.accept(ss);
-                seed = seed * 1103515245 + 12345; Link.Hello mine = hello(seed, LIVES[livesIx] | hpMax << 16); l.send(mine); // la vida máxima del anfitrión va junto a las vidas
+                seed = seed * 1103515245 + 12345; Link.Hello mine = hello(seed, lives | hpMax << 16); l.send(mine); // la vida máxima del anfitrión va junto a las vidas
                 Link.Hello peer = l.readHello();
                 if (peer.rules != World.rules()) { l.close(); netMsg = "El otro teléfono tiene otra versión o armas distintas (armas.txt). Instalen el mismo APK en ambos."; busy = false; hosting = false; return; }
                 pendHost = mine; pendGuest = peer; pending = l;
@@ -392,7 +394,7 @@ public final class App {
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); saveRivals(); go(armsFor >= 0 ? RIVALS : TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("lives", "" + livesIx); st.put("vidamax", "" + hpMax); st.put("mando", pad.save()); }
+    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("vidas", "" + lives); st.put("vidamax", "" + hpMax); st.put("mando", pad.save()); }
     public void go(int s) { screen = s; focus = 0; pad.clear(); }
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
     public void pointer(int id, float x, float y, boolean down) { if (screen == EDIT) editor.pointer(id, x, y, down); else if (screen == PAD_EDIT) pad.editPointer(id, x / uiScale, y / uiScale, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
@@ -493,6 +495,11 @@ public final class App {
     }
     /** Tamaño de letra que cabe en ese ancho (achica hasta la mitad). */
     float fit(String t, float size, float width) { float f = size; while (f > size * .5f && PixelFont.width(t, f) > width) f -= u; return f; }
+    /** Cantidad de vidas: se escribe con el teclado numérico. */
+    void askLives() {
+        if (dev == null) return;
+        dev.askNumber("Cantidad de vidas (1 a " + LIVES_MAX + ")", lives, n -> { if (n != null) { lives = Math.max(1, Math.min(LIVES_MAX, n)); save(); } });
+    }
     void askName() {
         if (dev == null) return;
         dev.askText("Tu nombre", myName, NAME_MAX, n -> { if (n != null) { myName = clean(n); save(); } });
@@ -755,13 +762,13 @@ public final class App {
     }
     void title(Gfx g) {
         sky(g); floor(g, 0, H * .92f, W * .46f);
-        hero.lean = frames / 30 % 2 == 0 ? 4 : 6;
+        RobotArt.runPose(hero, (int) (frames / 8)); // portada: corriendo
         hero(g, hero, W * .25f, H * .92f);
         float x = W * .47f, wd = W - x - 6;
         txtS(g, "WAP", x, H * .15f, 48 * u, GOLD, -1);
-        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA\nRED LOCAL", "SELECCIONA NIVEL", "EDITOR DE NIVELES", "RIVALES", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + LIVES[livesIx]));
+        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA\nRED LOCAL", "SELECCIONA NIVEL", "EDITOR DE NIVELES", "RIVALES", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + lives));
         List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, () -> { selPage = pageOf(levelName); go(LEVEL_SEL); }, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> go(RIVALS), () -> { armsFor = -1; go(ARMS); }, () -> go(PAINT),
-            () -> { livesIx = (livesIx + 1) % LIVES.length; save(); }));
+            this::askLives));
         if (up != null) { l.add(up.label()); a.add(() -> up.act()); txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
         l.add("SALIR DEL JUEGO"); a.add(() -> { save(); if (dev != null) dev.exit(); });
         // botones gorditos: JUGAR ocupa toda la fila; el resto va de a dos, con el texto en dos líneas si no cabe

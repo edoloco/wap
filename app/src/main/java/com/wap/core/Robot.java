@@ -3,6 +3,8 @@ package com.wap.core;
 public final class Robot {
     public static final int HELMET = 0, CHEST = 1, BELLY = 2, HIP = 3, SH_F = 4, SH_B = 5, BR_F = 6, BR_B = 7, TH_F = 8, TH_B = 9, SN_F = 10, SN_B = 11, PIECES = 12;
     static final float[] PX = {0, 0, 0, 0, 8, -8, 13, -13, 3, -3, 3, -3}, PY = {50, 37, 30, 26, 39, 39, 27, 27, 18, 18, 8, 8};
+    /** Golpe: cuánto dura el retroceso, el respiro antes de poder volver a sufrirlo (para no quedar trabado por una ráfaga) y el empujón. */
+    public static final int KNOCK = 14, KNOCK_CD = 16; public static final float KNOCK_PUSH = 2.6f;
     public static final int SLOTS = 4, STAND_H = 54, SLIDE_H = 26, HW = 7;
     /** Margen en ticks para que dirección + botón cuente como habilidad y no como correr + acción. */
     public static final int SMASH_WINDOW = 9, BUFFER = 3;
@@ -26,7 +28,7 @@ public final class Robot {
     public int slideT, airT, fireT, fireSlot = 3; boolean jumping;
     public int rope, hookId = -1; public float rx, ry, rvx, rvy, rlen, hookDy; // 0 sin gancho, 1 volando, 2 enganchado al escenario, 3 enganchado a otro personaje (hookId)
     public final Wpn[] loadout = new Wpn[SLOTS]; public final int[] ammo = new int[SLOTS], reload = new int[SLOTS], delay = new int[SLOTS], charge = new int[SLOTS];
-    public boolean wet; public int beamT, trapAim = 1, lassoFree, killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot[] all; Robot hitBody, stompOn; boolean ghost, stompHit;
+    public boolean wet; public int knockT, knockCd, beamT, trapAim = 1, lassoFree, killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot[] all; Robot hitBody, stompOn; boolean ghost, stompHit;
     /** Equipo: los del mismo equipo no se hacen daño. En todos contra todos cada uno tiene el suyo. */
     public int team;
     public int wallDir, windT; int windSlot, lastWall, wallT, wallLock;
@@ -95,7 +97,7 @@ public final class Robot {
         hp = maxHp; armor = (1 << PIECES) - 1; deadT = 0; droneShot = null; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
         int[] p = g.freeSpot(this); px = p[0]; py = p[1];
         for (int i = 0; i < SLOTS; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
-        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; stompCd = 0; thrownT = 0; rollT = 0; aim = 60;
+        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; knockT = 0; knockCd = 0; stompCd = 0; thrownT = 0; rollT = 0; aim = 60;
         g.fx(Fx.SPAWN, px, py - 27, id, 0);
     }
     public void damage(World g, float d, float kx, float ky, int by, float hx, float hy) {
@@ -109,6 +111,10 @@ public final class Robot {
         float mul = 1 + (12 - armorCount()) * .08f;
         vx += kx * mul; vy += ky * mul; hurtT = 12;
         if (d <= 0) return;
+        if (knockT == 0 && knockCd == 0 && lassoT == 0 && thrownT == 0 && stunT == 0 && !sliding() && by != id) { // golpeado: se va un poco hacia atrás, como Mega Man (sin quedar invulnerable)
+            float s = kx != 0 ? Math.signum(kx) : hx < px ? 1 : hx > px ? -1 : -facing;
+            knockT = KNOCK; vx = s * KNOCK_PUSH + kx * mul; if (grounded) { vy = Math.min(vy, -2.2f); grounded = false; } windT = 0;
+        }
         hp -= d; g.fx(Fx.HIT, hx, hy, d, id); flinchT = Math.max(flinchT, (int) Math.min(8, 2 + d / 4));
         int want = hp <= bone() ? 0 : (int) Math.ceil((hp - bone()) / (maxHp - bone()) * PIECES);
         while (armorCount() > want) {
@@ -226,6 +232,7 @@ public final class Robot {
         if (ghost) { Robot o = hitBody; vx += (px != o.px ? Math.signum(px - o.px) : id < o.id ? -1 : 1) * .4f; }
         if (stunT > 0) stunT--; if (stompCd > 0) stompCd--;
         if (stunT > 0 || thrownT > 0) in = 0;
+        if (knockT > 0) { if (--knockT == 0) knockCd = KNOCK_CD; in = 0; } else if (knockCd > 0) knockCd--; // golpeado: no se controla un instante
         if (flinchT > 0) { flinchT--; in &= ~(Input.LEFT | Input.RIGHT); } // breve tirón al recibir un impacto
         if (lassoT > 0) { // Proton Ray: atrapado, baja lento y pierde energía; solo se suelta saltando
             Robot o = g.robots[lassoBy]; lassoT--;
@@ -330,7 +337,7 @@ public final class Robot {
         moveY(t, vy);
         if (stompHit) { // pisotón, como a un Goomba
             stompHit = false; Robot o = stompOn;
-            if (o.invuln == 0 && o.stompCd == 0 && !ally(o)) { o.damage(g, STOMP_DMG, 0, 0, id, o.px, o.py - o.h); o.stunT = STUN; o.stompCd = STOMP_COOLDOWN; }
+            if (o.invuln == 0 && o.stompCd == 0 && !ally(o)) { o.stunT = STUN; o.damage(g, STOMP_DMG, 0, 0, id, o.px, o.py - o.h); o.stompCd = STOMP_COOLDOWN; } // aturdido primero: el pisotón no lo empuja
             vy = (in & Input.B) != 0 ? -JUMP * .9f : -5.5f; jumping = (in & Input.B) != 0; grounded = false; airJumps = 1;
             g.fx(Fx.STOMP, o.px, o.py - o.h, 0, o.id);
         }

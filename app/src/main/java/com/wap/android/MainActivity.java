@@ -37,6 +37,19 @@ public class MainActivity extends Activity implements InputManager.InputDeviceLi
             @Override public void listen(boolean on) { if (lock == null) return; try { if (on) lock.acquire(); else if (lock.isHeld()) lock.release(); } catch (RuntimeException e) { } }
             @Override public void exit() { runOnUiThread(() -> finishAndRemoveTask()); }
             @Override public void lowLatency(boolean on) { if (fast == null) return; try { if (on) fast.acquire(); else if (fast.isHeld()) fast.release(); } catch (RuntimeException e) { } }
+            @Override public void askNumber(String title, int current, java.util.function.Consumer<Integer> done) {
+                runOnUiThread(() -> {
+                    final android.widget.EditText ed = new android.widget.EditText(MainActivity.this);
+                    ed.setSingleLine(true); ed.setInputType(android.text.InputType.TYPE_CLASS_NUMBER); ed.setText("" + current); ed.setSelection(ed.getText().length());
+                    ed.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(3)});
+                    android.app.AlertDialog d = new android.app.AlertDialog.Builder(MainActivity.this).setTitle(title).setView(ed)
+                        .setPositiveButton("Listo", (x, y) -> { Integer v = null; try { v = Integer.valueOf(ed.getText().toString().trim()); } catch (NumberFormatException e) { } final Integer f = v; synchronized (app) { done.accept(f); } })
+                        .setNegativeButton("Cancelar", null).create();
+                    d.setOnDismissListener(x -> { immersive(); view.requestFocus(); });
+                    d.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+                    d.show(); ed.requestFocus();
+                });
+            }
             @Override public void askText(String title, String current, int max, java.util.function.Consumer<String> done) {
                 runOnUiThread(() -> {
                     final android.widget.EditText ed = new android.widget.EditText(MainActivity.this);

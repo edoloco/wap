@@ -394,5 +394,14 @@ public class Sim {
         w=flat();a=w.robots[0];w.robots[1].px=1700;T=w.t;hy=a.py-a.h-12;for(int y=hy-6;y<=hy;y++)for(int x=a.px-20;x<=a.px+20;x++)T.m[y*Terrain.W+x]=Terrain.EARTH;
         run(w,0,1);run(w,Input.B,1);top=a.py;for(int i=0;i<30;i++){run(w,Input.B,1);top=Math.min(top,a.py);}check(top>=hy+1+a.h-1&&T.solid(a.px,hy),"un techo de verdad sí frena el salto");
     }
-    public static void main(String[] a)throws Exception{mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void golpe(){
+        World w=flat();Robot a=w.robots[0],b=w.robots[1];b.px=a.px+200;run(w,0,2);int bx=b.px;a.invuln=0;b.invuln=0;
+        b.damage(w,5,0,0,0,b.px-10,b.py-30);check(b.knockT==Robot.KNOCK&&b.invuln==0,"golpeado: retrocede como Mega Man y no queda invulnerable");
+        w.step(new int[]{0,Input.LEFT});for(int i=0;i<12;i++)w.step(new int[]{0,Input.LEFT});check(b.px>bx+5,"se va un poco hacia atrás, lejos del golpe, aunque empuje hacia el otro lado ("+bx+"→"+b.px+")");
+        RobotArt.View v=new RobotArt.View();b.knockT=5;RobotArt.update(v,b,w);check(v.state==2||v.state==12,"golpeado usa la pose de salto (estado "+v.state+")");b.knockT=0;
+        run(w,0,30);float h0=b.hp;b.damage(w,5,0,0,0,b.px-10,b.py-30);check(b.hp<h0,"un segundo golpe también le quita vida");
+        int locks=0;w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+200;run(w,0,2);for(int i=0;i<120;i++){b.invuln=0;b.damage(w,.5f,0,0,0,b.px-10,b.py-30);w.step(new int[2]);if(b.knockT>0)locks++;}
+        check(locks<100,"una ráfaga no lo deja trabado todo el tiempo ("+locks+" de 120 cuadros)");
+    }
+    public static void main(String[] a)throws Exception{golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

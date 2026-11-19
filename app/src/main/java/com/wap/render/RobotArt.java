@@ -75,7 +75,7 @@ public final class RobotArt {
 
     /** Estado de animación solo visual de un robot. */
     public static final class View {
-        public float phase; float pel = -22, lean, fx = 4, fy = -ANK, bx = -3, by = -ANK, a1 = 86, a2 = 96, b1 = 94, b2 = 86, flash; int assemble, clock, state = -1; public int shotT; boolean open, ball;
+        public float phase; float pel = -22, lean, fx = 4, fy = -ANK, bx = -3, by = -ANK, a1 = 86, a2 = 96, b1 = 94, b2 = 86, flash; int assemble, clock; public int state = -1; public int shotT; boolean open, ball;
         float gFront, gBack; public String label = ""; public int labelT;
         /** Ajustes libres de las articulaciones de la pose actual (ver JOINTS), o null. */
         float[] adj;
@@ -144,7 +144,7 @@ public final class RobotArt {
     public static void update(View v, Robot r, World g) {
         float sp = Math.abs(r.vx); boolean run = r.grounded && sp > .3f && !r.sliding() && r.rope < 2;
         if (run) v.phase = (v.phase + sp) % (STRIDE * 4);
-        int st = r.thrownT > 0 ? 3 : r.rollT > 9 && !r.grounded ? 7 : r.rollT > 0 && !r.grounded ? 8 : r.sliding() ? 4 : r.rope >= 2 ? 5 : r.wallDir != 0 ? 6 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
+        int st = r.knockT > 0 ? 2 : r.thrownT > 0 ? 3 : r.rollT > 9 && !r.grounded ? 7 : r.rollT > 0 && !r.grounded ? 8 : r.sliding() ? 4 : r.rope >= 2 ? 5 : r.wallDir != 0 ? 6 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
         boolean act = r.windT > 0 || r.fireT > 0;
         if (act) st = st == 0 ? (r.windT > 3 ? 20 : r.windT > 0 ? 22 : 21) : st + 10;
         if (st % 10 == 4) st = r.slideT > 14 ? 4 : 9;
@@ -344,6 +344,8 @@ public final class RobotArt {
         }
         return v;
     }
+    /** Pose de carrera n (0-3), para la portada. */
+    public static void runPose(View v, int n) { pose(v, RUN_F[n & 3]); v.open = false; }
     public static View poster() { View v = new View(); pose(v, STANCE_F); v.open = true; return v; }
     public static void assemble(View v) { v.assemble = 30; }
 }
