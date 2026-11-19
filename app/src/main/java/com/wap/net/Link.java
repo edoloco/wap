@@ -20,7 +20,7 @@ public final class Link implements Closeable {
     }
     private final Socket s; private final DataInputStream in; private final DataOutputStream out; private final Object wl = new Object();
     private volatile byte[] remote = new byte[8192]; private volatile int count;
-    public volatile boolean closed; public volatile String error;
+    public volatile boolean closed; public volatile String error; private volatile boolean shut;
     public final ConcurrentHashMap<Integer, Integer> hashes = new ConcurrentHashMap<>();
     private Link(Socket s) throws IOException {
         this.s = s; s.setTcpNoDelay(true);
@@ -88,9 +88,15 @@ public final class Link implements Closeable {
         try { synchronized (wl) { out.writeByte(type); if (small) out.writeByte(a); else { out.writeInt(a); out.writeInt(b); } out.flush(); } }
         catch (IOException e) { error = "Se perdió la conexión con el otro teléfono"; closed = true; }
     }
+    /**
+     * Avisa al otro y cierra. La red se usa en un hilo aparte: en Android, escribir en la red desde el hilo de la
+     * pantalla lanza NetworkOnMainThreadException (así se caía "VOLVER AL MENÚ" en línea).
+     */
     @Override public void close() {
-        outQ.add(new long[]{BYE});
-        try { synchronized (wl) { out.writeByte(BYE); out.flush(); } } catch (IOException e) { }
-        closed = true; try { s.close(); } catch (IOException e) { }
+        if (shut) return; shut = true; final boolean bye = !closed; closed = true; outQ.add(new long[]{BYE});
+        Thread t = new Thread(() -> {
+            if (bye) try { synchronized (wl) { out.writeByte(BYE); out.flush(); } } catch (IOException | RuntimeException e) { }
+            try { s.close(); } catch (IOException | RuntimeException e) { }
+        }, "cerrar red"); t.setDaemon(true); t.start();
     }
 }

@@ -25,6 +25,7 @@ public final class Renderer {
     final Random r = new Random(7); final int[] px = new int[Terrain.TILE * Terrain.TILE];
     public float camX = 900, camY = 500, shake; public float zoom = 3; float vx0, vy0, vw, vh; boolean first = true;
 
+    final Recolor white = new Recolor();
     public void reset(World w) { java.util.Arrays.fill(okB, false); java.util.Arrays.fill(okF, false); ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; bgNew = true; java.util.Arrays.fill(loaded, false); }
     static int hash(int x, int y) { int h = x * 374761393 + y * 668265263; h = (h ^ h >> 13) * 1274126177; return h ^ h >> 16; }
     final boolean[] loaded = new boolean[Terrain.TW * Terrain.TH];
@@ -209,7 +210,7 @@ public final class Renderer {
                 continue;
             }
             if (s.w.look == Wpn.RAY) { P q = part(TRAIL, s.x, s.y, 0, 0, 26, 21, 0xFF6FDDFF); q.g = 0; P q2 = part(TRAIL, s.x, s.y, 0, 0, 16, 9, 0xFFFFFFFF); q2.g = 0; continue; } // Kamehameha
-            if (sp > 5 || lite && (w.tick & 1) == 1) continue;
+            if (sp > 5 && !s.w.trail || lite && (w.tick & 1) == 1) continue;
             int c; float z;
             switch (s.w.look) {
                 case Wpn.ROCKET: c = 0xFFFF8A2A; z = 4; if (w.tick % 2 == 0) { P q = part(SMOKE, s.x, s.y, 0, -.1f, 40, 2.2f, 0x50404650); q.g = 0; } break;
@@ -222,6 +223,7 @@ public final class Renderer {
             }
             if (s.w.tint != 0) c = Recolor.of(c, s.w.tint);
             P p = part(TRAIL, s.x, s.y, (r.nextFloat() - .5f) * .4f, (r.nextFloat() - .5f) * .4f, 18, z * s.w.size, c); p.g = 0;
+            if (s.w.trail) { P q = part(TRAIL, s.x - s.vx * .5f, s.y - s.vy * .5f, 0, 0, 26, z * s.w.size * .7f, c); q.g = 0; } // estela larga y pareja
         }
     }
     public void tick(World w) {
@@ -277,7 +279,12 @@ public final class Renderer {
         }
         for (P p : ps) if (p.kind == ARMOR || p.kind == BONE) { g.save(); g.translate(p.x, p.y); g.rotate(p.rot); if (p.kind == ARMOR) RobotArt.piece(g, p.slot, p.color); else RobotArt.bonePiece(g, p.slot); g.restore(); }
         for (int i = 0; i < w.robots.length; i++) {
-            Robot o = w.robots[i]; if (!o.alive()) continue;
+            Robot o = w.robots[i];
+            if (o.finalT > 0) { // última vida: blanco y brillando cada vez más
+                float k = 1 - o.finalT / (float) Robot.FINAL; RobotArt.draw(white.whiten(g, Math.min(1, .35f + k)), views[i], o, RobotArt.COLOR[i]);
+                g.additive(true); float pul = (float) Math.sin(o.finalT * (.25f + k * .6f)) * .5f + .5f;
+                g.glow(o.px, o.py - 27, 30 + 50 * k + 8 * pul, (int) (120 + 135 * k * (.6f + .4f * pul)) << 24 | 0xFFFFFF); g.additive(false); continue; }
+            if (!o.alive()) continue;
             if (o.rope != 0) { float hx = o.px + o.facing * 12, hy = o.py - 33; g.line(hx, hy, o.rx, o.ry, INK, 1.1f); g.circle(o.rx, o.ry, 2.4f, 0xFFFFFFFF, INK, .7f); }
             RobotArt.draw(g, views[i], o, RobotArt.COLOR[i]);
         }

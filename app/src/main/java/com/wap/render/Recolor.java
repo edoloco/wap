@@ -5,8 +5,10 @@ package com.wap.render;
  * negros no cambian (contornos, brillos). La misma regla está en el Taller de armas para la vista previa.
  */
 public final class Recolor implements Gfx {
-    Gfx t; int tint;
-    public Recolor with(Gfx target, int c) { t = target; tint = c; return this; }
+    Gfx t; int tint; float white;
+    public Recolor with(Gfx target, int c) { t = target; tint = c; white = 0; return this; }
+    /** Todo se va hacia el blanco (k de 0 a 1): última vida del personaje antes de explotar. */
+    public Recolor whiten(Gfx target, float k) { t = target; tint = 0; white = k; return this; }
     public static int of(int c, int tint) {
         int a = c >>> 24, r = c >> 16 & 255, g = c >> 8 & 255, b = c & 255, mx = Math.max(r, Math.max(g, b)), mn = Math.min(r, Math.min(g, b));
         if (mx == 0 || (mx - mn) / (float) mx < .25f) return c;
@@ -15,7 +17,9 @@ public final class Recolor implements Gfx {
         float k = mx / (float) tv;
         return a << 24 | Math.min(255, Math.round(tr * k)) << 16 | Math.min(255, Math.round(tg * k)) << 8 | Math.min(255, Math.round(tb * k));
     }
-    private int c(int x) { return of(x, tint); }
+    private int c(int x) {
+        if (white > 0) { int a = x >>> 24, r = x >> 16 & 255, g = x >> 8 & 255, b = x & 255; return a << 24 | (r + Math.round((255 - r) * white)) << 16 | (g + Math.round((255 - g) * white)) << 8 | b + Math.round((255 - b) * white); }
+        return of(x, tint); }
     @Override public void layer(String name) { t.layer(name); } @Override public void endLayer() { t.endLayer(); }
     @Override public int w() { return t.w(); } @Override public int h() { return t.h(); }
     @Override public void save() { t.save(); } @Override public void restore() { t.restore(); }

@@ -62,7 +62,7 @@ public class Sim {
         w=flat();b4=count(w);w.explode(600,600,36,30,32,3,1);check(count(w)<b4,"la explosión destruye el terreno");
         w=flat();r=w.robots[0];w.robots[1].px=r.px+40;int ac=r.armorCount();w.explode(r.px,r.py-30,36,44,0,3,1);check(r.armorCount()<ac,"el daño arranca piezas de armadura ("+ac+"→"+r.armorCount()+")");
         w=flat();r=w.robots[0];int lv=r.lives;for(int i=0;i<30&&r.lives==lv;i++){r.invuln=0;w.explode(r.px,r.py-30,36,44,0,0,1);}check(r.lives==lv-1&&r.deadT>0,"sin vida pierde una vida");for(int i=0;i<200;i++)w.step(new int[2]);check(r.alive()&&r.hp==100&&r.armorCount()==12,"reaparece con armadura completa");
-        w=new World(1,0,set("RIFLE","RIFLE","RIFLE","RIFLE","RIFLE"),set("RIFLE","RIFLE","RIFLE","RIFLE","RIFLE"));r=w.robots[0];r.invuln=0;for(int i=0;i<40&&!w.finished;i++){r.invuln=0;w.explode(r.px,r.py-30,36,44,0,0,1);}check(w.finished&&w.winner==1,"sin vidas termina la partida");
+        w=new World(1,0,set("RIFLE","RIFLE","RIFLE","RIFLE","RIFLE"),set("RIFLE","RIFLE","RIFLE","RIFLE","RIFLE"));r=w.robots[0];r.invuln=0;for(int i=0;i<40&&!w.finished;i++){r.invuln=0;w.explode(r.px,r.py-30,36,44,0,0,1);}for(int i=0;i<Robot.FINAL+2;i++)w.step(new int[2]);check(w.finished&&w.winner==1,"sin vidas termina la partida (después de brillar y explotar)");
     }
     static Prop mkProp(World w,int[] q){try{java.lang.reflect.Constructor<Prop> c=Prop.class.getDeclaredConstructor(int[].class);c.setAccessible(true);Prop p=c.newInstance((Object)q);w.props.add(p);return p;}catch(Exception e){throw new RuntimeException(e);}}
     static void bodies()throws Exception{
@@ -95,7 +95,7 @@ public class Sim {
          ww.explode(640,440,30,20,20,2,0);int solid2=0;for(int y=400;y<=560;y+=2)for(int xx=600;xx<=800;xx+=2)if(ww.t.solid(xx,y))solid2++;check(solid2<solid1&&solid2>solid1/3,"una explosión rompe los trozos cercanos ("+solid1+"→"+solid2+")");}
         {Wpn[] k=new Wpn[4];java.util.Arrays.fill(k,Wpn.ALL[Wpn.index("BAZOOKA")]);World tw4=new World(3,2,new Wpn[][]{k,k,k,k},new int[]{0,0,1,1},null);check(tw4.robots.length==4,"partida con 4 robots");
          Robot t0=tw4.robots[0],t1=tw4.robots[1];float h1=t1.hp;t1.invuln=0;t1.damage(tw4,30,0,0,0,t1.px,t1.py);check(t1.hp==h1,"en equipos no hay fuego amigo");Robot t2=tw4.robots[2];t2.invuln=0;float h2=t2.hp;t2.damage(tw4,30,0,0,0,t2.px,t2.py);check(t2.hp<h2,"al otro equipo sí le hace daño");
-         for(Robot r:new Robot[]{tw4.robots[2],tw4.robots[3]}){r.lives=0;r.invuln=0;r.damage(tw4,999,0,0,0,r.px,r.py);}check(tw4.finished&&tw4.winnerTeam==0,"gana el equipo que queda");
+         for(Robot r:new Robot[]{tw4.robots[2],tw4.robots[3]}){r.lives=0;r.invuln=0;r.damage(tw4,999,0,0,0,r.px,r.py);}for(int i=0;i<Robot.FINAL+2;i++)tw4.step(new int[4]);check(tw4.finished&&tw4.winnerTeam==0,"gana el equipo que queda");
          World fw=new World(4,1,new Wpn[][]{k,k,k},new int[]{0,1,2},null);Bot[] bs={null,new Bot(1,1,.9f),new Bot(2,2,.9f)};int n=0;for(;n<20000&&!fw.finished;n++){int[] in={0,bs[1].think(fw),bs[2].think(fw)};fw.step(in);}
          int dead=0;for(Robot r:fw.robots)if(r.lives<0)dead++;check(dead>=1&&fw.robots[1].kills+fw.robots[2].kills>0,"todos contra todos: los bots también se atacan entre ellos ("+n+" ticks, "+dead+" eliminados)");}
         w=flat();a=w.robots[0];w.robots[1].px=1700;for(int i=0;i<Robot.SLOTS;i++){a.loadout[i]=Wpn.ALL[Wpn.index("FAN")];a.ammo[i]=1;}run(w,0,2);run(w,Input.A,10);{int y0=a.py,n0=w.shots.size();run(w,Input.A|Input.B,1);run(w,Input.A,12);check(a.py<y0-15,"se puede saltar mientras se dispara");int n1=w.shots.size();run(w,Input.A,6);check(w.shots.size()>0&&a.fireT>0,"el FAN sigue soplando durante el salto");}
@@ -405,16 +405,32 @@ public class Sim {
     }
     static void desarrollador(String out)throws Exception{
         App q=new App(store,mute);q.seed(11);for(int i=0;i<9;i++)q.fanTapTest();check(!q.devOn(),"9 toques a FAN todavía no activan el modo desarrollador");q.fanTapTest();check(q.devOn(),"10 toques a FAN activan el modo desarrollador");
-        q.devSet(true,true,true,true,50);q.start();World w=q.w;int t0=w.tick;for(int i=0;i<200;i++)q.tick();int done=w.tick-t0;check(done>=54&&done<=56,"velocidad 50%: la mitad de pasos ("+done+" en los 110 cuadros que siguen a la cuenta inicial)");
+        q.devSet(true,true,true,true,100);q.start();World w=q.w;for(int i=0;i<95;i++)q.tick();
         Robot me=w.robots[0];float h=me.hp;me.invuln=0;me.damage(w,30,0,0,1,me.px,me.py-30);check(me.hp==h,"invencible: no pierde vida");
         Robot b=w.robots[1];int bx=b.px;for(int i=0;i<60;i++)q.tick();check(Math.abs(b.px-bx)<8,"rivales quietos: el bot no se mueve");
         int a0=me.ammo[3];int fl=0;for(int i=0;i<120;i++){int[] in=new int[w.robots.length];in[0]=Input.A;w.step(in);for(Fx f:w.fx)if(f.type==Fx.FLASH&&f.who==0)fl++;w.fx.clear();}check(fl>2&&me.ammo[3]==a0&&me.reload[3]==0,"balas infinitas: dispara ("+fl+" veces) y no gasta ("+a0+"→"+me.ammo[3]+")");
-        q.devSet(true,true,true,true,200);t0=w.tick;for(int i=0;i<60;i++)q.tick();check(w.tick-t0==120,"velocidad 200%: el doble de pasos");
+        {World f=flat();f.robots[1].px=1700;Robot r=f.robots[0];int x0=r.px;for(int i=0;i<60;i++)f.step(new int[]{Input.RIGHT,0});int full=r.px-x0;
+         f=flat();f.robots[1].px=1700;f.robotRate=.5f;r=f.robots[0];x0=r.px;for(int i=0;i<60;i++)f.step(new int[]{Input.RIGHT,0});int half=r.px-x0;
+         check(half>full*.35f&&half<full*.65f,"velocidad de personajes al 50%: camina la mitad ("+full+" vs "+half+")");
+         f=flat();f.robots[1].px=1700;f.shotRate=.5f;Shot s1=f.spawn(Wpn.ALL[Wpn.index("BAZOOKA")],0,600,400,6,0);float sx=s1.x;for(int i=0;i<10;i++)f.step(new int[2]);float slow=s1.x-sx;
+         f=flat();f.robots[1].px=1700;Shot s2=f.spawn(Wpn.ALL[Wpn.index("BAZOOKA")],0,600,400,6,0);sx=s2.x;for(int i=0;i<10;i++)f.step(new int[2]);float norm=s2.x-sx;
+         check(slow<norm*.7f&&slow>0,"velocidad de armas al 50%: el cohete avanza menos ("+norm+" vs "+slow+")");
+         f=flat();f.robots[1].px=1700;f.robotRate=.5f;r=f.robots[0];Shot s3=f.spawn(Wpn.ALL[Wpn.index("BAZOOKA")],0,600,400,6,0);sx=s3.x;for(int i=0;i<10;i++)f.step(new int[2]);check(Math.abs((s3.x-sx)-norm)<.01f,"cambiar la de personajes no cambia la de armas");}
         BufferedImage im=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);q.go(App.DEV);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"21_desarrollador.png"));check(q.overflow==0,"pantalla del modo desarrollador sin textos fuera de los botones");
         for(int i=0;i<10;i++)q.fanTapTest();check(!q.devOn(),"otros 10 toques lo apagan");
         {App r=new App(store,mute);r.seed(12);r.go(App.ARMS);BufferedImage ai=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);J ag=new J(ai);r.draw(ag);int fan=Wpn.index("FAN");float fx=-1,fy=-1;
          for(int y=5;y<720&&fx<0;y+=8)for(int x=800;x<1600&&fx<0;x+=10){r.tap(x,y);r.draw(ag);if(r.armsCur()==fan){fx=x;fy=y;}}
          for(int i=0;i<10;i++){r.tick();r.tick();r.tap(fx,fy);r.draw(ag);}check(fx>=0&&r.devOn(),"tocando 10 veces el botón FAN en la pantalla se activa ("+fx+","+fy+")");ImageIO.write(ai,"png",new File(out,"22_fan_dev.png"));for(int i=0;i<10;i++)r.fanTapTest();r.devSet(false,false,false,false,100);}
     }
-    public static void main(String[] a)throws Exception{desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void ultimaVida(String out)throws Exception{
+        World w=flat();Robot a=w.robots[0],b=w.robots[1];b.px=a.px+300;b.lives=0;b.invuln=0;b.damage(w,999,0,0,0,b.px,b.py-30);
+        check(b.finalT==Robot.FINAL&&!w.finished,"última vida: no termina de inmediato, primero se pone blanco y brilla");
+        RobotArt.View v=new RobotArt.View();RobotArt.update(v,b,w);check(v.state==2,"última vida: pose de salto");
+        boolean boom=false,death=false;int y0=b.py;Renderer rd=new Renderer();rd.reset(w);BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.freeCam=true;rd.camX=b.px;rd.camY=b.py-60;
+        for(int i=0;i<Robot.FINAL;i++){w.step(new int[2]);for(Fx f:w.fx){if(f.type==Fx.EXPLODE&&f.who==b.id)boom=true;if(f.type==Fx.DEATH&&f.a==b.id)death=true;}if(i==Robot.FINAL-20){rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"23_ultima_vida.png"));}w.fx.clear();}
+        check(boom&&death&&w.finished&&w.winner==0,"al final explota y termina la partida (ganó "+w.winner+", explosión "+boom+", baja "+death+", terminó "+w.finished+")");check(b.py<y0,"mientras brilla flota un poco hacia arriba");
+        Wpn pc=Wpn.ALL[Wpn.index("PLASMA CANNON")];check(pc.dmg>60&&pc.size>1.2f&&pc.trail&&(pc.tint&0xFF)>200,"PLASMA CANNON: celeste, más grande, con estela y más daño ("+pc.dmg+")");
+        Wpn.reset();check(pc.tint!=0&&pc.size>1.2f,"volver a las armas de siempre conserva el aspecto de PLASMA CANNON");
+    }
+    public static void main(String[] a)throws Exception{ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

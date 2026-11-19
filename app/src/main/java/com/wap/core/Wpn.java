@@ -11,6 +11,8 @@ public final class Wpn {
     /** Dron teledirigido: mientras vuela, los controles del dueño lo manejan (ver Shot.droneMove). */
     public boolean drone;
     /** Aspecto (armas.txt): color nuevo (0 = el de siempre), tamaño, si se ve su luz y un dibujo propio que reemplaza al cuerpo. */
+    /** trail: deja estela aunque vaya rápido. */
+    public boolean trail;
     public int tint; public float size = 1; public boolean light = true; public Art[] art;
     /** Dibujo animado: cuadros que se turnan (art es el primero), ticks por cuadro y si se mece al flotar. */
     public Art[][] frames; public int artRate = 6; public boolean artBob;
@@ -61,7 +63,7 @@ public final class Wpn {
         ALL = new Wpn[] {
             new Wpn("PLASMA GUN", "Ráfaga de disparos de energía").mag(30, 9, 90).shot(1, 0, 9.5f).hit(5, 4, .5f).look(LEMON),
             new Wpn("CANNON PUNCH", "Guante que sale volando y lanza al rival").mag(1, 20, 80).shot(1, 0, 7.5f).hit(4, 0, 0).fuse(48).look(GLOVE),
-            new Wpn("PLASMA CANNON", "Comando para cargar, comando para lanzar").mag(1, 12, 30).shot(1, 0, 8).boom(34, 60, 30, 4).look(PLASMA).rec(2),
+            new Wpn("PLASMA CANNON", "Comando para cargar, comando para lanzar").mag(1, 12, 30).shot(1, 0, 8).boom(34, 72, 30, 4).look(PLASMA).rec(2),
             new Wpn("DEATH RAY", "Rayo celeste de cinco cargas que atraviesa").mag(1, 30, 200).shot(5, 0, 4.5f).boom(18, 9, 16, 1.6f).fuse(300).look(RAY).rec(1.5f),
             new Wpn("SHOTGUN", "Abanico de perdigones").mag(5, 34, 120).shot(9, 8, 11).phys(.02f, 0, 1).hit(5, 5, .8f).rec(1.6f),
             new Wpn("SUPER SHOTGUN", "Doble cañón, mucho retroceso").mag(2, 26, 150).shot(26, 13, 12).phys(.02f, 0, 1).hit(5, 5, 1).rec(3.2f),
@@ -97,7 +99,7 @@ public final class Wpn {
         for (Wpn w : ALL) {
             if (w.name.equals("BAZOOKA") || w.name.equals("DOOMSDAY")) { w.accel = .24f; w.smoke = true; }
             if (w.name.equals("MINE") || w.name.equals("TRAP")) { w.sticky = true; w.trigger = 28; }
-            if (w.name.equals("PLASMA CANNON")) w.charge = 75;
+            if (w.name.equals("PLASMA CANNON")) { w.charge = 75; w.tint = 0xFF5FD0FF; w.size = 1.4f; w.trail = true; } // celeste, más grande y con estela
             if (w.name.equals("CANNON PUNCH")) { w.punch = true; w.impact = true; }
             if (w.name.equals("DEATH RAY")) { w.stagger = 7; w.boomStyle = 1; w.impact = true; }
             if (w.name.equals("BOUNCY LASER")) { w.maxBounce = 10; w.angle = 40; w.impact = true; w.boomStyle = 2; }
@@ -148,10 +150,10 @@ public final class Wpn {
             default:
         }
     }
-    private static float[][] DEFAULTS; private static String[][] DEF_TEXT; private static int[] DEF_LOOK;
+    private static float[][] DEFAULTS; private static String[][] DEF_TEXT; private static int[] DEF_LOOK, DEF_TINT;
     private static void snapshot() {
         DEFAULTS = new float[ALL.length][KEYS.length]; DEF_TEXT = new String[ALL.length][];
-        BASE_COUNT = ALL.length; DEF_LOOK = new int[ALL.length]; for (int i = 0; i < ALL.length; i++) DEF_LOOK[i] = ALL[i].look;
+        BASE_COUNT = ALL.length; DEF_LOOK = new int[ALL.length]; DEF_TINT = new int[ALL.length]; for (int i = 0; i < ALL.length; i++) { DEF_LOOK[i] = ALL[i].look; DEF_TINT[i] = ALL[i].tint; }
         for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) DEFAULTS[i][k] = ALL[i].get(KEYS[k]); DEF_TEXT[i] = new String[]{ALL[i].label, ALL[i].desc}; }
     }
     /** Huella de las armas: 0 si son las de siempre. Se compara en línea para que ambos teléfonos jueguen con las mismas. */
@@ -160,7 +162,7 @@ public final class Wpn {
     /** Vuelve a las armas de siempre. */
     public static void reset() {
         if (ALL.length != BASE_COUNT) ALL = java.util.Arrays.copyOf(ALL, BASE_COUNT); // quita las armas creadas
-        for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) ALL[i].set(KEYS[k], DEFAULTS[i][k]); ALL[i].label = DEF_TEXT[i][0]; ALL[i].desc = DEF_TEXT[i][1]; ALL[i].off = false; ALL[i].look = DEF_LOOK[i]; ALL[i].tint = 0; ALL[i].art = null; ALL[i].frames = null; ALL[i].artRate = 6; ALL[i].artBob = false; }
+        for (int i = 0; i < ALL.length; i++) { for (int k = 0; k < KEYS.length; k++) ALL[i].set(KEYS[k], DEFAULTS[i][k]); ALL[i].label = DEF_TEXT[i][0]; ALL[i].desc = DEF_TEXT[i][1]; ALL[i].off = false; ALL[i].look = DEF_LOOK[i]; ALL[i].tint = DEF_TINT[i]; ALL[i].art = null; ALL[i].frames = null; ALL[i].artRate = 6; ALL[i].artBob = false; }
         signature = 0; error = null;
     }
     /**

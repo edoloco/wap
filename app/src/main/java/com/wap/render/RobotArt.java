@@ -144,7 +144,7 @@ public final class RobotArt {
     public static void update(View v, Robot r, World g) {
         float sp = Math.abs(r.vx); boolean run = r.grounded && sp > .3f && !r.sliding() && r.rope < 2;
         if (run) v.phase = (v.phase + sp) % (STRIDE * 4);
-        int st = r.knockT > 0 ? 2 : r.thrownT > 0 ? 3 : r.rollT > 9 && !r.grounded ? 7 : r.rollT > 0 && !r.grounded ? 8 : r.sliding() ? 4 : r.rope >= 2 ? 5 : r.wallDir != 0 ? 6 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
+        int st = r.knockT > 0 || r.finalT > 0 ? 2 : r.thrownT > 0 ? 3 : r.rollT > 9 && !r.grounded ? 7 : r.rollT > 0 && !r.grounded ? 8 : r.sliding() ? 4 : r.rope >= 2 ? 5 : r.wallDir != 0 ? 6 : !r.grounded ? (r.vy < 1 ? 2 : 3) : run ? 1 : 0;
         boolean act = r.windT > 0 || r.fireT > 0;
         if (act) st = st == 0 ? (r.windT > 3 ? 20 : r.windT > 0 ? 22 : 21) : st + 10;
         if (st % 10 == 4) st = r.slideT > 14 ? 4 : 9;

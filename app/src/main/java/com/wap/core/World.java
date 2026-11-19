@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 18;
+    public static final int RULES = 19;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
@@ -19,6 +19,8 @@ public final class World {
     /** Vida máxima de todos los personajes (para probar el equilibrio). Se llama antes del primer paso. */
     /** Modo desarrollador (solo fuera de línea): personaje invencible y personaje con balas infinitas (-1 nadie). */
     public int godId = -1, ammoId = -1;
+    /** Modo desarrollador: velocidad de los personajes y de las armas (1 = normal). Se avanza de a pasos enteros. */
+    public float robotRate = 1, shotRate = 1; float rAcc, sAcc;
     public void setMaxHp(int v) { v = Math.max(25, Math.min(1000, v)); for (Robot r : robots) { r.maxHp = v; r.hp = v; } }
     public World(int seed, int lives, Wpn[] a, Wpn[] b) { this(seed, lives, a, b, null); }
     /** Partida en un nivel guardado (o aleatorio si level es null). */
@@ -238,9 +240,8 @@ public final class World {
 
     public void step(int[] in) {
         tick++;
-        for (int i = 0; i < robots.length; i++) robots[i].step(this, i < in.length ? in[i] : 0);
-        for (int i = 0; i < shots.size(); i++) { Shot s = shots.get(i); if (!s.dead) s.step(this); }
-        droneHits();
+        rAcc += robotRate; while (rAcc >= 1) { rAcc -= 1; for (int i = 0; i < robots.length; i++) robots[i].step(this, i < in.length ? in[i] : 0); }
+        sAcc += shotRate; while (sAcc >= 1) { sAcc -= 1; for (int i = 0; i < shots.size(); i++) { Shot s = shots.get(i); if (!s.dead) s.step(this); } droneHits(); }
         for (int i = shots.size() - 1; i >= 0; i--) if (shots.get(i).dead) shots.remove(i);
         if (--bonusT <= 0 && bonus.size() < 4) {
             bonusT = 500 + rng.i(400);

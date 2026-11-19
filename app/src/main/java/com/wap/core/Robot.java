@@ -4,7 +4,7 @@ public final class Robot {
     public static final int HELMET = 0, CHEST = 1, BELLY = 2, HIP = 3, SH_F = 4, SH_B = 5, BR_F = 6, BR_B = 7, TH_F = 8, TH_B = 9, SN_F = 10, SN_B = 11, PIECES = 12;
     static final float[] PX = {0, 0, 0, 0, 8, -8, 13, -13, 3, -3, 3, -3}, PY = {50, 37, 30, 26, 39, 39, 27, 27, 18, 18, 8, 8};
     /** Golpe: cuánto dura el retroceso, el respiro antes de poder volver a sufrirlo (para no quedar trabado por una ráfaga) y el empujón. */
-    public static final int KNOCK = 14, KNOCK_CD = 16; public static final float KNOCK_PUSH = 2.6f;
+    public static final int FINAL = 150, KNOCK = 14, KNOCK_CD = 16; public static final float KNOCK_PUSH = 2.6f;
     public static final int SLOTS = 4, STAND_H = 54, SLIDE_H = 26, HW = 7;
     /** Margen en ticks para que dirección + botón cuente como habilidad y no como correr + acción. */
     public static final int SMASH_WINDOW = 9, BUFFER = 3;
@@ -28,7 +28,8 @@ public final class Robot {
     public int slideT, airT, fireT, fireSlot = 3; boolean jumping;
     public int rope, hookId = -1; public float rx, ry, rvx, rvy, rlen, hookDy; // 0 sin gancho, 1 volando, 2 enganchado al escenario, 3 enganchado a otro personaje (hookId)
     public final Wpn[] loadout = new Wpn[SLOTS]; public final int[] ammo = new int[SLOTS], reload = new int[SLOTS], delay = new int[SLOTS], charge = new int[SLOTS];
-    public boolean wet; public int knockT, knockCd, beamT, trapAim = 1, lassoFree, killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot[] all; Robot hitBody, stompOn; boolean ghost, stompHit;
+    public boolean wet; /** finalT: perdió la última vida; se pone blanco, brilla y explota al llegar a 0. */
+    public int finalT; public int knockT, knockCd, beamT, trapAim = 1, lassoFree, killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot[] all; Robot hitBody, stompOn; boolean ghost, stompHit;
     /** Equipo: los del mismo equipo no se hacen daño. En todos contra todos cada uno tiene el suyo. */
     public int team;
     public int wallDir, windT; int windSlot, lastWall, wallT, wallLock;
@@ -130,10 +131,10 @@ public final class Robot {
         }
         if (hp <= 0) {
             if (droneShot != null) { Shot ds = droneShot; droneShot = null; if (!ds.dead) ds.explode(g); } // si muere el piloto, el dron explota
-            hp = 0; rope = 0; deadT = 150; stunT = 0; thrownT = 0; windT = 0; lassoT = 0; killedBy = by; java.util.Arrays.fill(charge, 0); lives--; deaths++;
+            hp = 0; rope = 0; deadT = 150; stunT = 0; thrownT = 0; windT = 0; lassoT = 0; knockT = 0; killedBy = by; java.util.Arrays.fill(charge, 0); lives--; deaths++;
             if (by != id) g.robots[by].kills++;
-            g.fx(Fx.DEATH, px, py - 27, id, 0).b = by; // b: quién lo eliminó (él mismo si se mató solo)
-            if (lives < 0) { lives = 0; deadT = 9999; lives = -1; g.checkEnd(); }
+            if (lives < 0) { lives = -1; deadT = 9999; finalT = FINAL; vx = 0; vy = 0; } // última vida: pose de salto, se pone blanco, brilla y explota (ver step)
+            else g.fx(Fx.DEATH, px, py - 27, id, 0).b = by; // b: quién lo eliminó (él mismo si se mató solo)
         }
     }
     void heal(float a) {
@@ -223,6 +224,10 @@ public final class Robot {
             if (reload[i] > 0 && --reload[i] == 0) ammo[i] = loadout[i].clip;
             if (charge[i] > 0 && charge[i] < loadout[i].charge && ++charge[i] == loadout[i].charge) g.fx(Fx.CHARGE, px, py - 30, 1, id).b = Wpn.index(loadout[i].name);
         }
+        if (finalT > 0) { // última vida: flota, se pone blanco y brilla; al final explota y se decide la partida
+            if (py > Terrain.EDGE + 80 && finalT % 2 == 0) py -= 1; prev = in;
+            if (--finalT == 0) { g.fx(Fx.DEATH, px, py - 27, id, 0).b = killedBy; g.fx(Fx.EXPLODE, px, py - 27, 70, id); g.checkEnd(); }
+            return; }
         if (lives < 0) return;
         if (deadT > 0) { if (--deadT == 0) spawnAt(g); prev = in; return; }
         if (droneShot != null) { // piloteando: la cruceta y los botones van al dron; al explotar, vuelve el control

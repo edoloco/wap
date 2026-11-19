@@ -29,7 +29,7 @@ public final class App {
     /** Vida máxima de los personajes (PERSONALIZAR), para probar el equilibrio. */
     int hpMax = 100; static final int HP_MIN = 25, HP_TOP = 1000, HP_STEP = 25;
     /** Modo desarrollador: se activa tocando 10 veces FAN en el menú de armas. Solo fuera de línea. */
-    boolean devMode, devGod, devStill, devAmmo, devDmg; int devSpeed = 100, fanTaps; long fanLast; float devAcc;
+    boolean devMode, devGod, devStill, devAmmo, devDmg; int devSpeed = 100, devShot = 100, fanTaps; long fanLast; float devAcc;
     static final int SPEED_MIN = 25, SPEED_MAX = 200, SPEED_STEP = 5;
     /** Números de daño flotando: x, y (mundo), valor, tiempo. */
     final ArrayList<float[]> dmgNums = new ArrayList<>();
@@ -82,7 +82,7 @@ public final class App {
         try { hpMax = Math.max(HP_MIN, Math.min(HP_TOP, Integer.parseInt(st.get("vidamax", "100")))); } catch (Exception e) { }
         pad.load(st.get("mando", ""));
         String dv = st.get("dev", ""); devMode = dv.startsWith("1"); if (dv.length() >= 5) { devGod = dv.charAt(1) == '1'; devStill = dv.charAt(2) == '1'; devAmmo = dv.charAt(3) == '1'; devDmg = dv.charAt(4) == '1'; }
-        try { devSpeed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Integer.parseInt(st.get("devvel", "100")))); } catch (Exception e) { }
+        try { devSpeed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Integer.parseInt(st.get("devvel", "100")))); devShot = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Integer.parseInt(st.get("devarmas", "100")))); } catch (Exception e) { }
         myName = clean(st.get("nombre", "")); levelName = st.get("nivel", "");
         try { level = Integer.parseInt(st.get("level", "1")); lives = Integer.parseInt(st.get("vidas", "" + LIVES[Math.max(0, Math.min(LIVES.length - 1, Integer.parseInt(st.get("lives", "2"))))])); lives = Math.max(1, Math.min(LIVES_MAX, lives)); } catch (Exception e) { }
         loadRivals();
@@ -104,7 +104,7 @@ public final class App {
         me = 0; online = false;
         Level lv = testing != null ? testLevel : levelName.isEmpty() ? null : loadLevel(levelName);
         if (lv == null && testing == null && !levelName.isEmpty()) { levelName = ""; save(); } // el nivel elegido ya no existe
-        w = new World(seed, lives, loads, team, lv); w.setMaxHp(hpMax); if (devMode) { w.godId = devGod ? 0 : -1; w.ammoId = devAmmo ? 0 : -1; } devAcc = 0; dmgNums.clear(); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
+        w = new World(seed, lives, loads, team, lv); w.setMaxHp(hpMax); if (devMode) { w.godId = devGod ? 0 : -1; w.ammoId = devAmmo ? 0 : -1; w.robotRate = devSpeed / 100f; w.shotRate = devShot / 100f; } devAcc = 0; dmgNums.clear(); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
         bots = new Bot[n]; for (int i = 1; i < n; i++) bots[i] = new Bot(seed + i, i, SKILL[rLevel[i - 1]]);
         String[] nm = new String[n]; nm[0] = or(myName, "PLAYER 1"); for (int i = 1; i < n; i++) nm[i] = "PLAYER " + (i + 1);
         setNames(nm, n > 2); ren.teams = teams;
@@ -296,7 +296,7 @@ public final class App {
     public World editorWorld() { return editor.w; }
     public boolean devOn() { return devMode; }
     public int armsCur() { return cur; }
-    public void devSet(boolean god, boolean still, boolean ammo, boolean dmg, int speed) { devGod = god; devStill = still; devAmmo = ammo; devDmg = dmg; devSpeed = speed; }
+    public void devSet(boolean god, boolean still, boolean ammo, boolean dmg, int speed) { devGod = god; devStill = still; devAmmo = ammo; devDmg = dmg; devSpeed = speed; devShot = speed; }
     public void fanTapTest() { for (int i = 0; i < Wpn.ALL.length; i++) if (Wpn.ALL[i].name.equals("FAN")) { frames++; fanTap(i); } }
     public float uiW() { return W; }
     public float uiH() { return H; }
@@ -406,7 +406,7 @@ public final class App {
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); saveRivals(); go(armsFor >= 0 ? RIVALS : TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("vidas", "" + lives); st.put("vidamax", "" + hpMax); st.put("mando", pad.save()); st.put("dev", (devMode ? "1" : "0") + (devGod ? "1" : "0") + (devStill ? "1" : "0") + (devAmmo ? "1" : "0") + (devDmg ? "1" : "0")); st.put("devvel", "" + devSpeed); }
+    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("vidas", "" + lives); st.put("vidamax", "" + hpMax); st.put("mando", pad.save()); st.put("dev", (devMode ? "1" : "0") + (devGod ? "1" : "0") + (devStill ? "1" : "0") + (devAmmo ? "1" : "0") + (devDmg ? "1" : "0")); st.put("devvel", "" + devSpeed); st.put("devarmas", "" + devShot); }
     public void go(int s) { screen = s; focus = 0; pad.clear(); }
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
     public void pointer(int id, float x, float y, boolean down) { if (screen == EDIT) editor.pointer(id, x, y, down); else if (screen == PAD_EDIT) pad.editPointer(id, x / uiScale, y / uiScale, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
@@ -437,13 +437,10 @@ public final class App {
         if (screen == PLAY) {
             if (cd > 0) cd--;
             else {
-                devAcc += devMode ? devSpeed / 100f : 1; // velocidad del juego (modo desarrollador): pasos de simulación por cuadro
-                while (devAcc >= 1 && !w.finished) { devAcc -= 1;
-                    int[] ins = new int[w.robots.length]; ins[0] = m; for (int i = 1; i < ins.length; i++) ins[i] = devMode && devStill ? 0 : bots[i].think(w);
-                    w.step(ins); ren.tick(w);
+                { int[] ins = new int[w.robots.length]; ins[0] = m; for (int i = 1; i < ins.length; i++) ins[i] = devMode && devStill ? 0 : bots[i].think(w);
+                    w.step(ins); ren.tick(w); // velocidades del modo desarrollador: dentro de World.step (personajes y armas por separado)
                     sounds();
-                    ren.consume(w, false);
-                }
+                    ren.consume(w, false); }
                 for (int i = dmgNums.size() - 1; i >= 0; i--) if (++dmgNums.get(i)[3] > 50) dmgNums.remove(i);
                 if (w.finished && ++overT > 110) go(OVER);
             }
@@ -833,16 +830,17 @@ public final class App {
             String t = n[i] + (v[i] ? ": SÍ" : ": NO"); txtS(g, t, bx + cw / 2, by + rh / 2 + 5 * u, fit(t, 14 * u, cw - 10 * u), CREAM, 0);
             btn(bx, by, cw, rh, () -> { if (k == 0) devGod = !devGod; else if (k == 1) devStill = !devStill; else if (k == 2) devAmmo = !devAmmo; else devDmg = !devDmg; save(); }); }
         y += 2 * (rh + gap) + 4 * u;
-        // velocidad del juego
-        float sw = 40 * u; String sp = "VELOCIDAD " + devSpeed + "%" + (devSpeed == 100 ? " (NORMAL)" : "");
-        box(g, x, y, sw, rh, BLUE, SKY, NAVY); txtS(g, "-", x + sw / 2, y + rh / 2 + 6 * u, 18 * u, CREAM, 0);
-        btn(x, y, sw, rh, () -> { devSpeed = Math.max(SPEED_MIN, devSpeed - SPEED_STEP); save(); });
-        box(g, x + sw + gap, y, wd - 2 * sw - 2 * gap, rh, DEEP, NAVY, DEEP); txt(g, sp, x + wd / 2, y + rh / 2 + 5 * u, fit(sp, 14 * u, wd - 2 * sw - 4 * gap), devSpeed == 100 ? CREAM : GOLD, 0);
-        btn(x + sw + gap, y, wd - 2 * sw - 2 * gap, rh, () -> { devSpeed = 100; save(); }); // tocar el centro vuelve a 100 %
-        box(g, x + wd - sw, y, sw, rh, BLUE, SKY, NAVY); txtS(g, "+", x + wd - sw / 2, y + rh / 2 + 6 * u, 18 * u, CREAM, 0);
-        btn(x + wd - sw, y, sw, rh, () -> { devSpeed = Math.min(SPEED_MAX, devSpeed + SPEED_STEP); save(); });
-        y += rh + 4 * u;
-        { String t = "MÁS LENTO = MÁS COMO MEGA MAN · TOCA EL NÚMERO PARA VOLVER A 100%"; txt(g, PixelFont.width(t, 8) < wd ? t : "TOCA EL NÚMERO PARA VOLVER A 100%", x + wd / 2, y + 16 * u, 8, MUTE, 0); }
+        // velocidad de los personajes y de las armas, por separado
+        for (int row = 0; row < 2; row++) { final boolean ch = row == 0; int val = ch ? devSpeed : devShot;
+            float sw = 40 * u; String sp = (ch ? "PERSONAJES " : "ARMAS ") + val + "%";
+            box(g, x, y, sw, rh, BLUE, SKY, NAVY); txtS(g, "-", x + sw / 2, y + rh / 2 + 6 * u, 18 * u, CREAM, 0);
+            btn(x, y, sw, rh, () -> { if (ch) devSpeed = Math.max(SPEED_MIN, devSpeed - SPEED_STEP); else devShot = Math.max(SPEED_MIN, devShot - SPEED_STEP); save(); });
+            box(g, x + sw + gap, y, wd - 2 * sw - 2 * gap, rh, DEEP, NAVY, DEEP); txt(g, sp, x + wd / 2, y + rh / 2 + 5 * u, fit(sp, 14 * u, wd - 2 * sw - 4 * gap), val == 100 ? CREAM : GOLD, 0);
+            btn(x + sw + gap, y, wd - 2 * sw - 2 * gap, rh, () -> { if (ch) devSpeed = 100; else devShot = 100; save(); }); // tocar el centro vuelve a 100 %
+            box(g, x + wd - sw, y, sw, rh, BLUE, SKY, NAVY); txtS(g, "+", x + wd - sw / 2, y + rh / 2 + 6 * u, 18 * u, CREAM, 0);
+            btn(x + wd - sw, y, sw, rh, () -> { if (ch) devSpeed = Math.min(SPEED_MAX, devSpeed + SPEED_STEP); else devShot = Math.min(SPEED_MAX, devShot + SPEED_STEP); save(); });
+            y += rh + 4 * u; }
+        txt(g, "TOCA EL NÚMERO PARA VOLVER A 100%", x + wd / 2, y + 8 * u, 8, MUTE, 0);
         float by = H - 46 * u;
         box(g, x, by, cw, 36 * u, RED, 0xFFFF8A8F, 0xFF8E1520); txtS(g, "APAGAR MODO", x + cw / 2, by + 23 * u, fit("APAGAR MODO", 14 * u, cw - 10 * u), CREAM, 0);
         btn(x, by, cw, 36 * u, () -> { devMode = false; save(); toast = "MODO DESARROLLADOR APAGADO"; toastT = 120; go(TITLE); });
