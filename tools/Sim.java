@@ -403,5 +403,15 @@ public class Sim {
         int locks=0;w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+200;run(w,0,2);for(int i=0;i<120;i++){b.invuln=0;b.damage(w,.5f,0,0,0,b.px-10,b.py-30);w.step(new int[2]);if(b.knockT>0)locks++;}
         check(locks<100,"una ráfaga no lo deja trabado todo el tiempo ("+locks+" de 120 cuadros)");
     }
-    public static void main(String[] a)throws Exception{golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void desarrollador(String out)throws Exception{
+        App q=new App(store,mute);q.seed(11);for(int i=0;i<9;i++)q.fanTapTest();check(!q.devOn(),"9 toques a FAN todavía no activan el modo desarrollador");q.fanTapTest();check(q.devOn(),"10 toques a FAN activan el modo desarrollador");
+        q.devSet(true,true,true,true,50);q.start();World w=q.w;int t0=w.tick;for(int i=0;i<200;i++)q.tick();int done=w.tick-t0;check(done>=54&&done<=56,"velocidad 50%: la mitad de pasos ("+done+" en los 110 cuadros que siguen a la cuenta inicial)");
+        Robot me=w.robots[0];float h=me.hp;me.invuln=0;me.damage(w,30,0,0,1,me.px,me.py-30);check(me.hp==h,"invencible: no pierde vida");
+        Robot b=w.robots[1];int bx=b.px;for(int i=0;i<60;i++)q.tick();check(Math.abs(b.px-bx)<8,"rivales quietos: el bot no se mueve");
+        int a0=me.ammo[3];int fl=0;for(int i=0;i<120;i++){int[] in=new int[w.robots.length];in[0]=Input.A;w.step(in);for(Fx f:w.fx)if(f.type==Fx.FLASH&&f.who==0)fl++;w.fx.clear();}check(fl>2&&me.ammo[3]==a0&&me.reload[3]==0,"balas infinitas: dispara ("+fl+" veces) y no gasta ("+a0+"→"+me.ammo[3]+")");
+        q.devSet(true,true,true,true,200);t0=w.tick;for(int i=0;i<60;i++)q.tick();check(w.tick-t0==120,"velocidad 200%: el doble de pasos");
+        BufferedImage im=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);q.go(App.DEV);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"21_desarrollador.png"));check(q.overflow==0,"pantalla del modo desarrollador sin textos fuera de los botones");
+        for(int i=0;i<10;i++)q.fanTapTest();check(!q.devOn(),"otros 10 toques lo apagan");
+    }
+    public static void main(String[] a)throws Exception{desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

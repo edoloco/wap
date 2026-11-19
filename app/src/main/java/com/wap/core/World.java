@@ -17,6 +17,8 @@ public final class World {
     /** Altura del agua (-1: sin agua). Bajo el agua se cae más lento y se corre más despacio. */
     public int water = -1;
     /** Vida máxima de todos los personajes (para probar el equilibrio). Se llama antes del primer paso. */
+    /** Modo desarrollador (solo fuera de línea): personaje invencible y personaje con balas infinitas (-1 nadie). */
+    public int godId = -1, ammoId = -1;
     public void setMaxHp(int v) { v = Math.max(25, Math.min(1000, v)); for (Robot r : robots) { r.maxHp = v; r.hp = v; } }
     public World(int seed, int lives, Wpn[] a, Wpn[] b) { this(seed, lives, a, b, null); }
     /** Partida en un nivel guardado (o aleatorio si level es null). */

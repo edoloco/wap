@@ -4,7 +4,7 @@ import com.wap.net.*;
 import java.util.ArrayList; import java.util.List;
 /** Pantallas y flujo de la aplicación. No conoce Android; recibe entradas y dibuja por Gfx. */
 public final class App {
-    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8, RIVALS = 9, LEVEL_SEL = 10, PAD_EDIT = 11;
+    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8, RIVALS = 9, LEVEL_SEL = 10, PAD_EDIT = 11, DEV = 12;
     /** Servicios del teléfono para jugar en red. */
     public interface Device { String name(); void listen(boolean on);
         /** Pide un texto con el teclado del teléfono; done recibe el texto o null si se cancela. */
@@ -28,6 +28,11 @@ public final class App {
     public int screen = TITLE, keys, last, focus; public boolean padSeen, startKey; public Updater up; public Device dev;
     /** Vida máxima de los personajes (PERSONALIZAR), para probar el equilibrio. */
     int hpMax = 100; static final int HP_MIN = 25, HP_TOP = 1000, HP_STEP = 25;
+    /** Modo desarrollador: se activa tocando 10 veces FAN en el menú de armas. Solo fuera de línea. */
+    boolean devMode, devGod, devStill, devAmmo, devDmg; int devSpeed = 100, fanTaps; long fanLast; float devAcc;
+    static final int SPEED_MIN = 25, SPEED_MAX = 200, SPEED_STEP = 5;
+    /** Números de daño flotando: x, y (mundo), valor, tiempo. */
+    final ArrayList<float[]> dmgNums = new ArrayList<>();
     String myName = ""; String[] names = {"PLAYER 1", "PLAYER 2"};
     /** Niveles guardados: archivos de la app. levelName es el elegido para jugar ("" = aleatorio). */
     public Files files = new Files.Memory(); String levelName = ""; final Editor editor = new Editor(this);
@@ -76,6 +81,8 @@ public final class App {
         try { myColor = 0xFF000000 | Integer.parseInt(st.get("traje", "5E5650"), 16); } catch (Exception e) { }
         try { hpMax = Math.max(HP_MIN, Math.min(HP_TOP, Integer.parseInt(st.get("vidamax", "100")))); } catch (Exception e) { }
         pad.load(st.get("mando", ""));
+        String dv = st.get("dev", ""); devMode = dv.startsWith("1"); if (dv.length() >= 5) { devGod = dv.charAt(1) == '1'; devStill = dv.charAt(2) == '1'; devAmmo = dv.charAt(3) == '1'; devDmg = dv.charAt(4) == '1'; }
+        try { devSpeed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Integer.parseInt(st.get("devvel", "100")))); } catch (Exception e) { }
         myName = clean(st.get("nombre", "")); levelName = st.get("nivel", "");
         try { level = Integer.parseInt(st.get("level", "1")); lives = Integer.parseInt(st.get("vidas", "" + LIVES[Math.max(0, Math.min(LIVES.length - 1, Integer.parseInt(st.get("lives", "2"))))])); lives = Math.max(1, Math.min(LIVES_MAX, lives)); } catch (Exception e) { }
         loadRivals();
@@ -97,7 +104,7 @@ public final class App {
         me = 0; online = false;
         Level lv = testing != null ? testLevel : levelName.isEmpty() ? null : loadLevel(levelName);
         if (lv == null && testing == null && !levelName.isEmpty()) { levelName = ""; save(); } // el nivel elegido ya no existe
-        w = new World(seed, lives, loads, team, lv); w.setMaxHp(hpMax); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
+        w = new World(seed, lives, loads, team, lv); w.setMaxHp(hpMax); if (devMode) { w.godId = devGod ? 0 : -1; w.ammoId = devAmmo ? 0 : -1; } devAcc = 0; dmgNums.clear(); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
         bots = new Bot[n]; for (int i = 1; i < n; i++) bots[i] = new Bot(seed + i, i, SKILL[rLevel[i - 1]]);
         String[] nm = new String[n]; nm[0] = or(myName, "PLAYER 1"); for (int i = 1; i < n; i++) nm[i] = "PLAYER " + (i + 1);
         setNames(nm, n > 2); ren.teams = teams;
@@ -287,6 +294,9 @@ public final class App {
     public int editorSolidCount() { int c = 0; for (int i = 0; i < editor.w.t.m.length; i += 7) { int k = editor.w.t.m[i]; if (k == Terrain.EARTH || k == Terrain.WOOD) c++; } return c * 7; }
     public void editorApply(int x, int y) { editor.apply(x, y); }
     public World editorWorld() { return editor.w; }
+    public boolean devOn() { return devMode; }
+    public void devSet(boolean god, boolean still, boolean ammo, boolean dmg, int speed) { devGod = god; devStill = still; devAmmo = ammo; devDmg = dmg; devSpeed = speed; }
+    public void fanTapTest() { for (int i = 0; i < Wpn.ALL.length; i++) if (Wpn.ALL[i].name.equals("FAN")) { frames++; fanTap(i); } }
     public float uiW() { return W; }
     public float uiH() { return H; }
     public int editorCell() { return editor.cellSize; }
@@ -387,6 +397,7 @@ public final class App {
         if (screen == OVER && online) { endOnline(null); return; }
         if (screen == PAINT) { save(); go(TITLE); return; }
         if (screen == PAD_EDIT) { save(); go(PAINT); return; }
+        if (screen == DEV) { save(); go(TITLE); return; }
         if (screen == EDIT) { leaveEditor(false); return; }
         if (screen == LEVEL_LIST || screen == LEVEL_SEL) { go(TITLE); return; }
         if (screen == RIVALS) { saveRivals(); go(TITLE); return; }
@@ -394,7 +405,7 @@ public final class App {
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); saveRivals(); go(armsFor >= 0 ? RIVALS : TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("vidas", "" + lives); st.put("vidamax", "" + hpMax); st.put("mando", pad.save()); }
+    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("vidas", "" + lives); st.put("vidamax", "" + hpMax); st.put("mando", pad.save()); st.put("dev", (devMode ? "1" : "0") + (devGod ? "1" : "0") + (devStill ? "1" : "0") + (devAmmo ? "1" : "0") + (devDmg ? "1" : "0")); st.put("devvel", "" + devSpeed); }
     public void go(int s) { screen = s; focus = 0; pad.clear(); }
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
     public void pointer(int id, float x, float y, boolean down) { if (screen == EDIT) editor.pointer(id, x, y, down); else if (screen == PAD_EDIT) pad.editPointer(id, x / uiScale, y / uiScale, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
@@ -425,13 +436,18 @@ public final class App {
         if (screen == PLAY) {
             if (cd > 0) cd--;
             else {
-                int[] ins = new int[w.robots.length]; ins[0] = m; for (int i = 1; i < ins.length; i++) ins[i] = bots[i].think(w);
-                w.step(ins); ren.tick(w);
-                sounds();
-                ren.consume(w, false);
+                devAcc += devMode ? devSpeed / 100f : 1; // velocidad del juego (modo desarrollador): pasos de simulación por cuadro
+                while (devAcc >= 1 && !w.finished) { devAcc -= 1;
+                    int[] ins = new int[w.robots.length]; ins[0] = m; for (int i = 1; i < ins.length; i++) ins[i] = devMode && devStill ? 0 : bots[i].think(w);
+                    w.step(ins); ren.tick(w);
+                    sounds();
+                    ren.consume(w, false);
+                }
+                for (int i = dmgNums.size() - 1; i >= 0; i--) if (++dmgNums.get(i)[3] > 50) dmgNums.remove(i);
                 if (w.finished && ++overT > 110) go(OVER);
             }
         } else if (screen == ARMS) navArms(press);
+        else if (screen == DEV) { if ((press & Input.B) != 0) back(); }
         else if (screen == PAINT) navPaint(press, keys);
         else if (screen == EDIT) editor.tick(keys, press);
         else navList(press);
@@ -441,7 +457,7 @@ public final class App {
             case Fx.EXPLODE: au.play(f.a > 50 ? Audio.BIG : Audio.BOOM); break;
             case Fx.FLASH: { if (f.b < 0) { au.play(Audio.SHOT); break; } String n = Wpn.ALL[(int) f.b].base; au.play(n.endsWith("SHOTGUN") ? Audio.BLAST : Audio.SHOT); break; }
             case Fx.ARMOR: au.play(Audio.ARMOR); break;
-            case Fx.HIT: au.play(Audio.HURT); break;
+            case Fx.HIT: au.play(Audio.HURT); if (devMode && devDmg && !online && dmgNums.size() < 40) dmgNums.add(new float[]{f.x, f.y, f.a, 0}); break;
             case Fx.STOMP: case Fx.SLAM: au.play(Audio.BOOM); break;
             case Fx.GRAB: au.play(Audio.HOOK); break;
             case Fx.JUMP: if (f.a == 0) au.play(Audio.JUMP); break;
@@ -649,6 +665,7 @@ public final class App {
             case ARMS: arms(g); break;
             case PAINT: paint(g); break;
             case PAD_EDIT: padEdit(g); break;
+            case DEV: dev(g); break;
             case LOBBY: lobby(g); break;
             case EDIT: editor.draw(g); if (toastT > 0) { g.rect(0, 26, W, 14, MINT); txtS(g, toast, W / 2, 37, 8, CREAM, 0); } break;
             case LEVEL_LIST: levels(g); break;
@@ -769,6 +786,7 @@ public final class App {
         List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA\nRED LOCAL", "SELECCIONA NIVEL", "EDITOR DE NIVELES", "RIVALES", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + lives));
         List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, () -> { selPage = pageOf(levelName); go(LEVEL_SEL); }, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> go(RIVALS), () -> { armsFor = -1; go(ARMS); }, () -> go(PAINT),
             this::askLives));
+        if (devMode) { l.add("DESARROLLADOR"); a.add(() -> go(DEV)); }
         if (up != null) { l.add(up.label()); a.add(() -> up.act()); txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
         l.add("SALIR DEL JUEGO"); a.add(() -> { save(); if (dev != null) dev.exit(); });
         // botones gorditos: JUGAR ocupa toda la fila; el resto va de a dos, con el texto en dos líneas si no cabe
@@ -794,6 +812,41 @@ public final class App {
         }
         l.add("VOLVER"); a.add(() -> { closeLobby(); go(TITLE); });
         menu(g, W / 2 - 170 * u, 84 * u, 340 * u, l.toArray(new String[0]), a.toArray(new Runnable[0]));
+    }
+    /** 10 toques seguidos a FAN (sin pausas de más de 1,5 s) encienden o apagan el modo desarrollador. */
+    void fanTap(int ix) {
+        if (!Wpn.ALL[ix].name.equals("FAN")) { fanTaps = 0; return; }
+        fanTaps = frames - fanLast > 90 ? 1 : fanTaps + 1; fanLast = frames;
+        if (fanTaps >= 10) { fanTaps = 0; devMode = !devMode; save(); toast = devMode ? "MODO DESARROLLADOR ACTIVADO: MIRA EL MENÚ" : "MODO DESARROLLADOR APAGADO"; toastT = 180; }
+        else if (fanTaps >= 6) { toast = (10 - fanTaps) + "..."; toastT = 40; }
+    }
+    /** Pantalla del modo desarrollador. */
+    void dev(Gfx g) {
+        sky(g);
+        txtS(g, "MODO DESARROLLADOR", 12 * u, 26 * u, 18 * u, GOLD, -1);
+        txt(g, "SOLO FUERA DE LÍNEA", W - 12 * u, 24 * u, 10 * u, MUTE, 1);
+        String[] n = {"INVENCIBLE", "RIVALES QUIETOS", "BALAS INFINITAS", "VER EL DAÑO"}; boolean[] v = {devGod, devStill, devAmmo, devDmg};
+        float x = 12 * u, wd = W - 24 * u, rh = 34 * u, y = 38 * u, gap = 6 * u; float cw = (wd - gap) / 2;
+        for (int i = 0; i < 4; i++) { final int k = i; float bx = x + (i % 2) * (cw + gap), by = y + (i / 2) * (rh + gap);
+            box(g, bx, by, cw, rh, v[i] ? MINT : BLUE, v[i] ? 0xFF9CF5C9 : SKY, v[i] ? 0xFF1F8A5B : NAVY);
+            String t = n[i] + (v[i] ? ": SÍ" : ": NO"); txtS(g, t, bx + cw / 2, by + rh / 2 + 5 * u, fit(t, 14 * u, cw - 10 * u), CREAM, 0);
+            btn(bx, by, cw, rh, () -> { if (k == 0) devGod = !devGod; else if (k == 1) devStill = !devStill; else if (k == 2) devAmmo = !devAmmo; else devDmg = !devDmg; save(); }); }
+        y += 2 * (rh + gap) + 4 * u;
+        // velocidad del juego
+        float sw = 40 * u; String sp = "VELOCIDAD " + devSpeed + "%" + (devSpeed == 100 ? " (NORMAL)" : "");
+        box(g, x, y, sw, rh, BLUE, SKY, NAVY); txtS(g, "-", x + sw / 2, y + rh / 2 + 6 * u, 18 * u, CREAM, 0);
+        btn(x, y, sw, rh, () -> { devSpeed = Math.max(SPEED_MIN, devSpeed - SPEED_STEP); save(); });
+        box(g, x + sw + gap, y, wd - 2 * sw - 2 * gap, rh, DEEP, NAVY, DEEP); txt(g, sp, x + wd / 2, y + rh / 2 + 5 * u, fit(sp, 14 * u, wd - 2 * sw - 4 * gap), devSpeed == 100 ? CREAM : GOLD, 0);
+        btn(x + sw + gap, y, wd - 2 * sw - 2 * gap, rh, () -> { devSpeed = 100; save(); }); // tocar el centro vuelve a 100 %
+        box(g, x + wd - sw, y, sw, rh, BLUE, SKY, NAVY); txtS(g, "+", x + wd - sw / 2, y + rh / 2 + 6 * u, 18 * u, CREAM, 0);
+        btn(x + wd - sw, y, sw, rh, () -> { devSpeed = Math.min(SPEED_MAX, devSpeed + SPEED_STEP); save(); });
+        y += rh + 4 * u;
+        { String t = "MÁS LENTO = MÁS COMO MEGA MAN · TOCA EL NÚMERO PARA VOLVER A 100%"; txt(g, PixelFont.width(t, 8) < wd ? t : "TOCA EL NÚMERO PARA VOLVER A 100%", x + wd / 2, y + 16 * u, 8, MUTE, 0); }
+        float by = H - 46 * u;
+        box(g, x, by, cw, 36 * u, RED, 0xFFFF8A8F, 0xFF8E1520); txtS(g, "APAGAR MODO", x + cw / 2, by + 23 * u, fit("APAGAR MODO", 14 * u, cw - 10 * u), CREAM, 0);
+        btn(x, by, cw, 36 * u, () -> { devMode = false; save(); toast = "MODO DESARROLLADOR APAGADO"; toastT = 120; go(TITLE); });
+        box(g, x + cw + gap, by, cw, 36 * u, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", x + cw + gap + cw / 2, by + 24 * u, 16 * u, CREAM, 0);
+        btn(x + cw + gap, by, cw, 36 * u, this::back);
     }
     void arms(Gfx g) {
         sky(g);
@@ -823,11 +876,15 @@ public final class App {
             else if (eq) box(g, x, yy, gw - u, gh - 2 * u, PURPLE, 0xFFB46BFF, 0xFF4A00A8);
             else box(g, x, yy, gw - u, gh - 2 * u, NAVY, BLUE, DEEP);
             txt(g, Wpn.ALL[i].label, x + gw / 2, yy + gh / 2 + 3, 8, c ? DEEP : CREAM, 0);
-            btn(x, yy, gw, gh, () -> { cur = ix; eslots()[selSlot] = ix; selSlot = (selSlot + 1) % SLOTS; });
+            btn(x, yy, gw, gh, () -> { cur = ix; eslots()[selSlot] = ix; selSlot = (selSlot + 1) % SLOTS; fanTap(ix); });
         }
         txt(g, Wpn.ALL[cur].desc, gx + 2, H - 3, 8, SKY, -1);
     }
     void hud(Gfx g) {
+        for (float[] d : dmgNums) { // modo desarrollador: daño de cada golpe
+            float x = (d[0] - ren.vx0) * ren.zoom / uiScale, y = (d[1] - ren.vy0) * ren.zoom / uiScale - d[3] * .5f;
+            String t = d[2] >= 10 ? "" + Math.round(d[2]) : String.format(java.util.Locale.US, "%.1f", d[2]);
+            txtS(g, t, x, y, 10, d[2] >= 20 ? RED : GOLD, 0); }
         Robot me = w.robots[this.me];
         float bw = 168 * u; bar(g, 4, 4, bw, me, this.me);
         if (w.robots.length == 2) bar(g, W - 4 - bw, 4, bw, w.robots[1 - this.me], 1 - this.me);
