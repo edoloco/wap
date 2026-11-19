@@ -295,6 +295,7 @@ public final class App {
     public void editorApply(int x, int y) { editor.apply(x, y); }
     public World editorWorld() { return editor.w; }
     public boolean devOn() { return devMode; }
+    public int armsCur() { return cur; }
     public void devSet(boolean god, boolean still, boolean ammo, boolean dmg, int speed) { devGod = god; devStill = still; devAmmo = ammo; devDmg = dmg; devSpeed = speed; }
     public void fanTapTest() { for (int i = 0; i < Wpn.ALL.length; i++) if (Wpn.ALL[i].name.equals("FAN")) { frames++; fanTap(i); } }
     public float uiW() { return W; }
@@ -638,7 +639,7 @@ public final class App {
         if ((p & Input.DOWN) != 0) q = Math.min(n - 1, q + COLS);
         if ((p & Input.UP) != 0) q = Math.max(0, q - COLS);
         cur = L[q];
-        if ((p & Input.A) != 0) { eslots()[selSlot] = cur; selSlot = (selSlot + 1) % SLOTS; au.play(Audio.PICK); }
+        if ((p & Input.A) != 0) { eslots()[selSlot] = cur; selSlot = (selSlot + 1) % SLOTS; au.play(Audio.PICK); fanTap(cur); }
         if ((p & Input.B) != 0) back();
     }
     void btn(float x, float y, float w, float h, Runnable r) { btns.add(new float[]{x, y, x + w, y + h}); acts.add(r); }
@@ -879,6 +880,8 @@ public final class App {
             btn(x, yy, gw, gh, () -> { cur = ix; eslots()[selSlot] = ix; selSlot = (selSlot + 1) % SLOTS; fanTap(ix); });
         }
         txt(g, Wpn.ALL[cur].desc, gx + 2, H - 3, 8, SKY, -1);
+        if (devMode) { String t = "MODO DESARROLLADOR"; float tw = PixelFont.width(t, 8) + 8; g.rect(W - tw - 2, H - 13, tw, 12, PURPLE); txt(g, t, W - tw / 2 - 2, H - 4, 8, CREAM, 0); }
+        if (toastT > 0) { g.rect(0, H / 2 - 10, W, 20, toast.startsWith("MODO") ? MINT : 0xE0101330); txtS(g, toast, W / 2, H / 2 + 4, 8, CREAM, 0); } // aviso de los toques a FAN
     }
     void hud(Gfx g) {
         for (float[] d : dmgNums) { // modo desarrollador: daño de cada golpe

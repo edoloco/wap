@@ -412,6 +412,9 @@ public class Sim {
         q.devSet(true,true,true,true,200);t0=w.tick;for(int i=0;i<60;i++)q.tick();check(w.tick-t0==120,"velocidad 200%: el doble de pasos");
         BufferedImage im=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);q.go(App.DEV);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"21_desarrollador.png"));check(q.overflow==0,"pantalla del modo desarrollador sin textos fuera de los botones");
         for(int i=0;i<10;i++)q.fanTapTest();check(!q.devOn(),"otros 10 toques lo apagan");
+        {App r=new App(store,mute);r.seed(12);r.go(App.ARMS);BufferedImage ai=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);J ag=new J(ai);r.draw(ag);int fan=Wpn.index("FAN");float fx=-1,fy=-1;
+         for(int y=5;y<720&&fx<0;y+=8)for(int x=800;x<1600&&fx<0;x+=10){r.tap(x,y);r.draw(ag);if(r.armsCur()==fan){fx=x;fy=y;}}
+         for(int i=0;i<10;i++){r.tick();r.tick();r.tap(fx,fy);r.draw(ag);}check(fx>=0&&r.devOn(),"tocando 10 veces el botón FAN en la pantalla se activa ("+fx+","+fy+")");ImageIO.write(ai,"png",new File(out,"22_fan_dev.png"));for(int i=0;i<10;i++)r.fanTapTest();r.devSet(false,false,false,false,100);}
     }
     public static void main(String[] a)throws Exception{desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }
