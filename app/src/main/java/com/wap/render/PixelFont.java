@@ -58,6 +58,21 @@ public final class PixelFont {
         put('x', 18593694720L);
     }
     private PixelFont() {}
+    /** Letra chica de 3x5 para números del marcador (dígitos, "/", "x" y BAJAS). Cada fila: 3 bits, el de la izquierda arriba. */
+    static final java.util.HashMap<Character, int[]> T = new java.util.HashMap<>();
+    static {
+        int[][] dg = {{7,5,5,5,7},{2,6,2,2,7},{7,1,7,4,7},{7,1,7,1,7},{5,5,7,1,1},{7,4,7,1,7},{7,4,7,5,7},{7,1,2,2,2},{7,5,7,5,7},{7,5,7,1,7}};
+        for (int i = 0; i < 10; i++) T.put((char) ('0' + i), dg[i]);
+        T.put('/', new int[]{1,1,2,4,4}); T.put('x', new int[]{0,5,2,5,0}); T.put('B', new int[]{6,5,6,5,6}); T.put('A', new int[]{2,5,7,5,5}); T.put('J', new int[]{1,1,1,5,2}); T.put('S', new int[]{3,4,2,1,6}); T.put('-', new int[]{0,0,7,0,0}); }
+    /** Ancho de un texto en letra chica (4 px por letra, 2 por espacio). */
+    public static int tinyW(String s) { int w = 0; for (int i = 0; i < s.length(); i++) w += s.charAt(i) == ' ' ? 2 : 4; return Math.max(0, w - 1); }
+    /** Dibuja en letra chica; y = arriba de las letras; align -1 izquierda, 0 centro, 1 derecha. */
+    public static void tiny(Gfx g, String s, float x, float y, int c, int align) {
+        int w = tinyW(s), px = Math.round(align < 0 ? x : align == 0 ? x - w / 2f : x - w), py = Math.round(y);
+        for (int i = 0; i < s.length(); i++) { char ch = s.charAt(i); if (ch == ' ') { px += 2; continue; }
+            int[] r = T.get(ch); if (r != null) for (int j = 0; j < 5; j++) for (int k = 0; k < 3; k++) if ((r[j] >> (2 - k) & 1) != 0) g.rect(px + k, py + j, 1, 1, c);
+            px += 4; }
+    }
     /** Si el punto (col 0-4, fila 0-6) de la letra está encendido. */
     public static boolean bit(char c, int col, int row) { Long v = G.get(base(Character.toUpperCase(c))); return v != null && col >= 0 && col < 5 && row >= 0 && row < 7 && (v >> (row * 5 + col) & 1) != 0; }
     /** Escala entera según el tamaño pedido: 8 unidades = 1 píxel por punto. */

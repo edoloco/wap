@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 19;
+    public static final int RULES = 20;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
@@ -21,6 +21,8 @@ public final class World {
     public int godId = -1, ammoId = -1;
     /** Modo desarrollador: velocidad de los personajes y de las armas (1 = normal). Se avanza de a pasos enteros. */
     public float robotRate = 1, shotRate = 1; float rAcc, sAcc;
+    /** Premios: cuántos puede haber a la vez y cuáles salen (bits: 1 cápsulas, 2 vida extra, 4 caja de arma). */
+    public int bonusMax = 4, bonusKinds = 7;
     public void setMaxHp(int v) { v = Math.max(25, Math.min(1000, v)); for (Robot r : robots) { r.maxHp = v; r.hp = v; } }
     public World(int seed, int lives, Wpn[] a, Wpn[] b) { this(seed, lives, a, b, null); }
     /** Partida en un nivel guardado (o aleatorio si level es null). */
@@ -243,9 +245,10 @@ public final class World {
         rAcc += robotRate; while (rAcc >= 1) { rAcc -= 1; for (int i = 0; i < robots.length; i++) robots[i].step(this, i < in.length ? in[i] : 0); }
         sAcc += shotRate; while (sAcc >= 1) { sAcc -= 1; for (int i = 0; i < shots.size(); i++) { Shot s = shots.get(i); if (!s.dead) s.step(this); } droneHits(); }
         for (int i = shots.size() - 1; i >= 0; i--) if (shots.get(i).dead) shots.remove(i);
-        if (--bonusT <= 0 && bonus.size() < 4) {
-            bonusT = 500 + rng.i(400);
-            int[] p = freeSpot(null); Bonus b = new Bonus(); b.x = p[0]; b.y = p[1] - 30; b.kind = rng.i(2); bonus.add(b);
+        if (--bonusT <= 0 && bonus.size() < bonusMax && (bonusKinds & 7) != 0) {
+            bonusT = (500 + rng.i(400)) * 4 / Math.max(4, bonusMax); // con más premios, salen más seguido
+            int n = Integer.bitCount(bonusKinds & 7), pick = rng.i(n), kind = 0; for (int k = 0; k < 3; k++) if ((bonusKinds & 1 << k) != 0 && pick-- == 0) { kind = k; break; }
+            int[] p = freeSpot(null); Bonus b = new Bonus(); b.x = p[0]; b.y = p[1] - 30; b.kind = kind; bonus.add(b);
         }
         moveProps();
         if (tick % 20 == 0) support();
@@ -256,7 +259,8 @@ public final class World {
             if (t.solid((int) b.x, (int) ny)) b.vy = 0; else b.y = ny;
             for (Robot r : robots) if (r.alive() && Math.abs(r.px - b.x) < 16 && b.y > r.py - r.h - 8 && b.y < r.py + 8) {
                 if (b.kind == 0) r.heal(r.maxHp * .4f);
-                else r.lives++; // la caja es una vida extra
+                else if (b.kind == 1) r.lives++; // vida extra
+                else { int[] ok = Wpn.enabled(); r.pendWpn = ok.length == 0 ? -1 : ok[rng.i(ok.length)]; r.wpnT = Robot.PEND_TIME; } // caja de arma: el jugador elige dónde ponerla
                 fx(Fx.PICK, b.x, b.y, b.kind, r.id); bonus.remove(i); break;
             }
         }

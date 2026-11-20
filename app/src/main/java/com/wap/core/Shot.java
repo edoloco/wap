@@ -11,6 +11,7 @@ public final class Shot {
         age++;
         if (w.drone) { droneMove(g); return; }
         if (w.trap) { trapMove(g); return; }
+        if (w.pillar) { pillarMove(g); return; }
         if (w.fan) for (Shot o : g.shots) if (o != this && !o.w.fan && o.wait == 0 && Math.abs(o.x - x) < 12 && Math.abs(o.y - y) < 12) { o.vx += vx * .14f; o.vy += vy * .14f; o.stuck = false; } // el ventilador desvía balas
         if (w.accel != 0) { float s = (float) StrictMath.hypot(vx, vy); if (s > .01f && s < 14) { vx += vx / s * w.accel; vy += vy / s * w.accel; } }
         if (w.jitter != 0 && age % 6 == 0) { float a = g.rng.r(-w.jitter, w.jitter), c = (float) StrictMath.cos(a), n = (float) StrictMath.sin(a), t = vx * c - vy * n; vy = vx * n + vy * c; vx = t; }
@@ -39,6 +40,7 @@ public final class Shot {
             }
             if (w.fan) continue;
             if (g.t.solid((int) x, (int) y)) {
+                if (w.tower != null) { towers(g, ox, oy); dead = true; return; }
                 if (!w.sticky && w.radius == 0) g.hitProp(x, y, w.dmg, vx, vy);
                 if (w.sticky) { stuck = true; x = ox; y = oy; vx = vy = 0; return; }
                 if (w.bounce > 0) {
@@ -136,6 +138,29 @@ public final class Shot {
             }
         }
         if (t >= TRAP_BOOM) { dead = true; g.explode(x, y - 3, 12, 6, 6, .8f, owner); }
+    }
+    /** FLAME TOWER: llamas a cada lado sobre el piso, una tras otra hacia afuera, hasta que se acaba el suelo o hay una pared. */
+    void towers(World g, float x0, float y0) {
+        g.fx(Fx.EXPLODE, x0, y0, 14, owner);
+        for (int dir = -1; dir <= 1; dir += 2) {
+            float gy = y0;
+            for (int k = dir < 0 ? 0 : 1; k <= 9; k++) {
+                float px = x0 + dir * k * 15; int y = ground(g, px, gy); if (y < 0) break; gy = y;
+                Shot f = g.spawn(w.tower, owner, px, y, 0, 0); f.wait = k * 3; f.life = w.tower.fuse;
+            }
+        }
+    }
+    /** Primer suelo bajo (x, cerca de y): busca 26 px arriba y 40 abajo; -1 si no hay o es una pared. */
+    static int ground(World g, float x, float y) {
+        int ix = (int) x; if (ix < 0 || ix >= Terrain.W) return -1;
+        for (int yy = (int) y - 26; yy < (int) y + 40; yy++) if (!g.t.solid(ix, yy) && g.t.solid(ix, yy + 1)) return yy + 1;
+        return -1;
+    }
+    /** Llama de FLAME TOWER: sube del piso y quema a quien esté encima (no al que la lanzó). */
+    private void pillarMove(World g) {
+        if (life > 0 && --life == 0) { dead = true; return; }
+        if (g.wet(y - 4)) { dead = true; return; }
+        if (age % 6 == 1) for (Robot r : g.robots) if (r.alive() && r.id != owner && Math.abs(r.px - x) < 9 && r.py > y - 72 && r.py - r.h < y + 2) r.damage(g, w.dmg, 0, -1.2f, owner, x, y - 20);
     }
     public void explode(World g) {
         dead = true;

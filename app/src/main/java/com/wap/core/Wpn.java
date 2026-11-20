@@ -1,7 +1,7 @@
 package com.wap.core;
 /** Definición de un arma: cargador, tiempo de recarga y comportamiento del proyectil, al estilo de la tabla de armas de Liero. */
 public final class Wpn {
-    public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12, GREEN = 13, BLASER = 14, LIGHT = 15, RAY = 16, GAS = 17, WIND = 18, GLOVE = 19, PROTON = 20, TRAP = 21, DRONE = 22, MISSILE = 23;
+    public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12, GREEN = 13, BLASER = 14, LIGHT = 15, RAY = 16, GAS = 17, WIND = 18, GLOVE = 19, PROTON = 20, TRAP = 21, DRONE = 22, MISSILE = 23, FIREBALL = 24, PILLAR = 25;
     /** name: identificador (no cambia; con él se guardan las armas elegidas). label: nombre que se muestra. */
     public String name, desc = "", label;
     /** Arma original de la que viene (para las creadas en armas.txt; decide, por ejemplo, el sonido). */
@@ -13,6 +13,8 @@ public final class Wpn {
     /** Aspecto (armas.txt): color nuevo (0 = el de siempre), tamaño, si se ve su luz y un dibujo propio que reemplaza al cuerpo. */
     /** trail: deja estela aunque vaya rápido. */
     public boolean trail;
+    /** FLAME TOWER: al tocar el suelo levanta llamas a lo largo del piso (tower = la llama que se crea). */
+    public Wpn tower; public boolean pillar;
     public int tint; public float size = 1; public boolean light = true; public Art[] art;
     /** Dibujo animado: cuadros que se turnan (art es el primero), ticks por cuadro y si se mece al flotar. */
     public Art[][] frames; public int artRate = 6; public boolean artBob;
@@ -21,7 +23,7 @@ public final class Wpn {
     public static final class Art { public float[][] polys; public int fill, stroke; public float sw; public boolean eo; }
     /** Nombres de los aspectos para armas.txt, en el orden de las constantes BULLET..MISSILE. */
     public static final String[] LOOKS = {"BALA", "COHETE", "GRANADA", "MINA", "FUEGO", "PUAS", "TIERRA", "ORBE", "NUKE", "CHISPA", "CAPSULAS", "LIMON", "PLASMA",
-        "VERDE", "LASER", "LUZ", "RAYO", "GAS", "VIENTO", "GUANTE", "PROTON", "TRAMPA", "DRON", "MISIL"};
+        "VERDE", "LASER", "LUZ", "RAYO", "GAS", "VIENTO", "GUANTE", "PROTON", "TRAMPA", "DRON", "MISIL", "BOLAFUEGO", "LLAMA"};
     public static final int MAX_ART_POINTS = 600;
     public int charge, clip = 1, delay = 20, reload = 100, parts = 1, fuse = 0, look = BULLET;
     public float spread, speed = 10, grav, bounce, drag = 1, accel, dmg, knock = 1, recoil, lob, jitter;
@@ -59,6 +61,7 @@ public final class Wpn {
         Wpn chiq = sub("chiq").shot(1, 180, 4.5f).phys(.14f, .35f, 1).boom(24, 16, 20, 2.2f).fuse(55).look(GRENADE).split(frag, 4);
         Wpn chiqBig = sub("chiqb").shot(1, 180, 4.5f).phys(.14f, .35f, 1).boom(24, 16, 20, 2.2f).fuse(55).look(GRENADE).split(frag, 8);
         Wpn hop = sub("");
+        Wpn flame = sub("llama").shot(1, 0, 0).phys(0, 0, 1).hit(5, 0, .6f).fuse(48).look(PILLAR); flame.pillar = true; flame.impact = false;
         Wpn missile = sub("misil").shot(1, 0, 8.5f).boom(8, 7, 6, 1).look(MISSILE); missile.impact = true;
         ALL = new Wpn[] {
             new Wpn("PLASMA GUN", "Ráfaga de disparos de energía").mag(30, 9, 90).shot(1, 0, 9.5f).hit(5, 4, .5f).look(LEMON),
@@ -95,10 +98,12 @@ public final class Wpn {
             new Wpn("BIG NUKE", "Lenta y devastadora").mag(1, 40, 480).shot(1, 1, 2.6f).boom(125, 100, 120, 9).look(NUKE).rec(2),
             new Wpn("FAN", "Desvía balas y empuja; nunca se acaba").mag(1, 1, 0).shot(1, 12, 8).phys(0, 0, .96f).hit(0, 0, .35f).fuse(36).look(WIND),
             new Wpn("DRONE", "Teledirigido: la cruceta lo maneja, A dispara misiles, B lo explota").mag(1, 30, 420).shot(1, 0, 3.2f).boom(34, 45, 26, 3.5f).fuse(600).look(DRONE),
+            new Wpn("FLAME TOWER", "Bola de fuego que cae y levanta llamas por todo el suelo").mag(2, 40, 170).shot(1, 2, 6).phys(.2f, 0, 1).hit(8, 0, 1).look(FIREBALL).lob(14),
         };
         for (Wpn w : ALL) {
             if (w.name.equals("BAZOOKA") || w.name.equals("DOOMSDAY")) { w.accel = .24f; w.smoke = true; }
             if (w.name.equals("MINE") || w.name.equals("TRAP")) { w.sticky = true; w.trigger = 28; }
+            if (w.name.equals("FLAME TOWER")) { w.tower = flame; w.trail = true; w.impact = true; }
             if (w.name.equals("PLASMA CANNON")) { w.charge = 75; w.tint = 0xFF5FD0FF; w.size = 1.4f; w.trail = true; } // celeste, más grande y con estela
             if (w.name.equals("CANNON PUNCH")) { w.punch = true; w.impact = true; }
             if (w.name.equals("DEATH RAY")) { w.stagger = 7; w.boomStyle = 1; w.impact = true; }

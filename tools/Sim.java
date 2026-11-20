@@ -428,9 +428,26 @@ public class Sim {
         RobotArt.View v=new RobotArt.View();RobotArt.update(v,b,w);check(v.state==2,"última vida: pose de salto");
         boolean boom=false,death=false;int y0=b.py;Renderer rd=new Renderer();rd.reset(w);BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.freeCam=true;rd.camX=b.px;rd.camY=b.py-60;
         for(int i=0;i<Robot.FINAL;i++){w.step(new int[2]);for(Fx f:w.fx){if(f.type==Fx.EXPLODE&&f.who==b.id)boom=true;if(f.type==Fx.DEATH&&f.a==b.id)death=true;}if(i==Robot.FINAL-20){rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"23_ultima_vida.png"));}w.fx.clear();}
-        check(boom&&death&&w.finished&&w.winner==0,"al final explota y termina la partida (ganó "+w.winner+", explosión "+boom+", baja "+death+", terminó "+w.finished+")");check(b.py<y0,"mientras brilla flota un poco hacia arriba");
+        check(boom&&death&&w.finished&&w.winner==0,"al final explota y termina la partida (ganó "+w.winner+", explosión "+boom+", baja "+death+", terminó "+w.finished+")");check(b.py==y0,"última vida: no flota, se queda donde murió");
         Wpn pc=Wpn.ALL[Wpn.index("PLASMA CANNON")];check(pc.dmg>60&&pc.size>1.2f&&pc.trail&&(pc.tint&0xFF)>200,"PLASMA CANNON: celeste, más grande, con estela y más daño ("+pc.dmg+")");
         Wpn.reset();check(pc.tint!=0&&pc.size>1.2f,"volver a las armas de siempre conserva el aspecto de PLASMA CANNON");
     }
-    public static void main(String[] a)throws Exception{ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void premiosTorre(String out)throws Exception{
+        // FLAME TOWER
+        World w=flat();Robot a=w.robots[0],b=w.robots[1];b.px=a.px+170;run(w,0,2);Wpn ft=Wpn.ALL[Wpn.index("FLAME TOWER")];
+        Shot s=w.spawn(ft,0,a.px+30,a.py-40,2,0);int pill=0;float h0=b.hp;int spread=0;
+        for(int i=0;i<140;i++){w.step(new int[2]);int n=0;float mn=9999,mx=-9999;for(Shot q:w.shots)if(q.w.pillar){n++;mn=Math.min(mn,q.x);mx=Math.max(mx,q.x);}pill=Math.max(pill,n);if(n>0)spread=Math.max(spread,(int)(mx-mn));if(i==40){Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=a.px+80;rd.camY=a.py-60;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"24_flame_tower.png"));}}
+        check(pill>=12&&spread>=200,"FLAME TOWER: al caer levanta llamas a lo largo del suelo ("+pill+" llamas, "+spread+" px)");check(b.hp<h0,"las llamas queman al rival que está lejos del impacto ("+h0+"→"+b.hp+")");check(a.hp==a.maxHp,"y no al que la lanzó");
+        // caja de arma
+        w=flat();a=w.robots[0];w.robots[1].px=1700;run(w,0,2);Bonus bx=new Bonus();bx.kind=2;bx.x=a.px;bx.y=a.py-10;w.bonus.add(bx);run(w,0,2);check(a.pendWpn>=0,"caja de arma: queda un arma esperando lugar");
+        int want=a.pendWpn;w.step(new int[]{Input.DOWN|Input.A,0});check(a.pendWpn<0&&Wpn.index(a.loadout[0].name)==want&&a.ammo[0]==a.loadout[0].clip,"▼+A la pone en el lugar 1, cargada");
+        w.bonus.add(bx=new Bonus());bx.kind=2;bx.x=a.px;bx.y=a.py-10;run(w,0,2);w.step(new int[]{Input.A,0});check(a.pendWpn<0,"A sola la pone en el lugar 4");
+        w.bonus.add(bx=new Bonus());bx.kind=2;bx.x=a.px;bx.y=a.py-10;run(w,0,2);for(int i=0;i<Robot.PEND_TIME+2;i++)w.step(new int[2]);check(a.pendWpn<0,"si no elige, el arma se pierde al rato");
+        {App q=new App(store,mute);q.seed(13);q.start();World qw=q.w;Robot me=qw.robots[0];qw.bonus.add(bx=new Bonus());bx.kind=2;bx.x=me.px;bx.y=me.py-10;for(int i=0;i<95;i++)q.tick();
+         BufferedImage im=new BufferedImage(1560,720,BufferedImage.TYPE_INT_RGB);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"25_caja_arma.png"));check(me.pendWpn>=0,"en la partida aparece el menú de la caja de arma");}
+        // premios configurables
+        w=flat();w.bonusMax=0;for(int i=0;i<3000;i++)w.step(new int[2]);check(w.bonus.isEmpty(),"0 premios: no aparece ninguno");
+        w=flat();w.bonusMax=10;w.bonusKinds=4;int most=0;boolean other=false;for(int i=0;i<4000;i++){w.step(new int[2]);most=Math.max(most,w.bonus.size());for(Bonus q:w.bonus)if(q.kind!=2)other=true;}check(most>4&&!other,"10 premios, solo cajas de arma ("+most+" a la vez)");
+    }
+    public static void main(String[] a)throws Exception{premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

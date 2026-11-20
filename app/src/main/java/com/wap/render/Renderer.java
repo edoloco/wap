@@ -217,6 +217,7 @@ public final class Renderer {
                 case Wpn.NUKE: c = 0xFFFFD040; z = 6; break;
                 case Wpn.ORB: c = 0xFF3FD8FF; z = 3; break;
                 case Wpn.PLASMA: c = 0xFFFFC23A; z = 8; break;
+                case Wpn.FIREBALL: c = 0xFFFF7A1A; z = 6; break;
                 case Wpn.SPARK: c = 0xFFFF9A2A; z = 2; break;
                 case Wpn.MISSILE: c = 0xFFFF9A3A; z = 1.6f; if (w.tick % 2 == 0) { P q = part(SMOKE, s.x, s.y, 0, -.1f, 22, 1.4f, 0x40404650); q.g = 0; } break;
                 default: continue;
@@ -281,7 +282,9 @@ public final class Renderer {
         for (int i = 0; i < w.robots.length; i++) {
             Robot o = w.robots[i];
             if (o.finalT > 0) { // última vida: blanco y brillando cada vez más
-                float k = 1 - o.finalT / (float) Robot.FINAL; RobotArt.draw(white.whiten(g, Math.min(1, .35f + k)), views[i], o, RobotArt.COLOR[i]);
+                float k = 1 - o.finalT / (float) Robot.FINAL;
+                g.save(); g.translate(o.px, o.py - 27); g.rotate(-o.facing * .5f * Math.min(1, k * 1.6f)); g.translate(-o.px, -(o.py - 27)); // gira un poco hacia atrás
+                RobotArt.draw(white.whiten(g, Math.min(1, .35f + k)), views[i], o, RobotArt.COLOR[i]); g.restore();
                 g.additive(true); float pul = (float) Math.sin(o.finalT * (.25f + k * .6f)) * .5f + .5f;
                 g.glow(o.px, o.py - 27, 30 + 50 * k + 8 * pul, (int) (120 + 135 * k * (.6f + .4f * pul)) << 24 | 0xFFFFFF); g.additive(false); continue; }
             if (!o.alive()) continue;
@@ -517,6 +520,12 @@ public final class Renderer {
             case Wpn.ROCKET: { float nx = s.vx / Math.max(1, sp), ny = s.vy / Math.max(1, sp); g.glow(s.x - nx * 9, s.y - ny * 9, 7 + (s.age % 3), 0xEEFF8A2A); g.glow(s.x - nx * 8, s.y - ny * 8, 3, 0xFFFFF0C0); break; }
             case Wpn.FLAME: { float k = s.life > 0 && s.w.fuse > 0 ? s.life / (float) s.w.fuse : 1; g.glow(s.x, s.y, 4 + 9 * (1 - k * .5f), alpha(k > .6f ? 0xFFFFD040 : 0xFFFF6A10, .9f * Math.min(1, k * 2.5f))); break; }
             case Wpn.LEMON: g.glow(s.x, s.y, 8, 0xCCFFE23A); g.save(); g.translate(s.x, s.y); g.rotate((float) Math.atan2(s.vy, s.vx)); g.scale(1.5f, 1); g.circle(0, 0, 2.2f, 0xFFFFFDE0, 0, 0); g.restore(); break;
+            case Wpn.FIREBALL: g.glow(s.x, s.y, 14 + s.age / 2 % 2 * 2, 0xEEFF6A10); g.glow(s.x, s.y, 7, 0xFFFFE07A); break;
+            case Wpn.PILLAR: { // llama que sube del piso: crece, se mueve y se apaga
+                float k = s.life / (float) Math.max(1, s.w.fuse), grow = Math.min(1, s.age / 7f), h = 64 * grow * (k < .25f ? k * 4 : 1);
+                for (int i = 0; i < 6; i++) { float t = i / 5f, yy = s.y - h * t, wob = (float) Math.sin(s.age * .5f + i * 1.7f + s.x) * 2.5f * t;
+                    g.glow(s.x + wob, yy, (11 - 5 * t) * (.6f + .4f * grow), i < 2 ? 0xEEFF5A10 : i < 4 ? 0xDDFF9A2A : 0xCCFFE07A); }
+                g.glow(s.x, s.y - 3, 7, 0xFFFFF0B0); break; }
             case Wpn.PLASMA: g.glow(s.x, s.y, 20 + s.age / 3 % 2 * 2, 0xEEFFC23A); g.glow(s.x, s.y, 9, 0xFFFFF6C0); g.circle(s.x, s.y, 4, 0xFFFFFFFF, 0, 0); break;
             case Wpn.LIGHT: g.glow(s.x, s.y, 11, 0xEE58D2FF); g.glow(s.x, s.y, 5, 0xFFE8FBFF); g.circle(s.x, s.y, 2.2f, 0xFFFFFFFF, 0, 0); break;
             case Wpn.GREEN: g.glow(s.x, s.y, 13, 0xCC5CFF3A); g.circle(s.x, s.y, 5, 0xFF46D62A, 0, 0); g.circle(s.x - 1.5f, s.y - 1.5f, 2, 0xFFD8FFC0, 0, 0); break;
@@ -553,6 +562,10 @@ public final class Renderer {
     /** Bonus: píldoras de colores para curar, caja de balas para recargar. */
     void crate(Gfx g, float x, float y, int kind) {
         if (kind == 0) { pill(g, x - 2, y - 5, -.5f, 0xFFE8323C, 0xFFFFD23D); pill(g, x + 3, y - 10, .6f, 0xFF2F7BFF, 0xFFFFFFFF); return; }
+        if (kind == 2) { // caja de arma: caja naranja con un cañón y un "?"
+            g.rect(x - 9, y - 17, 18, 17, INK); g.rect(x - 8, y - 16, 16, 15, 0xFFE07A20); g.rect(x - 8, y - 16, 16, 2, 0xFFFFB45A); g.rect(x - 8, y - 3, 16, 2, 0xFF9A4A10);
+            g.rect(x - 6, y - 11, 9, 3, 0xFF2A2F3A); g.rect(x - 6, y - 8, 3, 4, 0xFF2A2F3A); g.rect(x + 3, y - 12, 2, 5, 0xFF2A2F3A); // arma
+            g.rect(x + 4, y - 15, 3, 1, 0xFFFFF4D6); g.rect(x + 6, y - 14, 1, 2, 0xFFFFF4D6); g.rect(x + 5, y - 12, 1, 1, 0xFFFFF4D6); g.rect(x + 5, y - 10, 1, 1, 0xFFFFF4D6); return; }
         // vida extra: caja con la cabeza del robot y un "+"
         g.rect(x - 9, y - 17, 18, 17, INK); g.rect(x - 8, y - 16, 16, 15, 0xFF2A9D6A); g.rect(x - 8, y - 16, 16, 2, 0xFF6FE0A8); g.rect(x - 8, y - 3, 16, 2, 0xFF1C6B48);
         g.circle(x - 1, y - 8, 4.6f, 0xFFB9C2CE, INK, .9f); g.circle(x - 2.4f, y - 9.6f, 1.3f, 0xFFFFFFFF, 0, 0); g.rect(x - 4, y - 4, 6, 2, 0xFFFFFFFF);
@@ -651,6 +664,13 @@ public final class Renderer {
             case Wpn.GLOVE: glove(g, s.x, s.y, s.vx > 0 ? 1 : -1, RobotArt.COLOR[s.owner]); break;
             case Wpn.DRONE: drone(g, s); break;
             case Wpn.MISSILE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-3.5f,-1, 1.5f,-1, 3.5f,0, 1.5f,1, -3.5f,1}, 0xFFD8D8E0, 0x99000000, .5f); g.restore(); break;
+            case Wpn.PILLAR: { // lengua de fuego: naranja por fuera, amarilla por dentro, que se mece
+                float k = s.life / (float) Math.max(1, w.fuse), grow = Math.min(1, s.age / 7f), h = 62 * grow * (k < .25f ? k * 4 : 1); if (h < 2) break;
+                float sw = (float) Math.sin(s.age * .45f + s.x * .3f) * 4, bw = 7;
+                g.poly(new float[]{s.x - bw, s.y, s.x - bw * .8f + sw * .3f, s.y - h * .45f, s.x + sw, s.y - h, s.x + bw * .8f + sw * .3f, s.y - h * .45f, s.x + bw, s.y}, 0xEEFF6A10, 0, 0);
+                g.poly(new float[]{s.x - bw * .5f, s.y, s.x - bw * .4f + sw * .2f, s.y - h * .35f, s.x + sw * .7f, s.y - h * .72f, s.x + bw * .4f + sw * .2f, s.y - h * .35f, s.x + bw * .5f, s.y}, 0xFFFFD23A, 0, 0);
+                g.poly(new float[]{s.x - bw * .2f, s.y, s.x + sw * .3f, s.y - h * .35f, s.x + bw * .2f, s.y}, 0xFFFFF6C0, 0, 0); break; }
+            case Wpn.FIREBALL: g.circle(s.x, s.y, 4.5f, 0xFFFF6A10, 0, 0); g.circle(s.x - 1, s.y - 1, 2.6f, 0xFFFFD23A, 0, 0); break;
             case Wpn.DIRT: case Wpn.LEMON: case Wpn.PLASMA: case Wpn.ORB: break; // son pura luz
             case Wpn.NUKE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 9,0, 5,3.4f, -8,3.4f}, 0xFFFFD020, 0, 0); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 7,-1.6f, -8,-1.6f}, 0xFFFFF09A, 0, 0); g.circle(-1, .8f, 1.8f, 0xFF8A5A10, 0, 0); g.restore(); break;
             case Wpn.SPARK: break;

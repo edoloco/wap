@@ -29,7 +29,10 @@ public final class Robot {
     public int rope, hookId = -1; public float rx, ry, rvx, rvy, rlen, hookDy; // 0 sin gancho, 1 volando, 2 enganchado al escenario, 3 enganchado a otro personaje (hookId)
     public final Wpn[] loadout = new Wpn[SLOTS]; public final int[] ammo = new int[SLOTS], reload = new int[SLOTS], delay = new int[SLOTS], charge = new int[SLOTS];
     public boolean wet; /** finalT: perdió la última vida; se pone blanco, brilla y explota al llegar a 0. */
-    public int finalT; public int knockT, knockCd, beamT, trapAim = 1, lassoFree, killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot[] all; Robot hitBody, stompOn; boolean ghost, stompHit;
+    public int finalT;
+    /** Caja de arma: arma que espera que elijas su lugar (con la combinación del lugar + A) y cuánto le queda; -1 nada. */
+    public int pendWpn = -1, wpnT;
+    public static final int PEND_TIME = 420; public int knockT, knockCd, beamT, trapAim = 1, lassoFree, killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot[] all; Robot hitBody, stompOn; boolean ghost, stompHit;
     /** Equipo: los del mismo equipo no se hacen daño. En todos contra todos cada uno tiene el suyo. */
     public int team;
     public int wallDir, windT; int windSlot, lastWall, wallT, wallLock;
@@ -98,7 +101,7 @@ public final class Robot {
         hp = maxHp; armor = (1 << PIECES) - 1; deadT = 0; droneShot = null; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
         int[] p = g.freeSpot(this); px = p[0]; py = p[1];
         for (int i = 0; i < SLOTS; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
-        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; knockT = 0; knockCd = 0; stompCd = 0; thrownT = 0; rollT = 0; aim = 60;
+        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; knockT = 0; knockCd = 0; pendWpn = -1; stompCd = 0; thrownT = 0; rollT = 0; aim = 60;
         g.fx(Fx.SPAWN, px, py - 27, id, 0);
     }
     public void damage(World g, float d, float kx, float ky, int by, float hx, float hy) {
@@ -225,10 +228,20 @@ public final class Robot {
             if (charge[i] > 0 && charge[i] < loadout[i].charge && ++charge[i] == loadout[i].charge) g.fx(Fx.CHARGE, px, py - 30, 1, id).b = Wpn.index(loadout[i].name);
         }
         if (finalT > 0) { // última vida: flota, se pone blanco y brilla; al final explota y se decide la partida
-            if (py > Terrain.EDGE + 80 && finalT % 2 == 0) py -= 1; prev = in;
+            prev = in; // quieto: pose de salto, gira hacia atrás y brilla (Renderer)
             if (--finalT == 0) { g.fx(Fx.DEATH, px, py - 27, id, 0).b = killedBy; g.fx(Fx.EXPLODE, px, py - 27, 70, id); g.checkEnd(); }
             return; }
         if (lives < 0) return;
+        if (pendWpn >= 0 && deadT == 0) { // caja de arma: la combinación del lugar + A la pone ahí
+            int press = in & ~prev;
+            if ((press & Input.A) != 0) {
+                int s = (in & Input.DOWN) != 0 ? 0 : (in & (Input.LEFT | Input.RIGHT)) != 0 ? 1 : (in & Input.UP) != 0 ? 2 : 3;
+                Wpn nw = Wpn.ALL[pendWpn]; loadout[s] = nw; ammo[s] = nw.clip; reload[s] = 0; delay[s] = 10; charge[s] = 0; pendWpn = -1;
+                g.fx(Fx.PICK, px, py - 30, 3, id).b = s; prev = in; return;
+            }
+            if (--wpnT <= 0) pendWpn = -1;
+            in &= ~Input.A; // mientras elige, A no dispara
+        }
         if (deadT > 0) { if (--deadT == 0) spawnAt(g); prev = in; return; }
         if (droneShot != null) { // piloteando: la cruceta y los botones van al dron; al explotar, vuelve el control
             if (droneShot.dead) droneShot = null; else { droneShot.ctlPrev = droneShot.ctl; droneShot.ctl = in; in = 0; }

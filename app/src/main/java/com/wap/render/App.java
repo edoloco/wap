@@ -29,7 +29,9 @@ public final class App {
     /** Vida máxima de los personajes (PERSONALIZAR), para probar el equilibrio. */
     int hpMax = 100; static final int HP_MIN = 25, HP_TOP = 1000, HP_STEP = 25;
     /** Modo desarrollador: se activa tocando 10 veces FAN en el menú de armas. Solo fuera de línea. */
-    boolean devMode, devGod, devStill, devAmmo, devDmg; int devSpeed = 100, devShot = 100, fanTaps; long fanLast; float devAcc;
+    /** Toque en un lugar del menú de la caja de arma: esa combinación + A durante 2 cuadros (viaja como entrada normal, también en línea). */
+    int forceIn, forceT;
+    boolean devMode, devGod, devStill, devAmmo, devDmg; int devSpeed = 100, devShot = 100, devPrizes = 4, devKinds = 7, fanTaps; long fanLast; float devAcc;
     static final int SPEED_MIN = 25, SPEED_MAX = 200, SPEED_STEP = 5;
     /** Números de daño flotando: x, y (mundo), valor, tiempo. */
     final ArrayList<float[]> dmgNums = new ArrayList<>();
@@ -82,7 +84,7 @@ public final class App {
         try { hpMax = Math.max(HP_MIN, Math.min(HP_TOP, Integer.parseInt(st.get("vidamax", "100")))); } catch (Exception e) { }
         pad.load(st.get("mando", ""));
         String dv = st.get("dev", ""); devMode = dv.startsWith("1"); if (dv.length() >= 5) { devGod = dv.charAt(1) == '1'; devStill = dv.charAt(2) == '1'; devAmmo = dv.charAt(3) == '1'; devDmg = dv.charAt(4) == '1'; }
-        try { devSpeed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Integer.parseInt(st.get("devvel", "100")))); devShot = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Integer.parseInt(st.get("devarmas", "100")))); } catch (Exception e) { }
+        try { devSpeed = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Integer.parseInt(st.get("devvel", "100")))); devShot = Math.max(SPEED_MIN, Math.min(SPEED_MAX, Integer.parseInt(st.get("devarmas", "100")))); String[] pz = st.get("devpremios", "4,7").split(","); devPrizes = Math.max(0, Math.min(12, Integer.parseInt(pz[0]))); devKinds = Integer.parseInt(pz[1]) & 7; } catch (Exception e) { }
         myName = clean(st.get("nombre", "")); levelName = st.get("nivel", "");
         try { level = Integer.parseInt(st.get("level", "1")); lives = Integer.parseInt(st.get("vidas", "" + LIVES[Math.max(0, Math.min(LIVES.length - 1, Integer.parseInt(st.get("lives", "2"))))])); lives = Math.max(1, Math.min(LIVES_MAX, lives)); } catch (Exception e) { }
         loadRivals();
@@ -104,7 +106,7 @@ public final class App {
         me = 0; online = false;
         Level lv = testing != null ? testLevel : levelName.isEmpty() ? null : loadLevel(levelName);
         if (lv == null && testing == null && !levelName.isEmpty()) { levelName = ""; save(); } // el nivel elegido ya no existe
-        w = new World(seed, lives, loads, team, lv); w.setMaxHp(hpMax); if (devMode) { w.godId = devGod ? 0 : -1; w.ammoId = devAmmo ? 0 : -1; w.robotRate = devSpeed / 100f; w.shotRate = devShot / 100f; } devAcc = 0; dmgNums.clear(); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
+        w = new World(seed, lives, loads, team, lv); w.setMaxHp(hpMax); if (devMode) { w.godId = devGod ? 0 : -1; w.ammoId = devAmmo ? 0 : -1; w.robotRate = devSpeed / 100f; w.shotRate = devShot / 100f; w.bonusMax = devPrizes; w.bonusKinds = devKinds; } devAcc = 0; dmgNums.clear(); ren.reset(w); cd = 90; screen = PLAY; overT = 0;
         bots = new Bot[n]; for (int i = 1; i < n; i++) bots[i] = new Bot(seed + i, i, SKILL[rLevel[i - 1]]);
         String[] nm = new String[n]; nm[0] = or(myName, "PLAYER 1"); for (int i = 1; i < n; i++) nm[i] = "PLAYER " + (i + 1);
         setNames(nm, n > 2); ren.teams = teams;
@@ -406,7 +408,7 @@ public final class App {
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); saveRivals(); go(armsFor >= 0 ? RIVALS : TITLE); } else if (screen == OVER) go(TITLE);
     }
     public void pauseNow() { if (screen == PLAY) screen = PAUSE; }
-    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("vidas", "" + lives); st.put("vidamax", "" + hpMax); st.put("mando", pad.save()); st.put("dev", (devMode ? "1" : "0") + (devGod ? "1" : "0") + (devStill ? "1" : "0") + (devAmmo ? "1" : "0") + (devDmg ? "1" : "0")); st.put("devvel", "" + devSpeed); st.put("devarmas", "" + devShot); }
+    void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("vidas", "" + lives); st.put("vidamax", "" + hpMax); st.put("mando", pad.save()); st.put("dev", (devMode ? "1" : "0") + (devGod ? "1" : "0") + (devStill ? "1" : "0") + (devAmmo ? "1" : "0") + (devDmg ? "1" : "0")); st.put("devvel", "" + devSpeed); st.put("devarmas", "" + devShot); st.put("devpremios", devPrizes + "," + devKinds); }
     public void go(int s) { screen = s; focus = 0; pad.clear(); }
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
     public void pointer(int id, float x, float y, boolean down) { if (screen == EDIT) editor.pointer(id, x, y, down); else if (screen == PAD_EDIT) pad.editPointer(id, x / uiScale, y / uiScale, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
@@ -422,6 +424,7 @@ public final class App {
     public void tick() {
         frames++;
         int m = keys | (screen == PLAY ? pad.mask() : 0), press = keys & ~last; last = keys;
+        if (forceT > 0) { if (screen == PLAY) m = forceIn; forceT--; }
         if (startKey) { startKey = false; if (screen == PLAY || screen == PAUSE) back(); else if (screen == TITLE) start(); }
         if (pending != null) startOnline();
         if (toastT > 0) toastT--;
@@ -460,7 +463,7 @@ public final class App {
             case Fx.GRAB: au.play(Audio.HOOK); break;
             case Fx.JUMP: if (f.a == 0) au.play(Audio.JUMP); break;
             case Fx.HOOK: au.play(Audio.HOOK); break;
-            case Fx.PICK: au.play(Audio.PICK); if (f.a == 1 && f.who >= 0 && f.who < names.length) { toast = names[f.who] + " GANA UNA VIDA"; toastT = 120; } break;
+            case Fx.PICK: au.play(Audio.PICK); if (f.a == 1 && f.who >= 0 && f.who < names.length) { toast = names[f.who] + " GANA UNA VIDA"; toastT = 120; } if (f.a == 3 && f.who == me) { toast = "ARMA LISTA: " + w.robots[f.who].loadout[(int) f.b].label; toastT = 100; } break;
             case Fx.DEATH: { au.play(Audio.DEATH); int d = (int) f.a, k = (int) f.b; // aviso arriba de la pantalla
                 ren.feed(k == d || k < 0 ? names[d] + " SE BANEÓ DE LA VIDA" : names[d] + " FUE ELIMINADO POR " + names[k], RobotArt.COLOR[d]); break; }
             case Fx.SPLASH: au.play(Audio.JUMP); break;
@@ -821,31 +824,40 @@ public final class App {
     /** Pantalla del modo desarrollador. */
     void dev(Gfx g) {
         sky(g);
-        txtS(g, "MODO DESARROLLADOR", 12 * u, 26 * u, 18 * u, GOLD, -1);
-        txt(g, "SOLO FUERA DE LÍNEA", W - 12 * u, 24 * u, 10 * u, MUTE, 1);
+        txtS(g, "MODO DESARROLLADOR", 12 * u, 24 * u, 16 * u, GOLD, -1);
+        txt(g, "SOLO FUERA DE LÍNEA", W - 12 * u, 22 * u, 10 * u, MUTE, 1);
+        float x = 12 * u, wd = W - 24 * u, rh = 26 * u, gap = 5 * u, y = 32 * u, fs = 12 * u;
+        // interruptores, de a cuatro por fila
         String[] n = {"INVENCIBLE", "RIVALES QUIETOS", "BALAS INFINITAS", "VER EL DAÑO"}; boolean[] v = {devGod, devStill, devAmmo, devDmg};
-        float x = 12 * u, wd = W - 24 * u, rh = 34 * u, y = 38 * u, gap = 6 * u; float cw = (wd - gap) / 2;
+        float cw = (wd - gap) / 2;
         for (int i = 0; i < 4; i++) { final int k = i; float bx = x + (i % 2) * (cw + gap), by = y + (i / 2) * (rh + gap);
-            box(g, bx, by, cw, rh, v[i] ? MINT : BLUE, v[i] ? 0xFF9CF5C9 : SKY, v[i] ? 0xFF1F8A5B : NAVY);
-            String t = n[i] + (v[i] ? ": SÍ" : ": NO"); txtS(g, t, bx + cw / 2, by + rh / 2 + 5 * u, fit(t, 14 * u, cw - 10 * u), CREAM, 0);
-            btn(bx, by, cw, rh, () -> { if (k == 0) devGod = !devGod; else if (k == 1) devStill = !devStill; else if (k == 2) devAmmo = !devAmmo; else devDmg = !devDmg; save(); }); }
-        y += 2 * (rh + gap) + 4 * u;
-        // velocidad de los personajes y de las armas, por separado
-        for (int row = 0; row < 2; row++) { final boolean ch = row == 0; int val = ch ? devSpeed : devShot;
-            float sw = 40 * u; String sp = (ch ? "PERSONAJES " : "ARMAS ") + val + "%";
-            box(g, x, y, sw, rh, BLUE, SKY, NAVY); txtS(g, "-", x + sw / 2, y + rh / 2 + 6 * u, 18 * u, CREAM, 0);
-            btn(x, y, sw, rh, () -> { if (ch) devSpeed = Math.max(SPEED_MIN, devSpeed - SPEED_STEP); else devShot = Math.max(SPEED_MIN, devShot - SPEED_STEP); save(); });
-            box(g, x + sw + gap, y, wd - 2 * sw - 2 * gap, rh, DEEP, NAVY, DEEP); txt(g, sp, x + wd / 2, y + rh / 2 + 5 * u, fit(sp, 14 * u, wd - 2 * sw - 4 * gap), val == 100 ? CREAM : GOLD, 0);
-            btn(x + sw + gap, y, wd - 2 * sw - 2 * gap, rh, () -> { if (ch) devSpeed = 100; else devShot = 100; save(); }); // tocar el centro vuelve a 100 %
-            box(g, x + wd - sw, y, sw, rh, BLUE, SKY, NAVY); txtS(g, "+", x + wd - sw / 2, y + rh / 2 + 6 * u, 18 * u, CREAM, 0);
-            btn(x + wd - sw, y, sw, rh, () -> { if (ch) devSpeed = Math.min(SPEED_MAX, devSpeed + SPEED_STEP); else devShot = Math.min(SPEED_MAX, devShot + SPEED_STEP); save(); });
-            y += rh + 4 * u; }
-        txt(g, "TOCA EL NÚMERO PARA VOLVER A 100%", x + wd / 2, y + 8 * u, 8, MUTE, 0);
-        float by = H - 46 * u;
-        box(g, x, by, cw, 36 * u, RED, 0xFFFF8A8F, 0xFF8E1520); txtS(g, "APAGAR MODO", x + cw / 2, by + 23 * u, fit("APAGAR MODO", 14 * u, cw - 10 * u), CREAM, 0);
-        btn(x, by, cw, 36 * u, () -> { devMode = false; save(); toast = "MODO DESARROLLADOR APAGADO"; toastT = 120; go(TITLE); });
-        box(g, x + cw + gap, by, cw, 36 * u, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", x + cw + gap + cw / 2, by + 24 * u, 16 * u, CREAM, 0);
-        btn(x + cw + gap, by, cw, 36 * u, this::back);
+            toggle(g, bx, by, cw, rh, n[i], v[i], () -> { if (k == 0) devGod = !devGod; else if (k == 1) devStill = !devStill; else if (k == 2) devAmmo = !devAmmo; else devDmg = !devDmg; save(); }); }
+        y += 2 * (rh + gap);
+        // velocidades por separado
+        stepper(g, x, y, wd, rh, "PERSONAJES " + devSpeed + "%", devSpeed == 100, () -> devSpeed = Math.max(SPEED_MIN, devSpeed - SPEED_STEP), () -> devSpeed = 100, () -> devSpeed = Math.min(SPEED_MAX, devSpeed + SPEED_STEP)); y += rh + gap;
+        stepper(g, x, y, wd, rh, "ARMAS " + devShot + "%", devShot == 100, () -> devShot = Math.max(SPEED_MIN, devShot - SPEED_STEP), () -> devShot = 100, () -> devShot = Math.min(SPEED_MAX, devShot + SPEED_STEP)); y += rh + gap;
+        // premios: cuántos a la vez y cuáles
+        stepper(g, x, y, wd, rh, "PREMIOS EN PANTALLA " + devPrizes, devPrizes == 4, () -> devPrizes = Math.max(0, devPrizes - 1), () -> devPrizes = 4, () -> devPrizes = Math.min(12, devPrizes + 1)); y += rh + gap;
+        String[] kn = {"CÁPSULAS", "VIDA EXTRA", "CAJA DE ARMA"}; float c3 = (wd - 2 * gap) / 3;
+        for (int i = 0; i < 3; i++) { final int bit = 1 << i; toggle(g, x + i * (c3 + gap), y, c3, rh, kn[i], (devKinds & bit) != 0, () -> { devKinds ^= bit; save(); }); }
+        y += rh + gap;
+        txt(g, "TOCA EL NÚMERO PARA VOLVER A LO NORMAL", x + wd / 2, y + 8, 8, MUTE, 0);
+        float by = H - 40 * u, bh = 32 * u;
+        box(g, x, by, cw, bh, RED, 0xFFFF8A8F, 0xFF8E1520); txtS(g, "APAGAR MODO", x + cw / 2, by + bh / 2 + 5 * u, fit("APAGAR MODO", 14 * u, cw - 10 * u), CREAM, 0);
+        btn(x, by, cw, bh, () -> { devMode = false; save(); toast = "MODO DESARROLLADOR APAGADO"; toastT = 120; go(TITLE); });
+        box(g, x + cw + gap, by, cw, bh, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", x + cw + gap + cw / 2, by + bh / 2 + 6 * u, 16 * u, CREAM, 0);
+        btn(x + cw + gap, by, cw, bh, this::back);
+    }
+    void toggle(Gfx g, float bx, float by, float bw, float bh, String name, boolean on, Runnable r) {
+        box(g, bx, by, bw, bh, on ? MINT : BLUE, on ? 0xFF9CF5C9 : SKY, on ? 0xFF1F8A5B : NAVY);
+        String t = name + (on ? ": SÍ" : ": NO"); txtS(g, t, bx + bw / 2, by + bh / 2 + 4 * u, fit(t, 12 * u, bw - 8 * u), CREAM, 0); btn(bx, by, bw, bh, r);
+    }
+    /** Fila con − valor +; tocar el valor vuelve a lo normal. */
+    void stepper(Gfx g, float x, float y, float wd, float rh, String label, boolean normal, Runnable minus, Runnable reset, Runnable plus) {
+        float sw = 36 * u, gap = 5 * u, mw = wd - 2 * sw - 2 * gap;
+        box(g, x, y, sw, rh, BLUE, SKY, NAVY); txtS(g, "-", x + sw / 2, y + rh / 2 + 5 * u, 16 * u, CREAM, 0); btn(x, y, sw, rh, () -> { minus.run(); save(); });
+        box(g, x + sw + gap, y, mw, rh, DEEP, NAVY, DEEP); txt(g, label, x + wd / 2, y + rh / 2 + 4 * u, fit(label, 12 * u, mw - 8 * u), normal ? CREAM : GOLD, 0); btn(x + sw + gap, y, mw, rh, () -> { reset.run(); save(); });
+        box(g, x + wd - sw, y, sw, rh, BLUE, SKY, NAVY); txtS(g, "+", x + wd - sw / 2, y + rh / 2 + 5 * u, 16 * u, CREAM, 0); btn(x + wd - sw, y, sw, rh, () -> { plus.run(); save(); });
     }
     void arms(Gfx g) {
         sky(g);
@@ -902,7 +914,9 @@ public final class App {
         int n = SLOTS; float cw = Math.min(112 * u, (W - 2 * bw - 16) / n), x = W / 2 - cw * n / 2;
         for (int i = 0; i < n; i++) {
             float y = 4, h = 27, cx = x + i * cw; Wpn wp = me.loadout[i];
-            box(g, cx + 1, y, cw - 2, h, 0xE61B1F4A, BLUE, DEEP);
+            boolean pick = me.pendWpn >= 0; final int slot = i;
+            box(g, cx + 1, y, cw - 2, h, 0xE61B1F4A, pick && frames / 8 % 2 == 0 ? GOLD : BLUE, DEEP);
+            if (pick) btn(cx, y, cw, h + 4, () -> { forceIn = Input.A | (slot == 0 ? Input.DOWN : slot == 1 ? (w.robots[this.me].facing > 0 ? Input.RIGHT : Input.LEFT) : slot == 2 ? Input.UP : 0); forceT = 2; });
             combo(g, i, cx + 4, y + 6, 8, GOLD);
             int fit = Math.max(3, (int) ((cw - 6) / 6)); String nm = wp.label;
             if (nm.length() > fit && nm.indexOf(' ') > 0) nm = nm.charAt(0) + "." + nm.substring(nm.indexOf(' ') + 1); // PLASMA CANNON → P.CANNON
@@ -913,6 +927,12 @@ public final class App {
             if (wp.charge > 0 && me.reload[i] == 0) { frac = me.charge[i] / (float) wp.charge; c = frac >= 1 && frames / 4 % 2 == 0 ? CREAM : SKY; }
             int bx = Math.round(cx + 4), by = Math.round(y + h - 7), bwd = Math.round(cw - 10);
             g.rect(bx, by, bwd, 3, DEEP); g.rect(bx, by, Math.round(bwd * Math.max(0, Math.min(1, frac))), 3, c);
+        }
+        if (me.pendWpn >= 0) { // caja de arma: menú chico bajo las armas
+            String t = "ARMA NUEVA: " + Wpn.ALL[me.pendWpn].label, h2 = "TOCA UN LUGAR O SU COMBINACIÓN + A";
+            float tw = Math.max(PixelFont.width(t, 8), PixelFont.width(h2, 8)) + 12, tx = W / 2 - tw / 2, ty = 34;
+            box(g, tx, ty, tw, 26, 0xF0101330, GOLD, DEEP); txt(g, t, W / 2, ty + 10, 8, GOLD, 0); txt(g, h2, W / 2, ty + 20, 8, CREAM, 0);
+            float k = me.wpnT / (float) Robot.PEND_TIME; g.rect(tx + 4, ty + 23, (tw - 8) * k, 1, k < .25f ? RED : MINT);
         }
     }
     /** Barra chica de un rival: color, vida en segmentos y vidas que le quedan. */
@@ -930,10 +950,13 @@ public final class App {
             g.rect(sx + i * sw, sy, sw - 1, 6, i < full ? col : DEEP);
             if (i < full) g.rect(sx + i * sw, sy, sw - 1, 1, RobotArt.mixLight(col));
         }
-        int hx = sx, hy = Math.round(y + h - 9);
+        // fila de abajo, sin encimarse: corazón y vidas a la izquierda, bajas a la derecha y la vida en números (letra chica) al medio
+        int hx = sx, hy = Math.round(y + h - 10), right = Math.round(x + w - 4);
         g.rect(hx, hy, 2, 1, PINK); g.rect(hx + 3, hy, 2, 1, PINK); g.rect(hx, hy + 1, 5, 2, PINK); g.rect(hx + 1, hy + 3, 3, 1, PINK); g.rect(hx + 2, hy + 4, 1, 1, PINK);
-        txt(g, "x" + Math.max(0, r.lives), hx + 7, hy + 5, 8, CREAM, -1);
-        txt(g, (int) Math.ceil(Math.max(0, r.hp)) + "/" + (int) r.maxHp, Math.round(x + w / 2), hy + 5, 8, MUTE, 0); // vida en números
-        txt(g, "BAJAS " + r.kills, Math.round(x + w - 4), hy + 5, 8, GOLD, 1);
+        String lv = "" + Math.max(0, r.lives); txt(g, lv, hx + 7, hy + 6, 8, CREAM, -1); int lx = hx + 7 + Math.round(PixelFont.width(lv, 8));
+        String kn = "" + r.kills; float kw = PixelFont.width(kn, 8); txt(g, kn, right, hy + 6, 8, GOLD, 1);
+        int kl = right - Math.round(kw) - 2 - PixelFont.tinyW("BAJAS"); PixelFont.tiny(g, "BAJAS", kl, hy + 1, GOLD, -1);
+        String hp = (int) Math.ceil(Math.max(0, r.hp)) + "/" + (int) r.maxHp; int hw = PixelFont.tinyW(hp), mid = (lx + kl) / 2;
+        if (hw < kl - lx - 4) PixelFont.tiny(g, hp, mid, hy + 1, MUTE, 0); // solo si cabe
     }
 }
