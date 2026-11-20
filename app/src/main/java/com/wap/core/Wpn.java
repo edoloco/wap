@@ -1,7 +1,7 @@
 package com.wap.core;
 /** Definición de un arma: cargador, tiempo de recarga y comportamiento del proyectil, al estilo de la tabla de armas de Liero. */
 public final class Wpn {
-    public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12, GREEN = 13, BLASER = 14, LIGHT = 15, RAY = 16, GAS = 17, WIND = 18, GLOVE = 19, PROTON = 20, TRAP = 21, DRONE = 22, MISSILE = 23, FIREBALL = 24, PILLAR = 25, BUBBLE = 26;
+    public static final int BULLET = 0, ROCKET = 1, GRENADE = 2, MINE = 3, FLAME = 4, SPIKE = 5, DIRT = 6, ORB = 7, NUKE = 8, SPARK = 9, CRATE = 10, LEMON = 11, PLASMA = 12, GREEN = 13, BLASER = 14, LIGHT = 15, RAY = 16, GAS = 17, WIND = 18, GLOVE = 19, PROTON = 20, TRAP = 21, DRONE = 22, MISSILE = 23, FIREBALL = 24, PILLAR = 25, BUBBLE = 26, ICE = 27, TORNADO = 28;
     /** name: identificador (no cambia; con él se guardan las armas elegidas). label: nombre que se muestra. */
     public String name, desc = "", label;
     /** Arma original de la que viene (para las creadas en armas.txt; decide, por ejemplo, el sonido). */
@@ -17,6 +17,8 @@ public final class Wpn {
     public Wpn tower; public boolean pillar;
     /** BOOBLE SEAL: burbuja lenta que sube y atrapa a quien toca. */
     public boolean bubble;
+    /** FREEZEE FLOW (brisa helada), ELECTRIC THUNDER (relámpago) y TORNADO GUN (tornado que corre por el piso). */
+    public boolean ice, bolt, tornado;
     public int tint; public float size = 1; public boolean light = true; public Art[] art;
     /** Dibujo animado: cuadros que se turnan (art es el primero), ticks por cuadro y si se mece al flotar. */
     public Art[][] frames; public int artRate = 6; public boolean artBob;
@@ -25,7 +27,7 @@ public final class Wpn {
     public static final class Art { public float[][] polys; public int fill, stroke; public float sw; public boolean eo; }
     /** Nombres de los aspectos para armas.txt, en el orden de las constantes BULLET..MISSILE. */
     public static final String[] LOOKS = {"BALA", "COHETE", "GRANADA", "MINA", "FUEGO", "PUAS", "TIERRA", "ORBE", "NUKE", "CHISPA", "CAPSULAS", "LIMON", "PLASMA",
-        "VERDE", "LASER", "LUZ", "RAYO", "GAS", "VIENTO", "GUANTE", "PROTON", "TRAMPA", "DRON", "MISIL", "BOLAFUEGO", "LLAMA", "BURBUJA"};
+        "VERDE", "LASER", "LUZ", "RAYO", "GAS", "VIENTO", "GUANTE", "PROTON", "TRAMPA", "DRON", "MISIL", "BOLAFUEGO", "LLAMA", "BURBUJA", "HIELO", "TORNADO"};
     public static final int MAX_ART_POINTS = 600;
     public int charge, clip = 1, delay = 20, reload = 100, parts = 1, fuse = 0, look = BULLET;
     public float spread, speed = 10, grav, bounce, drag = 1, accel, dmg, knock = 1, recoil, lob, jitter;
@@ -101,11 +103,17 @@ public final class Wpn {
             new Wpn("FAN", "Desvía balas y empuja; nunca se acaba").mag(1, 1, 0).shot(1, 12, 8).phys(0, 0, .96f).hit(0, 0, .35f).fuse(36).look(WIND),
             new Wpn("DRONE", "Teledirigido: la cruceta lo maneja, A dispara misiles, B lo explota").mag(1, 30, 420).shot(1, 0, 3.2f).boom(34, 45, 26, 3.5f).fuse(600).look(DRONE),
             new Wpn("BOOBLE SEAL", "Burbuja lenta que sube y atrapa; adentro se pierde vida; se sale disparando 7 veces").mag(1, 30, 200).shot(1, 0, 2.4f).phys(0, 0, 1).hit(1.5f, 0, 0).fuse(720).look(BUBBLE),
+            new Wpn("FREEZEE FLOW", "Brisa helada: quien la recibe un rato queda en un cubo de hielo; escarcha el suelo").mag(90, 1, 150).shot(1, 10, 7).phys(.06f, 0, .96f).hit(0, 0, .1f).fuse(40).look(ICE),
+            new Wpn("ELECTRIC THUNDER", "Relámpago corto: aturde un momento y quita vida").mag(1, 30, 110).shot(1, 0, 0).hit(12, 0, 1).look(BULLET),
+            new Wpn("TORNADO GUN", "Mini tornado que corre por el piso y lanza por los aires a quien toca").mag(2, 40, 160).shot(1, 0, 3.2f).phys(0, 0, 1).hit(6, 0, 0).fuse(300).look(TORNADO),
             new Wpn("FLAME TOWER", "Bola de fuego que cae y levanta llamas por todo el suelo").mag(2, 40, 170).shot(1, 2, 6).phys(.2f, 0, 1).hit(8, 0, 1).look(FIREBALL).lob(14),
         };
         for (Wpn w : ALL) {
             if (w.name.equals("BAZOOKA") || w.name.equals("DOOMSDAY")) { w.accel = .24f; w.smoke = true; }
             if (w.name.equals("MINE") || w.name.equals("TRAP")) { w.sticky = true; w.trigger = 28; }
+            if (w.name.equals("FREEZEE FLOW")) w.ice = true;
+            if (w.name.equals("ELECTRIC THUNDER")) w.bolt = true;
+            if (w.name.equals("TORNADO GUN")) { w.tornado = true; w.impact = false; }
             if (w.name.equals("BOOBLE SEAL")) { w.bubble = true; w.impact = false; }
             if (w.name.equals("FLAME TOWER")) { w.tower = flame; w.trail = true; w.impact = true; }
             if (w.name.equals("PLASMA CANNON")) { w.charge = 75; w.tint = 0xFF5FD0FF; w.size = 1.4f; w.trail = true; } // celeste, más grande y con estela

@@ -34,6 +34,9 @@ public final class Robot {
     public int pendWpn = -1, wpnT;
     /** BOOBLE SEAL: la burbuja que lo tiene atrapado (null si nada) y cuántas veces disparó para romperla. */
     public Shot bubble; public int bubbleHits;
+    /** FREEZEE FLOW: frío acumulado; al llegar a FREEZE queda en un cubo de hielo (frozenT) que se rompe con 7 disparos. */
+    public float chill; public int frozenT, frozenBy, iceHits, icePrev;
+    public static final float FREEZE = 150; public static final int FROZEN_MAX = 600, BOLT_STUN = 40;
     public static final int PEND_TIME = 420; public int knockT, knockCd, beamT, trapAim = 1, lassoFree, killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot[] all; Robot hitBody, stompOn; boolean ghost, stompHit;
     /** Equipo: los del mismo equipo no se hacen daño. En todos contra todos cada uno tiene el suyo. */
     public int team;
@@ -103,7 +106,7 @@ public final class Robot {
         hp = maxHp; armor = (1 << PIECES) - 1; deadT = 0; droneShot = null; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
         int[] p = g.freeSpot(this); px = p[0]; py = p[1];
         for (int i = 0; i < SLOTS; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
-        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; knockT = 0; knockCd = 0; pendWpn = -1; bubble = null; stompCd = 0; thrownT = 0; rollT = 0; aim = 60;
+        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; knockT = 0; knockCd = 0; pendWpn = -1; bubble = null; frozenT = 0; chill = 0; stompCd = 0; thrownT = 0; rollT = 0; aim = 60;
         g.fx(Fx.SPAWN, px, py - 27, id, 0);
     }
     public void damage(World g, float d, float kx, float ky, int by, float hx, float hy) {
@@ -118,7 +121,7 @@ public final class Robot {
         float mul = 1 + (12 - armorCount()) * .08f;
         vx += kx * mul; vy += ky * mul; hurtT = 12;
         if (d <= 0) return;
-        if (knockT == 0 && knockCd == 0 && lassoT == 0 && bubble == null && thrownT == 0 && stunT == 0 && !sliding() && by != id) { // golpeado: se va un poco hacia atrás, como Mega Man (sin quedar invulnerable)
+        if (knockT == 0 && knockCd == 0 && lassoT == 0 && bubble == null && frozenT == 0 && thrownT == 0 && stunT == 0 && !sliding() && by != id) { // golpeado: se va un poco hacia atrás, como Mega Man (sin quedar invulnerable)
             float s = kx != 0 ? Math.signum(kx) : hx < px ? 1 : hx > px ? -1 : -facing;
             knockT = KNOCK; vx = s * KNOCK_PUSH + kx * mul; if (grounded) { vy = Math.min(vy, -2.2f); grounded = false; } windT = 0;
         }
@@ -162,6 +165,7 @@ public final class Robot {
             else if (w.drone) { if (droneShot == null || droneShot.dead) { Shot sh = g.spawn(w, id, mx, my, facing * w.speed, 0); if (sh != null) { droneShot = sh; sh.ang = facing > 0 ? 0 : 3.14159265f; } } }
             else if (w.trap) { float[] tv = TRAP_V[trapAim]; g.spawn(w, id, mx, my, facing * tv[0] + vx * .3f, tv[1]); }
             else if (w.beam) g.beam(w, id, mx, my, dx, dy);
+            else if (w.bolt) g.bolt(w, id, mx, my, dx, dy);
             else { Shot sh = g.spawn(w, id, mx, my, dx * v + (w.grav > .1f ? vx * .4f : 0), dy * v); if (sh != null) sh.wait = i * w.stagger; }
         }
         if (!w.lasso || fireT == 0) g.fx(Fx.FLASH, mx, my, deg * facing, id).b = Wpn.index(w.name); // el rayo continuo avisa solo al empezar
@@ -170,6 +174,13 @@ public final class Robot {
         if (ammo[slot] <= 0) reload[slot] = w.reload;
         return true;
     }
+    /** Un copo de la brisa helada lo enfría; con suficiente frío seguido queda congelado. */
+    public void chill(World g, int by) {
+        if (!alive() || frozenT > 0 || bubble != null || invuln > 0) return;
+        chill += 5; if (chill >= FREEZE) { chill = 0; frozenT = FROZEN_MAX; frozenBy = by; iceHits = 0; rope = 0; slideT = 0; windT = 0; g.fx(Fx.ICE, px, py - h / 2f, 1, id); }
+    }
+    /** El cubo de hielo se rompe. */
+    public void thaw(World g) { frozenT = 0; iceHits = 0; chill = 0; g.fx(Fx.ICE, px, py - h / 2f, 2, id); vy = Math.min(vy, -2); }
     /** Proton Ray: queda atado al rayo del rival. */
     public void lasso(World g, int by) {
         if (!alive() || invuln > 0 || lassoFree > 0) return;
@@ -234,6 +245,13 @@ public final class Robot {
             if (--finalT == 0) { g.fx(Fx.DEATH, px, py - 27, id, 0).b = killedBy; g.fx(Fx.EXPLODE, px, py - 27, 70, id); g.checkEnd(); }
             return; }
         if (lives < 0) return;
+        if (frozenT > 0 && deadT == 0) { // congelado: no se mueve (pero cae); cada A agrieta el hielo; con 7 se rompe
+            if (((in & ~icePrev) & Input.A) != 0) { if (++iceHits >= Shot.BUBBLE_HITS) thaw(g); else g.fx(Fx.ICE, px, py - h / 2f, 0, id); }
+            icePrev = in;
+            if (frozenT > 0 && --frozenT == 0) thaw(g);
+            if (frozenT > 0 && frozenT % Shot.BUBBLE_TICK == 0) damage(g, 1.5f, 0, 0, frozenBy, px, py - 30);
+            in = 0; vx *= .9f;
+        } else if (chill > 0) chill = Math.max(0, chill - .8f);
         if (bubble != null && deadT == 0) { // atrapado en una burbuja: cada A cuenta; con 7 la rompe
             if (((in & ~prev) & Input.A) != 0 && ++bubbleHits >= Shot.BUBBLE_HITS) bubble.pop(g); else if (((in & ~prev) & Input.A) != 0) g.fx(Fx.HOOK, px, py - h / 2f, 0, id);
             prev = in; return; }

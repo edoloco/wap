@@ -458,6 +458,8 @@ public final class App {
             case Fx.EXPLODE: au.play(f.a > 50 ? Audio.BIG : Audio.BOOM); break;
             case Fx.FLASH: { if (f.b < 0) { au.play(Audio.SHOT); break; } String n = Wpn.ALL[(int) f.b].base; au.play(n.endsWith("SHOTGUN") ? Audio.BLAST : Audio.SHOT); break; }
             case Fx.ARMOR: au.play(Audio.ARMOR); break;
+            case Fx.BOLT: au.play(Audio.BLAST); break;
+            case Fx.ICE: au.play(f.a == 2 ? Audio.BOOM : Audio.PICK); break;
             case Fx.HIT: au.play(Audio.HURT); if (devMode && devDmg && !online && dmgNums.size() < 40) dmgNums.add(new float[]{f.x, f.y, f.a, 0}); break;
             case Fx.STOMP: case Fx.SLAM: au.play(Audio.BOOM); break;
             case Fx.GRAB: au.play(Audio.HOOK); break;
@@ -632,13 +634,18 @@ public final class App {
         btn(lx, by, lw, 36 * u, this::back);
     }
     static final int COLS = 3, ROWS = 10;
+    int armsPage;
+    /** Columnas y filas por página de la lista de armas (letra chica). */
+    int armsCols() { float a = W - (12 * u + 200 * u + 8 * u) - 12 * u; return Math.max(3, Math.min(5, (int) (a / 54))); }
+    int armsRows() { return Math.max(4, (int) ((H - 6 * u - 30) / 14)); }
     void navArms(int p) {
         int[] L = Wpn.enabled(); int n = L.length, q = 0; for (int k = 0; k < n; k++) if (L[k] == cur) q = k;
         if ((p & Input.RIGHT) != 0) q = (q + 1) % n;
         if ((p & Input.LEFT) != 0) q = (q + n - 1) % n;
-        if ((p & Input.DOWN) != 0) q = Math.min(n - 1, q + COLS);
-        if ((p & Input.UP) != 0) q = Math.max(0, q - COLS);
-        cur = L[q];
+        int cols = armsCols();
+        if ((p & Input.DOWN) != 0) q = Math.min(n - 1, q + cols);
+        if ((p & Input.UP) != 0) q = Math.max(0, q - cols);
+        cur = L[q]; armsPage = q / (cols * armsRows()); // la página sigue a la elegida
         if ((p & Input.A) != 0) { eslots()[selSlot] = cur; selSlot = (selSlot + 1) % SLOTS; au.play(Audio.PICK); fanTap(cur); }
         if ((p & Input.B) != 0) back();
     }
@@ -673,7 +680,7 @@ public final class App {
             case RIVALS: rivalsScreen(g); focusBox(g); break;
             case LEVEL_SEL: levelSel(g); focusBox(g); break;
             default:
-                ren.overlay(g, s); hud(g);
+                ren.overlay(g, s); if (ren.bolted > 0) g.rect(0, 0, W, H, (int) (ren.bolted * 7) << 24 | 0xF4FAFF); hud(g); // relámpago: destello blanco suave en toda la pantalla
                 if (online && ls.stall > 45) txtS(g, "ESPERANDO AL OTRO TELÉFONO...", W / 2, H * .5f, 16 * u, CREAM, 0);
                 if (online && ls.desync) txtS(g, "PARTIDA DESINCRONIZADA", W / 2, H - 8 * u, 12 * u, RED, 0);
                 if (screen == PLAY) {
@@ -878,18 +885,32 @@ public final class App {
             box(g, bx + hw + 4 * u, by, hw, 38 * u, PURPLE, 0xFFB46BFF, 0xFF4A00A8); txtS(g, "AL AZAR", bx + hw * 1.5f + 4 * u, by + 24 * u, 12 * u, CREAM, 0);
             btn(bx + hw + 4 * u, by, hw, 38 * u, () -> { rRandom[armsFor] = true; saveRivals(); go(RIVALS); });
         } else btn(bx, by, cw, 38 * u, () -> { save(); go(TITLE); });
-        float gx = m + cw + 10 * u, gw = (W - gx - m) / COLS, gh = 28 * u, gy = 8 * u; int[] L = Wpn.enabled(); int n = L.length;
+        // lista de armas en letra chica, por páginas: cabe todo sin encimarse
+        float gx = m + cw + 8 * u, gy = 6 * u, areaW = W - gx - m, areaH = H - gy - 30; int[] L = Wpn.enabled(); int n = L.length;
         if (Wpn.ALL[cur].off) cur = L[0];
-        for (int q = 0; q < n; q++) {
-            final int i = L[q], ix = i; float x = gx + q % COLS * gw, yy = gy + q / COLS * gh;
+        int cols = armsCols(), rowsPP = armsRows(); float gw = areaW / cols, gh = Math.max(13, areaH / rowsPP);
+        int per = cols * rowsPP, pages = Math.max(1, (n + per - 1) / per), q0 = 0; for (int k = 0; k < n; k++) if (L[k] == cur) q0 = k;
+        if (armsPage >= pages) armsPage = pages - 1;
+        for (int q = armsPage * per; q < Math.min(n, (armsPage + 1) * per); q++) {
+            final int i = L[q], ix = i, p = q - armsPage * per; float x = gx + p % cols * gw, yy = gy + p / cols * gh;
             boolean c = i == cur, eq = false; for (int s : eslots()) eq |= s == i;
-            if (c) box(g, x, yy, gw - u, gh - 2 * u, GOLD, CREAM, 0xFFB8862A);
-            else if (eq) box(g, x, yy, gw - u, gh - 2 * u, PURPLE, 0xFFB46BFF, 0xFF4A00A8);
-            else box(g, x, yy, gw - u, gh - 2 * u, NAVY, BLUE, DEEP);
-            txt(g, Wpn.ALL[i].label, x + gw / 2, yy + gh / 2 + 3, 8, c ? DEEP : CREAM, 0);
+            if (c) box(g, x, yy, gw - 2, gh - 2, GOLD, CREAM, 0xFFB8862A);
+            else if (eq) box(g, x, yy, gw - 2, gh - 2, PURPLE, 0xFFB46BFF, 0xFF4A00A8);
+            else box(g, x, yy, gw - 2, gh - 2, NAVY, BLUE, DEEP);
+            String nm = Wpn.ALL[i].label; int tc = c ? DEEP : CREAM; float cx = x + (gw - 2) / 2;
+            if (PixelFont.tinyW(nm) <= gw - 6 || nm.indexOf(' ') < 0) PixelFont.tiny(g, nm, cx, yy + (gh - 2) / 2 - 2, tc, 0);
+            else { int sp = nm.lastIndexOf(' ', nm.length() / 2 + 2); if (sp < 0) sp = nm.indexOf(' '); PixelFont.tiny(g, nm.substring(0, sp), cx, yy + (gh - 2) / 2 - 5, tc, 0); PixelFont.tiny(g, nm.substring(sp + 1), cx, yy + (gh - 2) / 2 + 1, tc, 0); }
             btn(x, yy, gw, gh, () -> { cur = ix; eslots()[selSlot] = ix; selSlot = (selSlot + 1) % SLOTS; fanTap(ix); });
         }
-        txt(g, Wpn.ALL[cur].desc, gx + 2, H - 3, 8, SKY, -1);
+        if (pages > 1) { // páginas: flechas y cuál es
+            float py = gy + rowsPP * gh + 2, bw2 = 30;
+            box(g, gx, py, bw2, 14, armsPage > 0 ? BLUE : DEEP, SKY, NAVY); { float cx = gx + bw2 / 2f, cy = py + 7; g.poly(new float[]{cx - 4, cy, cx + 3, cy - 4, cx + 3, cy + 4}, armsPage > 0 ? CREAM : MUTE, 0, 0); }
+            btn(gx, py - 2, bw2 + 6, 18, () -> armsPage = Math.max(0, armsPage - 1));
+            box(g, gx + areaW - bw2 - 2, py, bw2, 14, armsPage < pages - 1 ? BLUE : DEEP, SKY, NAVY); { float cx = gx + areaW - bw2 / 2f - 2, cy = py + 7; g.poly(new float[]{cx + 4, cy, cx - 3, cy - 4, cx - 3, cy + 4}, armsPage < pages - 1 ? CREAM : MUTE, 0, 0); }
+            btn(gx + areaW - bw2 - 8, py - 2, bw2 + 8, 18, () -> armsPage = Math.min(pages - 1, armsPage + 1));
+            PixelFont.tiny(g, "PAGINA " + (armsPage + 1) + "/" + pages, gx + areaW / 2, py + 5, SKY, 0);
+        }
+        { String d = Wpn.ALL[cur].desc; if (PixelFont.width(d, 8) <= W - gx - 4) txt(g, d, gx + 2, H - 3, 8, SKY, -1); else PixelFont.tiny(g, d, gx + 2, H - 8, SKY, -1); }
         if (devMode) { String t = "MODO DESARROLLADOR"; float tw = PixelFont.width(t, 8) + 8; g.rect(W - tw - 2, H - 13, tw, 12, PURPLE); txt(g, t, W - tw / 2 - 2, H - 4, 8, CREAM, 0); }
         if (toastT > 0) { g.rect(0, H / 2 - 10, W, 20, toast.startsWith("MODO") ? MINT : 0xE0101330); txtS(g, toast, W / 2, H / 2 + 4, 8, CREAM, 0); } // aviso de los toques a FAN
     }

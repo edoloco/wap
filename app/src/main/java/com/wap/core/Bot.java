@@ -74,7 +74,7 @@ public final class Bot {
     public int think(World g) {
         Robot m = g.robots[me], e = g.nearest(m, true); // el enemigo más cercano
         if (!m.alive()) return 0;
-        if (m.bubble != null) return g.tick % 6 < 3 ? Input.A : 0; // atrapado: dispara para romper la burbuja
+        if (m.bubble != null || m.frozenT > 0) return g.tick % 6 < 3 ? Input.A : 0; // atrapado: dispara para romper la burbuja
         if (m.pendWpn >= 0) { int s = (m.pendWpn + m.id + g.tick / 200) % 4; return g.tick % 2 == 0 ? 0 : Input.A | (s == 0 ? Input.DOWN : s == 1 ? Input.RIGHT : s == 2 ? Input.UP : 0); } // caja de arma: la pone en algún lugar
         if (e == null) return 0;
         if (m.piloting()) return pilot(g, m.droneShot, e);

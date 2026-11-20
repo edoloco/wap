@@ -22,6 +22,8 @@ public final class Renderer {
     /** Equipos en pantalla: si hay equipos, la flecha y los nombres usan el color del equipo. */
     public boolean teams;
     final ArrayList<P> ps = new ArrayList<>(); final ArrayList<float[]> beams = new ArrayList<>(); final ArrayList<float[]> booms = new ArrayList<>();
+    /** Relámpagos de ELECTRIC THUNDER: x0, y0, x1, y1, vida, semilla. bolted: destello suave de pantalla (lo dibuja App). */
+    final ArrayList<float[]> bolts = new ArrayList<>(); public int bolted;
     final Random r = new Random(7); final int[] px = new int[Terrain.TILE * Terrain.TILE];
     public float camX = 900, camY = 500, shake; public float zoom = 3; float vx0, vy0, vw, vh; boolean first = true;
 
@@ -158,6 +160,8 @@ public final class Renderer {
                     P p = part(BONE, f.x + r.nextFloat() * 16 - 8, f.y + r.nextFloat() * 30 - 15, (float) Math.cos(a) * v, (float) Math.sin(a) * v - 3, 150, 1, INK); p.slot = k;
                 }
                 booms.add(new float[]{f.x, f.y, 36, 0, 0}); break; }
+            case Fx.BOLT: bolts.add(new float[]{f.x, f.y, f.c, f.d, 10, r.nextInt(1000)}); bolted = 12; break;
+            case Fx.ICE: { int n = f.a == 2 ? 26 : f.a == 1 ? 14 : 5; for (int i = 0; i < n; i++) { P p = part(SQUARE, f.x + (r.nextFloat() - .5f) * 30, f.y + (r.nextFloat() - .5f) * 40, (r.nextFloat() - .5f) * (f.a == 2 ? 6 : 2), -r.nextFloat() * (f.a == 2 ? 4 : 1.5f), 30, f.a == 2 ? 2.4f : 1.4f, r.nextBoolean() ? 0xFFE6F6FF : 0xFF9AD8FF); } break; }
             case Fx.BEAM: beams.add(new float[]{f.x, f.y, f.c, f.d, f.b == 1 ? 12 : 3, f.b}); break;
             case Fx.JUMP: for (int i = 0; i < 6; i++) { P p = part(DUST, f.x + r.nextFloat() * 14 - 7, f.y - 1, (r.nextFloat() - .5f) * 2, -.2f, 16, 2.2f, 0x88E2E7EE); p.g = 0; } break;
             case Fx.SLIDE: { P p = part(DUST, f.x, f.y - 2, -f.a * .6f, -.3f, 14, 2.4f, 0x88E2E7EE); p.g = 0; break; }
@@ -183,6 +187,8 @@ public final class Renderer {
         }
         for (int i = booms.size() - 1; i >= 0; i--) { float[] b = booms.get(i); if (++b[3] > BOOM_T) booms.remove(i); }
         for (int i = beams.size() - 1; i >= 0; i--) if (--beams.get(i)[4] <= 0) beams.remove(i);
+        for (int i = bolts.size() - 1; i >= 0; i--) if (--bolts.get(i)[4] <= 0) bolts.remove(i);
+        if (bolted > 0) bolted--;
         shake *= .86f;
     }
     static final int BOOM_T = 24;
@@ -290,6 +296,7 @@ public final class Renderer {
             if (!o.alive()) continue;
             if (o.rope != 0) { float hx = o.px + o.facing * 12, hy = o.py - 33; g.line(hx, hy, o.rx, o.ry, INK, 1.1f); g.circle(o.rx, o.ry, 2.4f, 0xFFFFFFFF, INK, .7f); }
             RobotArt.draw(g, views[i], o, RobotArt.COLOR[i]);
+            if (o.frozenT > 0) iceCube(g, o); // congelado: dentro de un cubo de hielo
         }
         for (Shot s : w.shots) if (s.w.bubble && !s.dead) bubble(g, s, w); // las burbujas van delante de quien atrapan
         woodCracks(g, w);
@@ -316,6 +323,7 @@ public final class Renderer {
             g.line(b[0], b[1], b[2], b[3], alpha(c, .3f * k), gs ? 9 * k : 5); g.line(b[0], b[1], b[2], b[3], alpha(c, .8f * k), gs ? 4 * k : 2); g.line(b[0], b[1], b[2], b[3], alpha(0xFFFFFFFF, k), gs ? 1.6f * k : .8f);
             g.glow(b[2], b[3], gs ? 14 : 7, alpha(c, k));
         }
+        for (float[] b : bolts) bolt(g, b);
         for (float[] b : booms) boom(g, b);
         world = w;
         for (Shot sh : w.shots) look(g, sh, true);
@@ -561,6 +569,22 @@ public final class Renderer {
         }
     }
     /** Bonus: píldoras de colores para curar, caja de balas para recargar. */
+    /** Relámpago quebrado entre dos puntos: varias capas (halo celeste, núcleo blanco) que parpadean y se apagan. */
+    void bolt(Gfx g, float[] b) {
+        float k = b[4] / 10f; java.util.Random q = new java.util.Random((long) b[5] + (long) b[4] / 3); // cambia de forma cada pocos cuadros
+        float x0 = b[0], y0 = b[1], dx = b[2] - b[0], dy = b[3] - b[1], len = (float) Math.hypot(dx, dy); int n = Math.max(3, (int) (len / 14));
+        float[] p = new float[(n + 1) * 2]; for (int i = 0; i <= n; i++) { float t = i / (float) n, off = i == 0 || i == n ? 0 : (q.nextFloat() - .5f) * 16; p[2 * i] = x0 + dx * t - dy / Math.max(1, len) * off; p[2 * i + 1] = y0 + dy * t + dx / Math.max(1, len) * off; }
+        for (int i = 0; i < n; i++) { g.line(p[2 * i], p[2 * i + 1], p[2 * i + 2], p[2 * i + 3], alpha(0xFF6FC8FF, .45f * k), 7 * k); }
+        for (int i = 0; i < n; i++) { g.line(p[2 * i], p[2 * i + 1], p[2 * i + 2], p[2 * i + 3], alpha(0xFFFFFFFF, k), 2f); }
+        g.glow(b[2], b[3], 18 * k, alpha(0xFFBFE8FF, k)); g.glow(x0, y0, 10 * k, alpha(0xFFBFE8FF, k));
+    }
+    /** FREEZEE FLOW: cubo de hielo celeste, translúcido, con brillo y grietas según los disparos. */
+    void iceCube(Gfx g, Robot o) {
+        float w = 34, h = o.h + 10, x = o.px - w / 2, y = o.py - h + 2;
+        g.rect(x, y, w, h, 0x7088D8FF); g.rect(x, y, w, 2, 0xCCFFFFFF); g.rect(x, y, 2, h, 0xAAE6F8FF); g.rect(x + w - 2, y, 2, h, 0x885AB0E8); g.rect(x, y + h - 2, w, 2, 0x885AB0E8);
+        g.line(x + 6, y + 6, x + 12, y + 18, 0xAAFFFFFF, 1.4f); g.line(x + 8, y + 5, x + 16, y + 9, 0x88FFFFFF, 1);
+        for (int i = 0; i < o.iceHits; i++) { float cx = x + 5 + (i * 11) % (w - 10), cy = y + 8 + (i * 17) % (h - 16); g.line(cx, cy, cx + 6 - (i % 2) * 12, cy + 7, 0xEEFFFFFF, .9f); g.line(cx, cy, cx + 3, cy - 6, 0xEEFFFFFF, .9f); }
+    }
     /** BOOBLE SEAL: burbuja transparente con brillo; con alguien adentro es grande, tiembla y muestra grietas según los disparos. */
     void bubble(Gfx g, Shot s, World w) {
         Robot r = s.held >= 0 ? w.robots[s.held] : null; int hits = r != null ? r.bubbleHits : 0;
@@ -681,6 +705,11 @@ public final class Renderer {
                 g.poly(new float[]{s.x - bw, s.y, s.x - bw * .8f + sw * .3f, s.y - h * .45f, s.x + sw, s.y - h, s.x + bw * .8f + sw * .3f, s.y - h * .45f, s.x + bw, s.y}, 0xEEFF6A10, 0, 0);
                 g.poly(new float[]{s.x - bw * .5f, s.y, s.x - bw * .4f + sw * .2f, s.y - h * .35f, s.x + sw * .7f, s.y - h * .72f, s.x + bw * .4f + sw * .2f, s.y - h * .35f, s.x + bw * .5f, s.y}, 0xFFFFD23A, 0, 0);
                 g.poly(new float[]{s.x - bw * .2f, s.y, s.x + sw * .3f, s.y - h * .35f, s.x + bw * .2f, s.y}, 0xFFFFF6C0, 0, 0); break; }
+            case Wpn.ICE: { float k = s.life > 0 && w.fuse > 0 ? s.life / (float) w.fuse : 1; g.circle(s.x, s.y, 1.2f + (1 - k) * 2.2f, alpha(0xFFE6F6FF, .9f * Math.min(1, k * 2)), 0, 0); break; }
+            case Wpn.TORNADO: { // embudo de aire gris que gira
+                for (int i = 0; i < 7; i++) { float t = i / 6f, yy = s.y - 2 - t * 32, rw = 3 + t * 13, ph = s.age * .6f + i * .9f, ox = (float) Math.sin(ph * .5f) * 3 * t;
+                    g.line(s.x + ox - rw, yy, s.x + ox + rw, yy + (float) Math.sin(ph) * 1.5f, i % 2 == 0 ? 0xCCE8EEF4 : 0xAA9AA7B8, 2.2f); }
+                break; }
             case Wpn.FIREBALL: g.circle(s.x, s.y, 4.5f, 0xFFFF6A10, 0, 0); g.circle(s.x - 1, s.y - 1, 2.6f, 0xFFFFD23A, 0, 0); break;
             case Wpn.DIRT: case Wpn.LEMON: case Wpn.PLASMA: case Wpn.ORB: case Wpn.BUBBLE: break; // pura luz (la burbuja se dibuja aparte, delante)
             case Wpn.NUKE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 9,0, 5,3.4f, -8,3.4f}, 0xFFFFD020, 0, 0); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 7,-1.6f, -8,-1.6f}, 0xFFFFF09A, 0, 0); g.circle(-1, .8f, 1.8f, 0xFF8A5A10, 0, 0); g.restore(); break;

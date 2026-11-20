@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 21;
+    public static final int RULES = 22;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
@@ -220,6 +220,17 @@ public final class World {
             if (hit) break;
         }
         r.beamT = 3; r.beamX = cx; r.beamY = cy;
+    }
+    /** ELECTRIC THUNDER: relámpago corto (unos 170 px) que se corta en el terreno; al primero que toca lo aturde y le quita vida. */
+    public void bolt(Wpn w, int owner, float x, float y, float dx, float dy) {
+        float cx = x, cy = y;
+        for (int i = 0; i < 57; i++) {
+            cx += dx * 3; cy += dy * 3;
+            Robot hit = null; for (Robot r : robots) if (r.id != owner && r.alive() && r.hits(cx, cy)) { hit = r; break; }
+            if (hit != null) { hit.stunT = Math.max(hit.stunT, Robot.BOLT_STUN); hit.damage(this, w.dmg, dx * w.knock, -.5f, owner, cx, cy); break; }
+            if (t.solid((int) cx, (int) cy)) { fx(Fx.CHIPS, cx, cy, 3, 0); break; }
+        }
+        Fx f = fx(Fx.BOLT, x, y, 0, owner); f.c = cx; f.d = cy;
     }
     public void beam(Wpn w, int owner, float x, float y, float dx, float dy) {
         float cx = x, cy = y; int n = w.pierce ? 300 : 240; boolean hit = false;

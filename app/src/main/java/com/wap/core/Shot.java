@@ -17,6 +17,7 @@ public final class Shot {
         if (w.trap) { trapMove(g); return; }
         if (w.pillar) { pillarMove(g); return; }
         if (w.bubble) { bubbleMove(g); return; }
+        if (w.tornado) { tornadoMove(g); return; }
         if (w.fan) for (Shot o : g.shots) if (o != this && !o.w.fan && o.wait == 0 && Math.abs(o.x - x) < 12 && Math.abs(o.y - y) < 12) { o.vx += vx * .14f; o.vy += vy * .14f; o.stuck = false; } // el ventilador desvía balas
         if (w.accel != 0) { float s = (float) StrictMath.hypot(vx, vy); if (s > .01f && s < 14) { vx += vx / s * w.accel; vy += vy / s * w.accel; } }
         if (w.jitter != 0 && age % 6 == 0) { float a = g.rng.r(-w.jitter, w.jitter), c = (float) StrictMath.cos(a), n = (float) StrictMath.sin(a), t = vx * c - vy * n; vy = vx * n + vy * c; vx = t; }
@@ -45,6 +46,7 @@ public final class Shot {
             }
             if (w.fan) continue;
             if (g.t.solid((int) x, (int) y)) {
+                if (w.ice) { g.t.frost((int) x, (int) y, 4); dead = true; return; } // deja escarcha
                 if (w.tower != null) { towers(g, ox, oy); dead = true; return; }
                 if (!w.sticky && w.radius == 0) g.hitProp(x, y, w.dmg, vx, vy);
                 if (w.sticky) { stuck = true; x = ox; y = oy; vx = vy = 0; return; }
@@ -100,6 +102,7 @@ public final class Shot {
     private boolean near(Robot r, int d) { return Math.abs(r.px - x) < d && y > r.py - r.h - d && y < r.py + d; }
     private boolean hitRobot(World g, Robot r) {
         if (w.lasso) { r.lasso(g, owner); dead = true; return true; }
+        if (w.ice) { r.chill(g, owner); dead = true; return true; } // brisa helada: enfría; mucho rato seguido, lo congela
         if (w.punch) { r.launch(g, vx > 0 ? 1 : -1, owner, w.dmg); dead = true; return true; } // Cannon Punch: lo lanza en el sentido del golpe
         if (w.radius > 0) { explode(g); return true; }
         float s = Math.max(1, (float) StrictMath.hypot(vx, vy)), k = Math.max(w.knock, s * .05f); // lo rápido empuja un poco
@@ -183,6 +186,21 @@ public final class Shot {
         if (!g.t.solid((int) x, (int) (y - BUBBLE_R - 2)) && !g.t.solid((int) x - 14, (int) (y - BUBBLE_R + 4)) && !g.t.solid((int) x + 14, (int) (y - BUBBLE_R + 4))) y -= .35f; // sube despacio hasta el techo
         r.px = Math.round(x); r.py = Math.round(y + r.h / 2f); r.vx = r.vy = 0;
         if (age % BUBBLE_TICK == 0) r.damage(g, w.dmg, 0, 0, owner, x, y);
+    }
+    /** TORNADO GUN: corre pegado al piso; sube escalones chicos, cae si no hay suelo y se deshace contra una pared. */
+    private void tornadoMove(World g) {
+        if (life > 0 && --life == 0) { dead = true; return; }
+        int dir = vx >= 0 ? 1 : -1; float nx = x + vx;
+        if (g.t.solid((int) nx + dir * 6, (int) y - 4)) { // escalón: sube hasta 10 px
+            int up = 0; while (up <= 10 && g.t.solid((int) nx + dir * 6, (int) y - 4 - up)) up++;
+            if (up > 10) { dead = true; g.fx(Fx.SMOKE, x, y - 10, 1, 0); return; } y -= up;
+        }
+        x = nx;
+        if (!g.t.solid((int) x, (int) y + 1)) { vy = Math.min(6, vy + .35f); y += vy; while (g.t.solid((int) x, (int) y)) { y--; vy = 0; } } else { vy = 0; while (g.t.solid((int) x, (int) y)) y--; }
+        if (age % 3 == 0) g.fx(Fx.SMOKE, x - dir * 4, y - 2, 0, 0);
+        for (Robot r : g.robots) if (r.alive() && r.id != owner && r.thrownT == 0 && Math.abs(r.px - x) < 12 && r.py > y - 34 && r.py - r.h < y) { // lo lanza para cualquier lado
+            r.launch(g, g.rng.i(2) == 0 ? -1 : 1, owner, w.dmg); r.vx *= g.rng.r(.5f, 1.3f); r.vy = -g.rng.r(6, 11); }
+        if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
     }
     /** La burbuja revienta y suelta a quien tenía. */
     public void pop(World g) {

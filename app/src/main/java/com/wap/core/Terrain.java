@@ -316,6 +316,16 @@ public final class Terrain {
         for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) if (solid(x, y)) m[y * W + x] = 0;
         mark(x0, y0, x1, y1); return true;
     }
+    /** Escarcha de FREEZEE FLOW: aclara hacia el blanco la superficie (píxeles sólidos que tocan aire) en ese radio. */
+    public void frost(int cx, int cy, int r) {
+        for (int y = cy - r; y <= cy + r; y++) for (int x = cx - r; x <= cx + r; x++) {
+            if (!inside(x, y) || !solid(x, y) || isProp(m[y * W + x])) continue;
+            if (solid(x - 1, y) && solid(x + 1, y) && solid(x, y - 1) && solid(x, y + 1)) continue; // solo la superficie
+            int i = y * W + x, c = tex[i], rr = c >> 16 & 255, gg = c >> 8 & 255, bb = c & 255;
+            tex[i] = 0xFF000000 | (rr + (238 - rr) * 8 / 10) << 16 | (gg + (246 - gg) * 8 / 10) << 8 | bb + (255 - bb) * 8 / 10;
+        }
+        mark(cx - r, cy - r, cx + r, cy + r);
+    }
     /** Vetas de la tierra (pruebas). */
     public static int earthTexT(int c, int x, int y) { return earthTex(c, x, y); }
     /** Solo el marco (pruebas). */
