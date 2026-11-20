@@ -437,7 +437,7 @@ public class Sim {
         World w=flat();Robot a=w.robots[0],b=w.robots[1];b.px=a.px+170;run(w,0,2);Wpn ft=Wpn.ALL[Wpn.index("FLAME TOWER")];
         Shot s=w.spawn(ft,0,a.px+30,a.py-40,2,0);int pill=0;float h0=b.hp;int spread=0;
         for(int i=0;i<140;i++){w.step(new int[2]);int n=0;float mn=9999,mx=-9999;for(Shot q:w.shots)if(q.w.pillar){n++;mn=Math.min(mn,q.x);mx=Math.max(mx,q.x);}pill=Math.max(pill,n);if(n>0)spread=Math.max(spread,(int)(mx-mn));if(i==40){Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=a.px+80;rd.camY=a.py-60;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"24_flame_tower.png"));}}
-        check(pill>=12&&spread>=200,"FLAME TOWER: al caer levanta llamas a lo largo del suelo ("+pill+" llamas, "+spread+" px)");check(b.hp<h0,"las llamas queman al rival que está lejos del impacto ("+h0+"→"+b.hp+")");check(a.hp==a.maxHp,"y no al que la lanzó");
+        check(pill>=6&&spread>=140,"FLAME TOWER: al caer levanta llamas a lo largo del suelo ("+pill+" llamas, "+spread+" px)");check(b.hp<h0,"las llamas queman al rival que está lejos del impacto ("+h0+"→"+b.hp+")");check(a.hp==a.maxHp,"y no al que la lanzó");
         // caja de arma
         w=flat();a=w.robots[0];w.robots[1].px=1700;run(w,0,2);Bonus bx=new Bonus();bx.kind=2;bx.x=a.px;bx.y=a.py-10;w.bonus.add(bx);run(w,0,2);check(a.pendWpn>=0,"caja de arma: queda un arma esperando lugar");
         int want=a.pendWpn;w.step(new int[]{Input.DOWN|Input.A,0});check(a.pendWpn<0&&Wpn.index(a.loadout[0].name)==want&&a.ammo[0]==a.loadout[0].clip,"▼+A la pone en el lugar 1, cargada");
@@ -449,5 +449,16 @@ public class Sim {
         w=flat();w.bonusMax=0;for(int i=0;i<3000;i++)w.step(new int[2]);check(w.bonus.isEmpty(),"0 premios: no aparece ninguno");
         w=flat();w.bonusMax=10;w.bonusKinds=4;int most=0;boolean other=false;for(int i=0;i<4000;i++){w.step(new int[2]);most=Math.max(most,w.bonus.size());for(Bonus q:w.bonus)if(q.kind!=2)other=true;}check(most>4&&!other,"10 premios, solo cajas de arma ("+most+" a la vez)");
     }
-    public static void main(String[] a)throws Exception{premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    static void burbuja(String out)throws Exception{
+        World w=flat();Robot a=w.robots[0],b=w.robots[1];b.px=a.px+170;run(w,0,2);
+        Shot f=w.spawn(Wpn.ALL[Wpn.index("FLAME TOWER")],0,a.px+30,a.py-40,2,0);float minX=9999;for(int i=0;i<90;i++){w.step(new int[2]);for(Shot q:w.shots)if(q.w.pillar)minX=Math.min(minX,q.x);}
+        check(minX>=a.px+20,"FLAME TOWER: las llamas van solo hacia donde se disparó");
+        w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+120;run(w,0,2);Wpn bs=Wpn.ALL[Wpn.index("BOOBLE SEAL")];Shot s=w.spawn(bs,0,a.px+20,b.py-26,2.4f,0);
+        int t=0;for(;t<200&&b.bubble==null;t++)w.step(new int[2]);check(b.bubble==s,"BOOBLE SEAL: atrapa al rival ("+t+" cuadros)");
+        int y0=b.py;float h0=b.hp;for(int i=0;i<120;i++)w.step(new int[]{0,Input.RIGHT|Input.B});check(b.py<y0&&b.hp<h0&&b.bubble!=null,"atrapado: sube despacio, pierde vida y no se puede mover ("+y0+"→"+b.py+", "+h0+"→"+b.hp+")");
+        {Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=b.px;rd.camY=b.py-40;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);for(int i=0;i<3;i++){w.step(new int[]{0,i%2==0?Input.A:0});}rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"26_booble_seal.png"));}
+        for(int i=0;i<16&&b.bubble!=null;i++)w.step(new int[]{0,i%2==0?Input.A:0});check(b.bubble==null&&s.dead,"disparando 7 veces rompe la burbuja y sale");
+        w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+600;run(w,0,2);s=w.spawn(bs,0,a.px+20,a.py-200,0,0);float sy=s.y;for(int i=0;i<100;i++)w.step(new int[2]);check(s.y<sy-30,"la burbuja sola flota hacia arriba ("+(sy-s.y)+" px en 100 cuadros)");
+    }
+    public static void main(String[] a)throws Exception{burbuja(a.length>0?a[0]:"out");premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

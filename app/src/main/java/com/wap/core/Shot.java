@@ -6,12 +6,17 @@ public final class Shot {
     public int ctl, ctlPrev, cool; public float ang;
     /** Cuánto gira el dron por cuadro (radianes) y cada cuántos cuadros dispara un misil. */
     public static final float DRONE_TURN = .085f; public static final int DRONE_COOL = 12;
+    /** FLAME TOWER: distancia entre llamas. BOOBLE SEAL: radio con alguien adentro, golpes para romperla, daño cada cuántos cuadros. */
+    public static final float TOWER_GAP = 24, BUBBLE_R = 32; public static final int BUBBLE_HITS = 7, BUBBLE_TICK = 20;
+    /** BOOBLE SEAL: a quién tiene atrapado (-1 nadie). */
+    public int held = -1;
     public void step(World g) {
         if (wait > 0) { wait--; return; } // cargas del Death Ray que salen después
         age++;
         if (w.drone) { droneMove(g); return; }
         if (w.trap) { trapMove(g); return; }
         if (w.pillar) { pillarMove(g); return; }
+        if (w.bubble) { bubbleMove(g); return; }
         if (w.fan) for (Shot o : g.shots) if (o != this && !o.w.fan && o.wait == 0 && Math.abs(o.x - x) < 12 && Math.abs(o.y - y) < 12) { o.vx += vx * .14f; o.vy += vy * .14f; o.stuck = false; } // el ventilador desvía balas
         if (w.accel != 0) { float s = (float) StrictMath.hypot(vx, vy); if (s > .01f && s < 14) { vx += vx / s * w.accel; vy += vy / s * w.accel; } }
         if (w.jitter != 0 && age % 6 == 0) { float a = g.rng.r(-w.jitter, w.jitter), c = (float) StrictMath.cos(a), n = (float) StrictMath.sin(a), t = vx * c - vy * n; vy = vx * n + vy * c; vx = t; }
@@ -142,12 +147,10 @@ public final class Shot {
     /** FLAME TOWER: llamas a cada lado sobre el piso, una tras otra hacia afuera, hasta que se acaba el suelo o hay una pared. */
     void towers(World g, float x0, float y0) {
         g.fx(Fx.EXPLODE, x0, y0, 14, owner);
-        for (int dir = -1; dir <= 1; dir += 2) {
-            float gy = y0;
-            for (int k = dir < 0 ? 0 : 1; k <= 9; k++) {
-                float px = x0 + dir * k * 15; int y = ground(g, px, gy); if (y < 0) break; gy = y;
-                Shot f = g.spawn(w.tower, owner, px, y, 0, 0); f.wait = k * 3; f.life = w.tower.fuse;
-            }
+        int dir = vx >= 0 ? 1 : -1; float gy = y0; // solo hacia donde iba la bola
+        for (int k = 0; k <= 7; k++) {
+            float px = x0 + dir * k * TOWER_GAP; int y = ground(g, px, gy); if (y < 0) break; gy = y;
+            Shot f = g.spawn(w.tower, owner, px, y, 0, 0); f.wait = k * 4; f.life = w.tower.fuse;
         }
     }
     /** Primer suelo bajo (x, cerca de y): busca 26 px arriba y 40 abajo; -1 si no hay o es una pared. */
@@ -161,6 +164,30 @@ public final class Shot {
         if (life > 0 && --life == 0) { dead = true; return; }
         if (g.wet(y - 4)) { dead = true; return; }
         if (age % 6 == 1) for (Robot r : g.robots) if (r.alive() && r.id != owner && Math.abs(r.px - x) < 9 && r.py > y - 72 && r.py - r.h < y + 2) r.damage(g, w.dmg, 0, -1.2f, owner, x, y - 20);
+    }
+    /** BOOBLE SEAL: avanza lento, sube flotando y atrapa al primero que toca; con alguien adentro sube despacio y le quita vida. */
+    private void bubbleMove(World g) {
+        if (life > 0 && --life == 0) { pop(g); return; }
+        if (held < 0) {
+            vx *= .99f; vy = Math.max(-.7f, vy - .012f);
+            float nx = x + vx, ny = y + vy;
+            if (g.t.solid((int) nx, (int) ny - 8)) { vy = 0; ny = y; } if (g.t.solid((int) nx + (vx > 0 ? 8 : -8), (int) ny)) { vx = 0; nx = x; }
+            x = nx; y = ny;
+            for (Robot r : g.robots) if (r.alive() && r.bubble == null && (r.id != owner || age > 40) && Math.abs(r.px - x) < 18 && y > r.py - r.h - 14 && y < r.py + 8) {
+                held = r.id; r.bubble = this; r.bubbleHits = 0; r.vx = r.vy = 0; r.rope = 0; g.fx(Fx.LASSO, x, y, 1, r.id); y = r.py - r.h / 2f; x = r.px; life = 600; break; }
+            if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
+            return;
+        }
+        Robot r = g.robots[held];
+        if (!r.alive() || r.bubble != this) { pop(g); return; }
+        if (!g.t.solid((int) x, (int) (y - BUBBLE_R - 2)) && !g.t.solid((int) x - 14, (int) (y - BUBBLE_R + 4)) && !g.t.solid((int) x + 14, (int) (y - BUBBLE_R + 4))) y -= .35f; // sube despacio hasta el techo
+        r.px = Math.round(x); r.py = Math.round(y + r.h / 2f); r.vx = r.vy = 0;
+        if (age % BUBBLE_TICK == 0) r.damage(g, w.dmg, 0, 0, owner, x, y);
+    }
+    /** La burbuja revienta y suelta a quien tenía. */
+    public void pop(World g) {
+        dead = true; g.fx(Fx.LASSO, x, y, 0, held < 0 ? owner : held);
+        if (held >= 0) { Robot r = g.robots[held]; if (r.bubble == this) { r.bubble = null; r.vy = -2.5f; } held = -1; }
     }
     public void explode(World g) {
         dead = true;

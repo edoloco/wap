@@ -291,6 +291,7 @@ public final class Renderer {
             if (o.rope != 0) { float hx = o.px + o.facing * 12, hy = o.py - 33; g.line(hx, hy, o.rx, o.ry, INK, 1.1f); g.circle(o.rx, o.ry, 2.4f, 0xFFFFFFFF, INK, .7f); }
             RobotArt.draw(g, views[i], o, RobotArt.COLOR[i]);
         }
+        for (Shot s : w.shots) if (s.w.bubble && !s.dead) bubble(g, s, w); // las burbujas van delante de quien atrapan
         woodCracks(g, w);
         water(g, w, x0, y0);
         for (P p : ps) {
@@ -560,6 +561,16 @@ public final class Renderer {
         }
     }
     /** Bonus: píldoras de colores para curar, caja de balas para recargar. */
+    /** BOOBLE SEAL: burbuja transparente con brillo; con alguien adentro es grande, tiembla y muestra grietas según los disparos. */
+    void bubble(Gfx g, Shot s, World w) {
+        Robot r = s.held >= 0 ? w.robots[s.held] : null; int hits = r != null ? r.bubbleHits : 0;
+        float rad = r != null ? Shot.BUBBLE_R + (float) Math.sin(s.age * .2f) * 1.2f : 9 + (float) Math.sin(s.age * .3f) * .8f, sh = hits > 0 ? (float) Math.sin(s.age * 1.7f) * hits * .25f : 0;
+        float cx = s.x + sh, cy = s.y;
+        g.circle(cx, cy, rad, 0x305FD0FF, 0xCC9AE6FF, Math.max(1, rad / 14));
+        g.circle(cx - rad * .4f, cy - rad * .45f, rad * .18f, 0xBBFFFFFF, 0, 0); g.circle(cx + rad * .35f, cy + rad * .4f, rad * .08f, 0x88FFFFFF, 0, 0);
+        for (int i = 0; i < hits; i++) { double a = i * 2.4 + 1; float x0 = cx + (float) Math.cos(a) * rad * .95f, y0 = cy + (float) Math.sin(a) * rad * .95f; // grietas
+            g.line(x0, y0, x0 - (float) Math.cos(a + .4) * rad * .3f, y0 - (float) Math.sin(a + .4) * rad * .3f, 0xEEFFFFFF, .8f); }
+    }
     void crate(Gfx g, float x, float y, int kind) {
         if (kind == 0) { pill(g, x - 2, y - 5, -.5f, 0xFFE8323C, 0xFFFFD23D); pill(g, x + 3, y - 10, .6f, 0xFF2F7BFF, 0xFFFFFFFF); return; }
         if (kind == 2) { // caja de arma: caja naranja con un cañón y un "?"
@@ -671,7 +682,7 @@ public final class Renderer {
                 g.poly(new float[]{s.x - bw * .5f, s.y, s.x - bw * .4f + sw * .2f, s.y - h * .35f, s.x + sw * .7f, s.y - h * .72f, s.x + bw * .4f + sw * .2f, s.y - h * .35f, s.x + bw * .5f, s.y}, 0xFFFFD23A, 0, 0);
                 g.poly(new float[]{s.x - bw * .2f, s.y, s.x + sw * .3f, s.y - h * .35f, s.x + bw * .2f, s.y}, 0xFFFFF6C0, 0, 0); break; }
             case Wpn.FIREBALL: g.circle(s.x, s.y, 4.5f, 0xFFFF6A10, 0, 0); g.circle(s.x - 1, s.y - 1, 2.6f, 0xFFFFD23A, 0, 0); break;
-            case Wpn.DIRT: case Wpn.LEMON: case Wpn.PLASMA: case Wpn.ORB: break; // son pura luz
+            case Wpn.DIRT: case Wpn.LEMON: case Wpn.PLASMA: case Wpn.ORB: case Wpn.BUBBLE: break; // pura luz (la burbuja se dibuja aparte, delante)
             case Wpn.NUKE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 9,0, 5,3.4f, -8,3.4f}, 0xFFFFD020, 0, 0); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 7,-1.6f, -8,-1.6f}, 0xFFFFF09A, 0, 0); g.circle(-1, .8f, 1.8f, 0xFF8A5A10, 0, 0); g.restore(); break;
             case Wpn.SPARK: break;
             default:

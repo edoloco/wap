@@ -32,6 +32,8 @@ public final class Robot {
     public int finalT;
     /** Caja de arma: arma que espera que elijas su lugar (con la combinación del lugar + A) y cuánto le queda; -1 nada. */
     public int pendWpn = -1, wpnT;
+    /** BOOBLE SEAL: la burbuja que lo tiene atrapado (null si nada) y cuántas veces disparó para romperla. */
+    public Shot bubble; public int bubbleHits;
     public static final int PEND_TIME = 420; public int knockT, knockCd, beamT, trapAim = 1, lassoFree, killedBy = -1, lassoT, lassoBy, flinchT, stunT, stompCd, thrownT, rollT; public float aim = 60; public boolean aiming; int thrownBy, airJumps; Robot[] all; Robot hitBody, stompOn; boolean ghost, stompHit;
     /** Equipo: los del mismo equipo no se hacen daño. En todos contra todos cada uno tiene el suyo. */
     public int team;
@@ -101,7 +103,7 @@ public final class Robot {
         hp = maxHp; armor = (1 << PIECES) - 1; deadT = 0; droneShot = null; invuln = 90; vx = vy = 0; rope = 0; slideT = 0; h = STAND_H;
         int[] p = g.freeSpot(this); px = p[0]; py = p[1];
         for (int i = 0; i < SLOTS; i++) { ammo[i] = loadout[i].clip; reload[i] = 0; delay[i] = 0; charge[i] = 0; }
-        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; knockT = 0; knockCd = 0; pendWpn = -1; stompCd = 0; thrownT = 0; rollT = 0; aim = 60;
+        wallDir = 0; wallT = 0; wallLock = 0; windT = 0; fireT = 0; stunT = 0; knockT = 0; knockCd = 0; pendWpn = -1; bubble = null; stompCd = 0; thrownT = 0; rollT = 0; aim = 60;
         g.fx(Fx.SPAWN, px, py - 27, id, 0);
     }
     public void damage(World g, float d, float kx, float ky, int by, float hx, float hy) {
@@ -116,7 +118,7 @@ public final class Robot {
         float mul = 1 + (12 - armorCount()) * .08f;
         vx += kx * mul; vy += ky * mul; hurtT = 12;
         if (d <= 0) return;
-        if (knockT == 0 && knockCd == 0 && lassoT == 0 && thrownT == 0 && stunT == 0 && !sliding() && by != id) { // golpeado: se va un poco hacia atrás, como Mega Man (sin quedar invulnerable)
+        if (knockT == 0 && knockCd == 0 && lassoT == 0 && bubble == null && thrownT == 0 && stunT == 0 && !sliding() && by != id) { // golpeado: se va un poco hacia atrás, como Mega Man (sin quedar invulnerable)
             float s = kx != 0 ? Math.signum(kx) : hx < px ? 1 : hx > px ? -1 : -facing;
             knockT = KNOCK; vx = s * KNOCK_PUSH + kx * mul; if (grounded) { vy = Math.min(vy, -2.2f); grounded = false; } windT = 0;
         }
@@ -232,6 +234,9 @@ public final class Robot {
             if (--finalT == 0) { g.fx(Fx.DEATH, px, py - 27, id, 0).b = killedBy; g.fx(Fx.EXPLODE, px, py - 27, 70, id); g.checkEnd(); }
             return; }
         if (lives < 0) return;
+        if (bubble != null && deadT == 0) { // atrapado en una burbuja: cada A cuenta; con 7 la rompe
+            if (((in & ~prev) & Input.A) != 0 && ++bubbleHits >= Shot.BUBBLE_HITS) bubble.pop(g); else if (((in & ~prev) & Input.A) != 0) g.fx(Fx.HOOK, px, py - h / 2f, 0, id);
+            prev = in; return; }
         if (pendWpn >= 0 && deadT == 0) { // caja de arma: la combinación del lugar + A la pone ahí
             int press = in & ~prev;
             if ((press & Input.A) != 0) {
