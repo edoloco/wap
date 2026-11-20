@@ -18,7 +18,7 @@ public final class Wpn {
     /** BOOBLE SEAL: burbuja lenta que sube y atrapa a quien toca. */
     public boolean bubble;
     /** FREEZEE FLOW (brisa helada), ELECTRIC THUNDER (relámpago) y TORNADO GUN (tornado que corre por el piso). */
-    public boolean ice, bolt, tornado;
+    public boolean ice, bolt, tornado, rain;
     public int tint; public float size = 1; public boolean light = true; public Art[] art;
     /** Dibujo animado: cuadros que se turnan (art es el primero), ticks por cuadro y si se mece al flotar. */
     public Art[][] frames; public int artRate = 6; public boolean artBob;
@@ -103,9 +103,10 @@ public final class Wpn {
             new Wpn("FAN", "Desvía balas y empuja; nunca se acaba").mag(1, 1, 0).shot(1, 12, 8).phys(0, 0, .96f).hit(0, 0, .35f).fuse(36).look(WIND),
             new Wpn("DRONE", "Teledirigido: la cruceta lo maneja, A dispara misiles, B lo explota").mag(1, 30, 420).shot(1, 0, 3.2f).boom(34, 45, 26, 3.5f).fuse(600).look(DRONE),
             new Wpn("BOOBLE SEAL", "Burbuja lenta que sube y atrapa; adentro se pierde vida; se sale disparando 7 veces").mag(1, 30, 200).shot(1, 0, 2.4f).phys(0, 0, 1).hit(1.5f, 0, 0).fuse(720).look(BUBBLE),
-            new Wpn("FREEZEE FLOW", "Brisa helada: quien la recibe un rato queda en un cubo de hielo; escarcha el suelo").mag(90, 1, 150).shot(1, 10, 7).phys(.06f, 0, .96f).hit(0, 0, .1f).fuse(40).look(ICE),
-            new Wpn("ELECTRIC THUNDER", "Relámpago corto: aturde un momento y quita vida").mag(1, 30, 110).shot(1, 0, 0).hit(12, 0, 1).look(BULLET),
+            new Wpn("FREEZEE FLOW", "Brisa helada de largo alcance: congela al instante en un cubo de hielo; escarcha el suelo").mag(90, 1, 150).shot(1, 9, 10).phys(.05f, 0, .975f).hit(0, 0, .1f).fuse(62).look(ICE),
+            new Wpn("ELECTRIC THUNDER", "Relámpago de largo alcance: aturde un momento y quita vida").mag(1, 30, 110).shot(1, 0, 0).hit(12, 0, 1).look(BULLET),
             new Wpn("TORNADO GUN", "Mini tornado que corre por el piso y lanza por los aires a quien toca").mag(2, 40, 160).shot(1, 0, 3.2f).phys(0, 0, 1).hit(6, 0, 0).fuse(300).look(TORNADO),
+            new Wpn("MISILE RAIN", "Suelta 10 misiles hacia arriba que caen en arco como lluvia").mag(1, 40, 280).shot(10, 0, 10).phys(.22f, 0, 1).boom(18, 14, 16, 1.8f).look(MISSILE),
             new Wpn("FLAME TOWER", "Bola de fuego que cae y levanta llamas por todo el suelo").mag(2, 40, 170).shot(1, 2, 6).phys(.2f, 0, 1).hit(8, 0, 1).look(FIREBALL).lob(14),
         };
         for (Wpn w : ALL) {
@@ -113,6 +114,7 @@ public final class Wpn {
             if (w.name.equals("MINE") || w.name.equals("TRAP")) { w.sticky = true; w.trigger = 28; }
             if (w.name.equals("FREEZEE FLOW")) w.ice = true;
             if (w.name.equals("ELECTRIC THUNDER")) w.bolt = true;
+            if (w.name.equals("MISILE RAIN")) { w.rain = true; w.stagger = 4; w.smoke = true; w.impact = true; }
             if (w.name.equals("TORNADO GUN")) { w.tornado = true; w.impact = false; }
             if (w.name.equals("BOOBLE SEAL")) { w.bubble = true; w.impact = false; }
             if (w.name.equals("FLAME TOWER")) { w.tower = flame; w.trail = true; w.impact = true; }

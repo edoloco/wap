@@ -578,6 +578,30 @@ public final class Renderer {
         for (int i = 0; i < n; i++) { g.line(p[2 * i], p[2 * i + 1], p[2 * i + 2], p[2 * i + 3], alpha(0xFFFFFFFF, k), 2f); }
         g.glow(b[2], b[3], 18 * k, alpha(0xFFBFE8FF, k)); g.glow(x0, y0, 10 * k, alpha(0xFFBFE8FF, k));
     }
+    /** TORNADO GUN: embudo gris oscuro en franjas, quebrado en zigzag, con aros blancos que giran, polvo y chispas moradas. */
+    void tornado(Gfx g, Shot s) {
+        float x = s.x, y = s.y, t0 = s.age; int n = 12;
+        g.rect(x - 12, y - 1, 24, 2, 0x33000000); // sombra en el piso
+        float[] cx = new float[n + 1], hw = new float[n + 1], cy = new float[n + 1];
+        for (int i = 0; i <= n; i++) { float t = i / (float) n; cy[i] = y - t * 46; hw[i] = 1.5f + t * t * 9 + t * 7;
+            cx[i] = x + (float) Math.sin(t * 3.8f - 1.2f + Math.sin(t0 * .09f) * .5f) * (3 + t * 9) + (float) Math.sin(t0 * .5f + t * 9) * t * 1.2f; }
+        for (int i = n - 1; i >= 0; i--) { // franjas de abajo hacia arriba (la de arriba tapa a la de abajo)
+            float bh = cy[i] - cy[i + 1] + 1, l = Math.min(cx[i] - hw[i], cx[i + 1] - hw[i + 1]), r = Math.max(cx[i] + hw[i], cx[i + 1] + hw[i + 1]);
+            int band = (int) (i + t0 * .35f) % 3;
+            g.rect(l, cy[i + 1], r - l, bh, band == 0 ? 0xFF55536A : band == 1 ? 0xFF46445A : 0xFF5F5D76);
+            float sp = ((t0 * 1.6f + i * 7) % (r - l)); g.rect(l + sp, cy[i + 1], Math.min(4, r - l - sp), 1.5f, 0xFF7C7A94); // franja clara que da la vuelta
+            g.rect(l, cy[i + 1] + bh - 1.2f, r - l, 1.2f, 0xFF35344A); }
+        g.poly(new float[]{cx[0] - 2.5f, y - 3, cx[0] + 2.5f, y - 3, cx[0], y + 1}, 0xFFD6DCE6, 0, 0); // punta que toca el suelo
+        for (int k = 0; k < 3; k++) { // aros de viento blanco que giran alrededor
+            float t = .25f + k * .3f + (float) Math.sin(t0 * .07f + k) * .06f; int ii = Math.min(n, (int) (t * n)); float rx = hw[ii] + 5, ry = 3 + k, ph = t0 * .32f + k * 2.1f;
+            for (int q = 0; q < 7; q++) { float a0 = ph + q * .3f, a1 = a0 + .3f;
+                if (Math.sin(a0) < -.2f) continue; // la parte de atrás queda escondida
+                g.line(cx[ii] + (float) Math.cos(a0) * rx, cy[ii] + (float) Math.sin(a0) * ry, cx[ii] + (float) Math.cos(a1) * rx, cy[ii] + (float) Math.sin(a1) * ry, 0xEEE4E8F0, 2f); } }
+        for (int q = 0; q < 4; q++) { float a = t0 * .45f + q * 1.57f, d = 6 + q * 2; // polvo y pedacitos que vuelan abajo
+            g.rect(x + (float) Math.cos(a) * d, y - 4 - q * 3 + (float) Math.sin(a) * 2, 2, 2, 0xCCD6DCE6); }
+        if ((s.age / 3) % 9 == 0) { float bx = cx[n / 2], by = cy[n / 2]; // chispa morada adentro
+            g.line(bx - 3, by - 10, bx + 2, by - 3, 0xFFE040FF, 1); g.line(bx + 2, by - 3, bx - 2, by + 3, 0xFFE040FF, 1); g.line(bx - 2, by + 3, bx + 3, by + 9, 0xFFE040FF, 1); }
+    }
     /** FREEZEE FLOW: cubo de hielo celeste, translúcido, con brillo y grietas según los disparos. */
     void iceCube(Gfx g, Robot o) {
         float w = 34, h = o.h + 10, x = o.px - w / 2, y = o.py - h + 2;
@@ -706,10 +730,7 @@ public final class Renderer {
                 g.poly(new float[]{s.x - bw * .5f, s.y, s.x - bw * .4f + sw * .2f, s.y - h * .35f, s.x + sw * .7f, s.y - h * .72f, s.x + bw * .4f + sw * .2f, s.y - h * .35f, s.x + bw * .5f, s.y}, 0xFFFFD23A, 0, 0);
                 g.poly(new float[]{s.x - bw * .2f, s.y, s.x + sw * .3f, s.y - h * .35f, s.x + bw * .2f, s.y}, 0xFFFFF6C0, 0, 0); break; }
             case Wpn.ICE: { float k = s.life > 0 && w.fuse > 0 ? s.life / (float) w.fuse : 1; g.circle(s.x, s.y, 1.2f + (1 - k) * 2.2f, alpha(0xFFE6F6FF, .9f * Math.min(1, k * 2)), 0, 0); break; }
-            case Wpn.TORNADO: { // embudo de aire gris que gira
-                for (int i = 0; i < 7; i++) { float t = i / 6f, yy = s.y - 2 - t * 32, rw = 3 + t * 13, ph = s.age * .6f + i * .9f, ox = (float) Math.sin(ph * .5f) * 3 * t;
-                    g.line(s.x + ox - rw, yy, s.x + ox + rw, yy + (float) Math.sin(ph) * 1.5f, i % 2 == 0 ? 0xCCE8EEF4 : 0xAA9AA7B8, 2.2f); }
-                break; }
+            case Wpn.TORNADO: tornado(g, s); break;
             case Wpn.FIREBALL: g.circle(s.x, s.y, 4.5f, 0xFFFF6A10, 0, 0); g.circle(s.x - 1, s.y - 1, 2.6f, 0xFFFFD23A, 0, 0); break;
             case Wpn.DIRT: case Wpn.LEMON: case Wpn.PLASMA: case Wpn.ORB: case Wpn.BUBBLE: break; // pura luz (la burbuja se dibuja aparte, delante)
             case Wpn.NUKE: g.save(); g.translate(s.x, s.y); g.rotate(a); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 9,0, 5,3.4f, -8,3.4f}, 0xFFFFD020, 0, 0); g.poly(new float[]{-8,-3.4f, 5,-3.4f, 7,-1.6f, -8,-1.6f}, 0xFFFFF09A, 0, 0); g.circle(-1, .8f, 1.8f, 0xFF8A5A10, 0, 0); g.restore(); break;

@@ -198,7 +198,7 @@ public final class Shot {
         x = nx;
         if (!g.t.solid((int) x, (int) y + 1)) { vy = Math.min(6, vy + .35f); y += vy; while (g.t.solid((int) x, (int) y)) { y--; vy = 0; } } else { vy = 0; while (g.t.solid((int) x, (int) y)) y--; }
         if (age % 3 == 0) g.fx(Fx.SMOKE, x - dir * 4, y - 2, 0, 0);
-        for (Robot r : g.robots) if (r.alive() && r.id != owner && r.thrownT == 0 && Math.abs(r.px - x) < 12 && r.py > y - 34 && r.py - r.h < y) { // lo lanza para cualquier lado
+        for (Robot r : g.robots) if (r.alive() && r.id != owner && r.thrownT == 0 && Math.abs(r.px - x) < 14 && r.py > y - 46 && r.py - r.h < y) { // lo lanza para cualquier lado
             r.launch(g, g.rng.i(2) == 0 ? -1 : 1, owner, w.dmg); r.vx *= g.rng.r(.5f, 1.3f); r.vy = -g.rng.r(6, 11); }
         if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
     }

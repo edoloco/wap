@@ -462,21 +462,27 @@ public class Sim {
     }
     static void hieloRayoTornado(String out)throws Exception{
         // FREEZEE FLOW
-        World w=flat();Robot a=w.robots[0],b=w.robots[1];b.px=a.px+60;a.facing=1;run(w,0,2);int sl=-1;for(int k=0;k<4;k++)a.loadout[k]=Wpn.ALL[Wpn.index("FREEZEE FLOW")];a.ammo[3]=90;
-        int t=0;for(;t<200&&b.frozenT==0;t++)w.step(new int[]{Input.A,0});check(b.frozenT>0&&t>40,"FREEZEE FLOW: tras un rato de brisa queda congelado ("+t+" cuadros)");
+        World w=flat();Robot a=w.robots[0],b=w.robots[1];b.px=a.px+160;a.facing=1;run(w,0,2);int sl=-1;for(int k=0;k<4;k++)a.loadout[k]=Wpn.ALL[Wpn.index("FREEZEE FLOW")];a.ammo[3]=90;
+        int t=0;for(;t<200&&b.frozenT==0;t++)w.step(new int[]{Input.A,0});check(b.frozenT>0&&t<40,"FREEZEE FLOW: congela al instante a 160 px ("+t+" cuadros)");
         int bx=b.px;float h0=b.hp;for(int i=0;i<60;i++)w.step(new int[]{0,Input.RIGHT|Input.B});check(Math.abs(b.px-bx)<3&&b.hp<h0,"congelado: no se mueve y pierde vida");
         {Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=b.px-30;rd.camY=b.py-40;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);w.step(new int[]{0,Input.A});w.step(new int[]{0,0});w.step(new int[]{0,Input.A});rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"27_freezee.png"));}
-        for(int i=0;i<16&&b.frozenT>0;i++)w.step(new int[]{0,i%2==0?Input.A:0});check(b.frozenT==0,"7 disparos rompen el hielo");
+        for(int i=0;i<16&&b.frozenT>0;i++)w.step(new int[]{0,i%2==0?Input.A:0});check(b.frozenT==0,"7 disparos rompen el hielo");check(b.iceImm>0,"al salir queda un momento sin poder recongelarse");
         b.px=a.px+700;for(int i=0;i<60;i++)w.step(new int[]{Input.A,0});int frost=0;for(int y=b.py-60;y<b.py+10;y++)for(int x=a.px;x<a.px+300;x++){int c=w.t.tex[y*Terrain.W+x];if(w.t.solid(x,y)&&(c&255)>180&&(c>>16&255)>180)frost++;}check(frost>5,"deja escarcha blanca en el suelo ("+frost+" px)");
         // ELECTRIC THUNDER
         w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+120;a.facing=1;run(w,0,2);for(int k=0;k<4;k++)a.loadout[k]=Wpn.ALL[Wpn.index("ELECTRIC THUNDER")];a.ammo[3]=1;h0=b.hp;boolean bolt=false;
         boolean stun=false;for(int i=0;i<14;i++){w.step(new int[]{i<2?Input.A:0,0});for(Fx f:w.fx)if(f.type==Fx.BOLT)bolt=true;stun|=b.stunT>0;w.fx.clear();}check(stun,"ELECTRIC THUNDER: aturde al rival");
         check(bolt&&b.hp<h0,"y le quita vida ("+h0+"→"+b.hp+")");
-        w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+300;a.facing=1;run(w,0,2);for(int k=0;k<4;k++)a.loadout[k]=Wpn.ALL[Wpn.index("ELECTRIC THUNDER")];a.ammo[3]=1;h0=b.hp;for(int i=0;i<14;i++)w.step(new int[]{i<2?Input.A:0,0});check(b.hp==h0,"el relámpago es corto: no llega a 300");
+        w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+300;a.facing=1;run(w,0,2);for(int k=0;k<4;k++)a.loadout[k]=Wpn.ALL[Wpn.index("ELECTRIC THUNDER")];a.ammo[3]=1;h0=b.hp;for(int i=0;i<14;i++)w.step(new int[]{i<2?Input.A:0,0});check(b.hp<h0,"el relámpago llega lejos (300 px)");
         // TORNADO GUN
         w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+250;run(w,0,2);Shot tn=w.spawn(Wpn.ALL[Wpn.index("TORNADO GUN")],0,a.px+20,a.py-2,3.2f,0);int ty=(int)tn.y;boolean thrown=false;
         for(int i=0;i<120;i++){w.step(new int[2]);if(b.thrownT>0)thrown=true;if(i==30){Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=tn.x;rd.camY=tn.y-40;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"28_tornado.png"));}}
         check(thrown,"TORNADO GUN: recorre el piso y lanza por los aires al rival");
+        // MISILE RAIN
+        w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+900;a.facing=1;run(w,0,2);for(int k=0;k<4;k++)a.loadout[k]=Wpn.ALL[Wpn.index("MISILE RAIN")];a.ammo[3]=1;
+        int booms=0;float minX=1e9f,maxX=-1e9f,top=1e9f;int y0=a.py;
+        for(int i=0;i<200;i++){w.step(new int[]{i<2?Input.A:0,0});for(Shot sh:w.shots)if(sh.w.rain&&sh.wait==0)top=Math.min(top,sh.y);for(Fx f:w.fx)if(f.type==Fx.EXPLODE){booms++;minX=Math.min(minX,f.x);maxX=Math.max(maxX,f.x);}w.fx.clear();
+            if(i==40){Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=a.px-60;rd.camY=a.py-200;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"30_misile_rain.png"));}}
+        check(booms>=10,"MISILE RAIN: 10 misiles que estallan ("+booms+")");check(y0-top>120,"suben alto antes de caer ("+(int)(y0-top)+" px)");check(maxX-minX>120&&minX>a.px+40,"caen repartidos como lluvia ("+(int)minX+".."+(int)maxX+")");
         // pantalla de armas en tres tamaños
         for(int[] r:new int[][]{{1280,720},{2048,1536},{2400,1080}}){App q=new App(store,mute);q.seed(3);q.go(App.ARMS);BufferedImage im=new BufferedImage(r[0],r[1],BufferedImage.TYPE_INT_RGB);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"29_armas_"+r[0]+".png"));check(q.overflow==0,"pantalla de armas "+r[0]+"x"+r[1]+" sin textos fuera");}
     }
