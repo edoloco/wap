@@ -529,9 +529,9 @@ public class Sim {
         String[][] cases={{"CANNON PUNCH","lanzado"},{"TORNADO GUN","lanzado"},{"ELECTRIC THUNDER","aturdido"},{"FREEZEE FLOW","congelado"},{"BOOBLE SEAL","burbuja"},{"PROTON RAY","atado"},{"BAZOOKA","empujado"},{"FAN","empujado"}};
         for(String[] c:cases){
             Base b=Base.empty("E");for(int x=0;x<16;x++)b.putTile(x,8,Base.T_STEEL,0,0);b.putThing(9,7,Base.E_TURRET);
-            World w=new World(3,3,cargas(c[0]),b,false);Robot r=w.robots[0];BaseRun.Foe f=w.run.foes.get(0);for(int i=0;i<20;i++)w.step(new int[2]);
+            World w=new World(3,3,cargas(c[0]),b,false);Robot r=w.robots[0];BaseRun.Foe f=w.run.foes.get(0);for(int i=0;i<20;i++)w.step(new int[2]);Renderer fxr=new Renderer();fxr.reset(w); // los efectos pasan por el Renderer, como en el juego
             r.px=(int)f.x-(c[0].equals("TORNADO GUN")||c[0].equals("BAZOOKA")?120:60);r.py=(int)f.y+1;r.facing=1;r.vy=0;float x0=f.x,hp0=f.hp;boolean ok=false;
-            for(int i=0;i<240&&!ok;i++){w.step(new int[]{(i%30<20||c[0].equals("PROTON RAY")||c[0].equals("FAN"))?Input.A:0,0});r.invuln=99;r.facing=1;for(int k=0;k<4;k++)r.ammo[k]=99;
+            for(int i=0;i<240&&!ok;i++){w.step(new int[]{(i%30<20||c[0].equals("PROTON RAY")||c[0].equals("FAN"))?Input.A:0,0});fxr.consume(w,false);r.invuln=99;r.facing=1;for(int k=0;k<4;k++)r.ammo[k]=99;
                 switch(c[1]){case "lanzado":ok=f.thrownT>0||f.rot!=0;break;case "aturdido":ok=f.stunT>0&&f.hp<hp0;break;case "congelado":ok=f.frozenT>0;break;case "burbuja":ok=f.bubble!=null;break;case "atado":ok=f.lassoT>0;break;default:ok=Math.abs(f.x-x0)>3||f.kx!=0;}
                 if(!f.alive&&!c[1].equals("empujado"))break;}
             if(c[1].equals("empujado")&&!f.alive)ok=true;
@@ -539,7 +539,7 @@ public class Sim {
             if(c[0].equals("FREEZEE FLOW")){Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=f.x;rd.camY=f.y-60;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"41_enemigo_congelado.png"));}
         }
         Base b=Base.empty("T");for(int x=0;x<16;x++)b.putTile(x,8,Base.T_STEEL,0,0);b.putThing(9,7,Base.E_BADPAL);World w=new World(3,3,cargas("SHOTGUN"),b,false);BaseRun.Foe f=w.run.foes.get(0);
-        w.spawn(Wpn.ALL[Wpn.index("ROBOT TRAP")],0,f.x+30,f.y-10,0,0);for(int i=0;i<300&&f.alive;i++){w.step(new int[2]);w.robots[0].invuln=99;}check(!f.alive,"enemigos: la ROBOT TRAP los atrae y los destruye");
+        w.spawn(Wpn.ALL[Wpn.index("ROBOT TRAP")],0,f.x+30,f.y-10,0,0);Renderer fxr=new Renderer();fxr.reset(w);for(int i=0;i<300&&f.alive;i++){w.step(new int[2]);fxr.consume(w,false);w.robots[0].invuln=99;}check(!f.alive,"enemigos: la ROBOT TRAP los atrae y los destruye");
     }
     static void basesPorPartes(String out)throws Exception{
         Base b=Base.empty("LARGA");for(int i=1;i<40;i++)b.addRoom(i,0);

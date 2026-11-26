@@ -119,7 +119,7 @@ public final class Renderer {
             case Fx.CHIPS: for (int i = 0; i < f.a; i++) part(SQUARE, f.x, f.y, (r.nextFloat() - .5f) * 4, -r.nextFloat() * 3, 24, 1.6f, DIRT2); break;
             case Fx.SMOKE: { P p = part(f.a > 0 ? FIRE : SMOKE, f.x, f.y, 0, -.2f, f.a > 0 ? 14 : 30, f.a > 0 ? 3 : 2.5f, f.a > 0 ? 0xFFFF8A1A : 0x5A3A3E48); p.g = 0; break; }
             case Fx.FLASH: { if (f.b < 0) { P q = part(TRAIL, f.x, f.y, 0, 0, 8, 5, 0xFFFFD27A); q.g = 0; break; } // misil del dron: solo un destello
-                RobotArt.View v = views[f.who]; v.label = Wpn.ALL[(int) f.b].label; v.labelT = LABEL; if (v.shotT <= 0) v.shotT = 12; break; }
+                RobotArt.View v = view(f.who); v.label = Wpn.ALL[(int) f.b].label; v.labelT = LABEL; if (v.shotT <= 0) v.shotT = 12; break; }
             case Fx.WOOD: { // astillas del color de la madera
                 int n = Math.min(26, 5 + (int) f.a / 18), c = (int) f.b, d = RobotArt.mixDark(c);
                 for (int i = 0; i < n; i++) {
@@ -139,25 +139,25 @@ public final class Renderer {
                 break; }
             case Fx.STOMP: {
                 for (int i = 0; i < 10; i++) { float a = i * .628f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3, (float) Math.sin(a) * 1.6f - 1, 12, 1, 0xFFFFFFFF); p.g = 0; }
-                RobotArt.View v = views[f.who]; v.label = f.a > 0 ? "¡BARRIDA!" : "¡PISADO!"; v.labelT = LABEL; break; }
-            case Fx.GRAB: { RobotArt.View v = views[f.who]; v.label = "¡PUNCH!"; v.labelT = LABEL;
+                RobotArt.View v = view(f.who); v.label = f.a > 0 ? "¡BARRIDA!" : "¡PISADO!"; v.labelT = LABEL; break; }
+            case Fx.GRAB: { RobotArt.View v = view(f.who); v.label = "¡PUNCH!"; v.labelT = LABEL;
                 for (int i = 0; i < 12; i++) { float a = i * .52f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3.5f, (float) Math.sin(a) * 3.5f, 12, 1, 0xFFFFFFFF); p.g = 0; }
                 booms.add(new float[]{f.x, f.y, 20, 0, 0, 3}); break; }
             case Fx.SLAM: {
                 booms.add(new float[]{f.x, f.y, 14 + f.a * 14, 0, 0}); if (!reduceMotion) shake = Math.min(14, shake + 3 + f.a * 6);
                 for (int i = 0; i < 12; i++) { P p = part(SPARK, f.x, f.y, (r.nextFloat() - .5f) * 7, -r.nextFloat() * 5, 16, 1, 0xFFFFFFFF); p.g = .15f; }
                 break; }
-            case Fx.CHARGE: { RobotArt.View v = views[f.who]; v.label = f.a > 0 ? (Wpn.ALL[(int) f.b].trap ? "TRAMPA LISTA" : "CARGADO") : Wpn.ALL[(int) f.b].label; v.labelT = LABEL; break; }
-            case Fx.LASSO: { RobotArt.View v = views[f.who]; v.label = f.a == 1 ? "¡ATRAPADO!" : f.a == 2 ? "¡SALTA!" : "¡LIBRE!"; v.labelT = LABEL;
+            case Fx.CHARGE: { RobotArt.View v = view(f.who); v.label = f.a > 0 ? (Wpn.ALL[(int) f.b].trap ? "TRAMPA LISTA" : "CARGADO") : Wpn.ALL[(int) f.b].label; v.labelT = LABEL; break; }
+            case Fx.LASSO: { RobotArt.View v = view(f.who); v.label = f.a == 1 ? "¡ATRAPADO!" : f.a == 2 ? "¡SALTA!" : "¡LIBRE!"; v.labelT = LABEL;
                 for (int i = 0; i < 10; i++) { float a = i * .628f; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * 3, (float) Math.sin(a) * 3, 12, 1, f.a > 0 ? 0xFF7FE8FF : 0xFFFFFFFF); p.g = 0; }
                 break; }
             case Fx.TRAP: {
                 if (f.a == 0) booms.add(new float[]{f.x, f.y - 6, 22, 0, 0, 3});
-                else { RobotArt.View v = views[f.who]; v.label = "¡ATRAPADO!"; v.labelT = LABEL; booms.add(new float[]{f.x, f.y - 30, 46, 0, 0, 1}); if (!reduceMotion) shake = Math.min(14, shake + 6); }
+                else { RobotArt.View v = view(f.who); v.label = "¡ATRAPADO!"; v.labelT = LABEL; booms.add(new float[]{f.x, f.y - 30, 46, 0, 0, 1}); if (!reduceMotion) shake = Math.min(14, shake + 6); }
                 break; }
             case Fx.SPLASH: for (int i = 0; i < 6 + (int) f.a * 2; i++) { float a = -1.57f + (r.nextFloat() - .5f) * 1.6f, v = 1 + r.nextFloat() * f.a * .5f; P p = part(SQUARE, f.x + (r.nextFloat() - .5f) * 10, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v, 24 + r.nextInt(12), 1.5f, r.nextBoolean() ? 0xFFBFE4FF : 0xFF7FB8FF); p.g = .18f; } break;
             case Fx.WALL: { P p = part(DUST, f.x, f.y, 0, -.3f, 14, 2, 0x88E2E7EE); p.g = 0; break; }
-            case Fx.HOOK: if (f.a == 0) { RobotArt.View v = views[f.who]; v.label = "GANCHO"; v.labelT = LABEL; } break;
+            case Fx.HOOK: if (f.a == 0) { RobotArt.View v = view(f.who); v.label = "GANCHO"; v.labelT = LABEL; } break;
             case Fx.HIT: for (int i = 0; i < 7; i++) { float a = r.nextFloat() * 6.28f, v = 2 + r.nextFloat() * 3; P p = part(SPARK, f.x, f.y, (float) Math.cos(a) * v, (float) Math.sin(a) * v, 10 + r.nextInt(6), 1, 0xFFFFE9A0); p.g = .1f; } break;
             case Fx.ARMOR: { P p = part(ARMOR, f.x, f.y, f.c, f.d, 170, 1, RobotArt.COLOR[f.who]); p.slot = (int) f.a; p.g = .22f; break; }
             case Fx.DEATH: {
@@ -387,6 +387,9 @@ public final class Renderer {
             else { g.glow(b.x, b.y, 10, 0xAAFFC83D); g.rect(b.x - 6, b.y - 6, 12, 8, 0x88FFF1B0); }
         }
     }
+    /** La vista del personaje que causó el efecto; los enemigos de las bases (who = -1) usan una de sobra que no se dibuja. */
+    final RobotArt.View spare = new RobotArt.View();
+    RobotArt.View view(int who) { return who >= 0 && who < views.length && views[who] != null ? views[who] : spare; }
     public void drawWorld(Gfx g, World w, int who) {
         if (T != w.t) { boolean grew = T.TW * T.TH != w.t.TW * w.t.TH; size(w.t); if (grew) { for (int i = 0; i < w.t.dirty.length; i++) w.t.dirty[i] = true; bgNew = true; } }
         zoom = g.h() / 280f * zoomMul; vw = g.w() / zoom; vh = g.h() / zoom;
