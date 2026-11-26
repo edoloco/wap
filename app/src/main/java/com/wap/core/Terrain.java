@@ -8,7 +8,7 @@ public final class Terrain {
     public Terrain() { this(W0, H0); }
     public Terrain(int w, int h) {
         W = w; H = h; TW = (W + TILE - 1) / TILE; TH = (H + TILE - 1) / TILE; FW = W / FRAG + 1; FH = H / FRAG + 1;
-        tex = new int[W * H]; m = new byte[W * H]; dirty = new boolean[TW * TH]; touched = new boolean[TW * TH]; stamp = new int[W * H];
+        tex = new int[W * H]; m = new byte[W * H]; dirty = new boolean[TW * TH]; touched = new boolean[TW * TH];
     }
     /** 0 es aire; STEEL es indestructible; lo demás se destruye. */
     public static final byte PANEL = 1, STEEL = 2, CRATE = 3, VENT = 4, COMPUTER = 5, DEBRIS = 6, DECOR = 7, METAL = 8, STONE = 9, EARTH = 10, WOOD = 11, KINETIC = 12; // KINETIC: pieza que se mueve en una base (choca, la dibuja el Renderer)
@@ -66,7 +66,7 @@ public final class Terrain {
         mark(x0, y0, x1, y1);
         if (from < 0) cleanup(x0, y0, x1, y1);
     }
-    private int[] sat = new int[0], sat2 = new int[0]; private final int[] stamp; private final int[] stack = new int[SMALL * 5], found = new int[SMALL + 1]; private int cur;
+    private int[] sat = new int[0], sat2 = new int[0]; private int[] stamp /* se crea recién cuando hace falta (ahorra memoria en las bases grandes) */; private final int[] stack = new int[SMALL * 5], found = new int[SMALL + 1]; private int cur;
     private boolean col(int i) { byte k = m[i]; return k != 0 && k != DEBRIS && k != DECOR; }
     /** Tras una destrucción, marca astillas y pedazos sueltos: se siguen viendo, pero ya no chocan con nada. */
     private void cleanup(int x0, int y0, int x1, int y1) {
@@ -90,7 +90,7 @@ public final class Terrain {
             boolean held = false; for (int k = 1; k <= 16 && !held; k++) held = y + k < H && col((y + k) * W + x);
             if (!held) m[y * W + x] = 0;
         }
-        cur++;
+        cur++; if (stamp == null) stamp = new int[W * H];
         for (int y = ey0; y <= ey1; y++) for (int x = ex0; x <= ex1; x++) {
             int q = y * W + x; if (!col(q) || hard(m[q]) || stamp[q] == cur) continue;
             int sp = 0, c = 0; boolean big = false; stack[sp++] = q; stamp[q] = cur;

@@ -218,7 +218,8 @@ public final class BaseRun {
     }
     /** Los disparos del jugador contra los enemigos. */
     void playerShots(World g) {
-        for (Shot s : g.shots) {
+        for (int i = 0, n = g.shots.size(); i < n && i < g.shots.size(); i++) { // por índice: una explosión puede soltar esquirlas (nuevos disparos) mientras se recorre
+            Shot s = g.shots.get(i);
             if (s.dead || s.wait > 0 || s.owner < 0 || s.w.dmg <= 0 && s.w.radius <= 0) continue;
             for (Foe f : foes) if (f.hit(s.x, s.y, 3)) {
                 if (s.w.radius > 0) s.explode(g); else { hurt(g, f, s.w.dmg); if (!s.w.pierce) s.dead = true; }

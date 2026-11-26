@@ -496,6 +496,10 @@ public class Sim {
         check(run.bossOn&&!run.doors.isEmpty()&&run.boss!=null,"base: la sala del jefe cierra sus puertas y aparece el jefe");
         {r.invuln=999;for(int i=0;i<200;i++)w.step(new int[2]);Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=br[0]+256;rd.camY=br[1]+150;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"33_base_jefe.png"));}
         for(int i=0;i<200&&!w.finished;i++)run.hurtFoe(w,run.boss.x,run.boss.y-20,5,4);check(w.finished&&run.won&&w.winner==0,"base: vencer al jefe gana la base");
+        // explosivos con esquirlas contra un enemigo (se caía: ConcurrentModificationException)
+        {World v=new World(6,3,cargas("CLUSTER BOMB"),baseDePrueba(),false);BaseRun.Foe e=v.run.foes.get(0);boolean ok=true;
+         for(String n:new String[]{"CLUSTER BOMB","FLAK CANNON","NAPALM","MISILE RAIN","BIG NUKE"})try{for(int i=0;i<6;i++){v.spawn(Wpn.ALL[Wpn.index(n)],0,e.x-20,e.y-20,3,0);v.step(new int[2]);}for(int i=0;i<60;i++)v.step(new int[2]);}catch(Exception x){ok=false;x.printStackTrace();}
+         check(ok,"base: explosivos con esquirlas contra enemigos no botan el juego");}
         // la sala del jefe parte con ribetes de acero, menos donde se conecta; entrar cayendo desde arriba no deja atrapado
         {Base d=Base.empty("ARRIBA");d.addRoom(1,0);d.addRoom(2,0);d.addRoom(2,-1);d.toggleBoss(2,0);
          check(d.tiles.get(Base.key(47,4))!=null&&d.tiles.get(Base.key(47,4))[0]==Base.T_STEEL&&d.tiles.get(Base.key(32,4))==null&&d.tiles.get(Base.key(40,0))==null&&d.tiles.get(Base.key(40,8))[0]==Base.T_STEEL,"sala del jefe: ribetes de acero menos en los lados que conectan");
