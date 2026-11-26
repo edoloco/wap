@@ -525,6 +525,22 @@ public class Sim {
         // fondos
         for(int bg=1;bg<4;bg++){Base d=baseDePrueba();d.bg=bg;World v=new World(3,3,cargas("SHOTGUN"),d,false);Renderer rd=new Renderer();rd.reset(v);BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,v,0);rd.drawWorld(g,v,0);ImageIO.write(im,"png",new File(out,"34_fondo_"+Base.BG_NAMES[bg].toLowerCase()+".png"));}
     }
+    static void efectosEnemigos(String out)throws Exception{
+        String[][] cases={{"CANNON PUNCH","lanzado"},{"TORNADO GUN","lanzado"},{"ELECTRIC THUNDER","aturdido"},{"FREEZEE FLOW","congelado"},{"BOOBLE SEAL","burbuja"},{"PROTON RAY","atado"},{"BAZOOKA","empujado"},{"FAN","empujado"}};
+        for(String[] c:cases){
+            Base b=Base.empty("E");for(int x=0;x<16;x++)b.putTile(x,8,Base.T_STEEL,0,0);b.putThing(9,7,Base.E_TURRET);
+            World w=new World(3,3,cargas(c[0]),b,false);Robot r=w.robots[0];BaseRun.Foe f=w.run.foes.get(0);for(int i=0;i<20;i++)w.step(new int[2]);
+            r.px=(int)f.x-(c[0].equals("TORNADO GUN")||c[0].equals("BAZOOKA")?120:60);r.py=(int)f.y+1;r.facing=1;r.vy=0;float x0=f.x,hp0=f.hp;boolean ok=false;
+            for(int i=0;i<240&&!ok;i++){w.step(new int[]{(i%30<20||c[0].equals("PROTON RAY")||c[0].equals("FAN"))?Input.A:0,0});r.invuln=99;r.facing=1;for(int k=0;k<4;k++)r.ammo[k]=99;
+                switch(c[1]){case "lanzado":ok=f.thrownT>0||f.rot!=0;break;case "aturdido":ok=f.stunT>0&&f.hp<hp0;break;case "congelado":ok=f.frozenT>0;break;case "burbuja":ok=f.bubble!=null;break;case "atado":ok=f.lassoT>0;break;default:ok=Math.abs(f.x-x0)>3||f.kx!=0;}
+                if(!f.alive&&!c[1].equals("empujado"))break;}
+            if(c[1].equals("empujado")&&!f.alive)ok=true;
+            check(ok,"enemigos: "+c[0]+" los deja "+c[1]+" como a un jugador");
+            if(c[0].equals("FREEZEE FLOW")){Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=f.x;rd.camY=f.y-60;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"41_enemigo_congelado.png"));}
+        }
+        Base b=Base.empty("T");for(int x=0;x<16;x++)b.putTile(x,8,Base.T_STEEL,0,0);b.putThing(9,7,Base.E_BADPAL);World w=new World(3,3,cargas("SHOTGUN"),b,false);BaseRun.Foe f=w.run.foes.get(0);
+        w.spawn(Wpn.ALL[Wpn.index("ROBOT TRAP")],0,f.x+30,f.y-10,0,0);for(int i=0;i<300&&f.alive;i++){w.step(new int[2]);w.robots[0].invuln=99;}check(!f.alive,"enemigos: la ROBOT TRAP los atrae y los destruye");
+    }
     static void basesPorPartes(String out)throws Exception{
         Base b=Base.empty("LARGA");for(int i=1;i<40;i++)b.addRoom(i,0);
         for(int x=0;x<40*16;x++)if(x%23<20)b.putTile(x,8,x%5==0?Base.T_PANEL:Base.T_EARTH,0xFF8B5A2B,x%37==3?Base.M_UPDOWN:0);
@@ -599,5 +615,5 @@ public class Sim {
         // pantalla de armas en tres tamaños
         for(int[] r:new int[][]{{1280,720},{2048,1536},{2400,1080}}){App q=new App(store,mute);q.seed(3);q.go(App.ARMS);BufferedImage im=new BufferedImage(r[0],r[1],BufferedImage.TYPE_INT_RGB);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"29_armas_"+r[0]+".png"));check(q.overflow==0,"pantalla de armas "+r[0]+"x"+r[1]+" sin textos fuera");}
     }
-    public static void main(String[] a)throws Exception{basesPorPartes(a.length>0?a[0]:"out");editorBases(a.length>0?a[0]:"out");bases(a.length>0?a[0]:"out");personalizarSalas(a.length>0?a[0]:"out");hieloRayoTornado(a.length>0?a[0]:"out");burbuja(a.length>0?a[0]:"out");premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    public static void main(String[] a)throws Exception{efectosEnemigos(a.length>0?a[0]:"out");basesPorPartes(a.length>0?a[0]:"out");editorBases(a.length>0?a[0]:"out");bases(a.length>0?a[0]:"out");personalizarSalas(a.length>0?a[0]:"out");hieloRayoTornado(a.length>0?a[0]:"out");burbuja(a.length>0?a[0]:"out");premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

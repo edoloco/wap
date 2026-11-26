@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 28;
+    public static final int RULES = 29;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t; public final Rng rng;
@@ -238,6 +238,7 @@ public final class World {
             if (t.solid((int) nx, (int) cy)) break;
             cx = nx; boolean hit = false;
             for (Robot o : robots) if (o != r && o.alive() && o.team != r.team && o.hits(cx, cy)) { o.lasso(this, r.id); hit = true; }
+            if (!hit && run != null && run.lassoFoe(this, cx, cy, r.id)) hit = true; // también atrapa enemigos de la base
             if (hit) break;
         }
         r.beamT = 3; r.beamX = cx; r.beamY = cy;
@@ -249,7 +250,7 @@ public final class World {
             cx += dx * 3; cy += dy * 3;
             Robot hit = null; for (Robot r : robots) if (r.id != owner && r.alive() && r.hits(cx, cy)) { hit = r; break; }
             if (hit != null) { hit.stunT = Math.max(hit.stunT, Robot.BOLT_STUN); hit.damage(this, w.dmg, dx * w.knock, -.5f, owner, cx, cy); break; }
-            if (run != null && run.hurtFoe(this, cx, cy, w.dmg, 2)) break;
+            if (run != null && run.boltFoe(this, cx, cy, w.dmg)) break;
             if (t.solid((int) cx, (int) cy)) { fx(Fx.CHIPS, cx, cy, 3, 0); break; }
         }
         Fx f = fx(Fx.BOLT, x, y, 0, owner); f.c = cx; f.d = cy;

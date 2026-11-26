@@ -9,7 +9,7 @@ public final class Shot {
     /** FLAME TOWER: distancia entre llamas. BOOBLE SEAL: radio con alguien adentro, golpes para romperla, daño cada cuántos cuadros. */
     public static final float TOWER_GAP = 24, BUBBLE_R = 32; public static final int BUBBLE_HITS = 7, BUBBLE_TICK = 20;
     /** BOOBLE SEAL: a quién tiene atrapado (-1 nadie). */
-    public int held = -1;
+    public int held = -1; public boolean foeHeld; // foeHeld: la burbuja lleva a un enemigo de la base
     public void step(World g) {
         if (wait > 0) { wait--; return; } // cargas del Death Ray que salen después
         age++;
@@ -141,6 +141,7 @@ public final class Shot {
                 float dx = x - o.x, dy = y - 10 - o.y, d = (float) StrictMath.hypot(dx, dy);
                 if (d < TRAP_R && d > 1) { o.vx += dx / d * .5f; o.vy += dy / d * .5f; o.stuck = false; }
             }
+            if (g.run != null) g.run.trapPull(g, x, y, owner); // y los enemigos de la base
             for (Prop p : g.props) if (!p.gone) { // y también las cajas
                 float dx = x - (p.x + p.w / 2f), dy = y - (p.y + p.h / 2f), d = (float) StrictMath.hypot(dx, dy);
                 if (d < TRAP_R + p.w / 2f && d > 8 && hops % 4 == 0) g.push(p, dx / d * 1.2f, dy / d * 1.2f - .3f);
@@ -177,7 +178,8 @@ public final class Shot {
             float nx = x + vx, ny = y + vy;
             if (g.t.solid((int) nx, (int) ny - 8)) { vy = 0; ny = y; } if (g.t.solid((int) nx + (vx > 0 ? 8 : -8), (int) ny)) { vx = 0; nx = x; }
             x = nx; y = ny;
-            for (Robot r : g.robots) if (r.alive() && r.bubble == null && (r.id != owner || age > 40) && Math.abs(r.px - x) < 18 && y > r.py - r.h - 14 && y < r.py + 8) {
+            if (!foeHeld && g.run != null) g.run.bubbleCatch(g, this);
+            if (!foeHeld) for (Robot r : g.robots) if (r.alive() && r.bubble == null && (r.id != owner || age > 40) && Math.abs(r.px - x) < 18 && y > r.py - r.h - 14 && y < r.py + 8) {
                 held = r.id; r.bubble = this; r.bubbleHits = 0; r.vx = r.vy = 0; r.rope = 0; g.fx(Fx.LASSO, x, y, 1, r.id); y = r.py - r.h / 2f; x = r.px; life = 600; break; }
             if (x < 0 || y < 0 || x > g.t.W || y > g.t.H) dead = true;
             return;

@@ -121,6 +121,9 @@ public final class BaseRun implements Terrain.PageSource {
     public static final int DRONE = Base.E_DRONE, TURRET = Base.E_TURRET, BADPAL = Base.E_BADPAL, BOSS = 9;
     public static final class Foe {
         public final int type; public float x, y, vx, vy, hp, maxHp, aim; public int t, state, dir = 1, hurtT; public boolean alive = true; public final boolean mirrored;
+        /** Lo mismo que les pasa a los jugadores: aturdido, congelado, lanzado (girando), atado al rayo, en una burbuja, empujado. */
+        public int stunT, frozenT, thrownT, lassoT, lassoBy = -1; public float rot, kx; public Shot bubble;
+        public boolean busy() { return stunT > 0 || frozenT > 0 || thrownT > 0 || lassoT > 0 || bubble != null; }
         public final float hw, h; final float homeX, homeY;
         Foe(int type, float x, float y, boolean mirrored) {
             this.type = type; this.x = x; this.y = y; homeX = x; homeY = y; this.mirrored = mirrored; dir = mirrored ? -1 : 1;
@@ -173,6 +176,8 @@ public final class BaseRun implements Terrain.PageSource {
     void stepFoe(World g, Foe f) {
         f.t++; if (f.hurtT > 0) f.hurtT--;
         int[] room = rooms.get(Math.max(0, roomAt(f.homeX, f.homeY - 4)));
+        if (status(g, f, room)) return;
+        if (f.kx != 0) { float nx = f.x + f.kx; if (!g.t.solid((int) (nx + Math.signum(f.kx) * f.hw), (int) (f.y - f.h / 2)) && nx > room[0] + f.hw && nx < room[0] + room[2] - f.hw) f.x = nx; f.kx *= .8f; if (Math.abs(f.kx) < .1f) f.kx = 0; } // empujón de un golpe
         switch (f.type) {
             case DRONE: {
                 Robot r = target(g, f, 230);
@@ -236,7 +241,66 @@ public final class BaseRun implements Terrain.PageSource {
         }
     }
     void blast(World g, float x, float y, int r, float dmg) {
-        for (Foe f : foes) if (f.alive) { float d = (float) StrictMath.hypot(f.x - x, f.y - f.h / 2 - y); if (d < r + f.hw) hurt(g, f, dmg * Math.max(.35f, 1 - d / (r + f.hw))); }
+        for (Foe f : foes) if (f.alive) { float d = (float) StrictMath.hypot(f.x - x, f.y - f.h / 2 - y); if (d < r + f.hw) { hurt(g, f, dmg * Math.max(.35f, 1 - d / (r + f.hw))); push(f, f.x - x, 3); if (f.type == DRONE) f.y += Math.signum(f.y - y) * 3; } }
+    }
+    // ---------- Efectos de las armas sobre los enemigos (los mismos que sobre los jugadores)
+    static float heavy(Foe f) { return f.type == BOSS ? .2f : 1; }
+    void push(Foe f, float dir, float k) { if (f.alive && f.bubble == null) f.kx += Math.signum(dir) * Math.min(4, .8f + k * 2) * heavy(f); }
+    /** CANNON PUNCH y TORNADO GUN: sale lanzado girando; al chocar se daña. El jefe es pesado: apenas se mueve. */
+    void launch(World g, Foe f, int dir, float dmg, float up) {
+        if (!f.alive || f.thrownT > 0) return; hurt(g, f, dmg); if (!f.alive) return;
+        f.thrownT = 80; f.bubble = null; f.lassoT = 0; f.vx = dir * 6.5f * heavy(f); f.vy = -up * heavy(f); f.y -= 2; g.fx(Fx.GRAB, f.x, f.y - f.h / 2, 0, -1);
+    }
+    /** FREEZEE FLOW: cubo de hielo (el jefe, un rato corto). */
+    void freeze(World g, Foe f) { if (!f.alive || f.frozenT > 0 || f.bubble != null) return; f.frozenT = f.type == BOSS ? 70 : 300; f.kx = 0; g.fx(Fx.ICE, f.x, f.y - f.h / 2, 1, -1); }
+    /** ELECTRIC THUNDER: daño y aturdido. */
+    public boolean boltFoe(World g, float x, float y, float dmg) {
+        for (Foe f : foes) if (f.hit(x, y, 2)) { hurt(g, f, dmg); f.stunT = Math.max(f.stunT, f.type == BOSS ? 25 : Robot.BOLT_STUN + 20); return true; }
+        return false;
+    }
+    /** PROTON RAY: lo ata al rayo y lo arrastra hacia el que dispara. */
+    public boolean lassoFoe(World g, float x, float y, int by) {
+        for (Foe f : foes) if (f.hit(x, y, 2) && f.bubble == null) { if (f.lassoT == 0) g.fx(Fx.LASSO, f.x, f.y - f.h / 2, 1, -1); f.lassoT = Math.max(f.lassoT, 60); f.lassoBy = by; return true; }
+        return false;
+    }
+    /** BOOBLE SEAL: la burbuja lo atrapa, sube despacio y le baja la vida hasta reventar. */
+    public void bubbleCatch(World g, Shot s) {
+        for (Foe f : foes) if (f.alive && f.bubble == null && f.type != BOSS && Math.abs(f.x - s.x) < 18 + f.hw && s.y > Math.min(f.top(), f.y - 38) - 14 && s.y < f.y + 8) { // los chicos se atrapan a la altura de la mano, como al disparar
+            f.bubble = s; s.foeHeld = true; s.vx = 0; s.vy = -.3f; s.life = 360; f.thrownT = 0; f.lassoT = 0; g.fx(Fx.LASSO, s.x, s.y, 1, -1); return;
+        }
+    }
+    /** ROBOT TRAP: los atrae al centro; el que llega, muere. */
+    public void trapPull(World g, float x, float y, int owner) {
+        for (Foe f : foes) {
+            if (!f.alive || f.bubble != null) continue; float dx = x - f.x, dy = y - (f.y - f.h / 2), d = (float) StrictMath.hypot(dx, dy);
+            if (d > Shot.TRAP_R) continue;
+            float p = (.4f + 3 * (1 - d / Shot.TRAP_R)) * heavy(f); f.x += Math.signum(dx) * Math.min(p, Math.abs(dx) * .5f + .1f); if (f.type == DRONE) f.y += Math.signum(dy) * Math.min(p, Math.abs(dy) * .5f);
+            if (Math.abs(dx) < 9 && Math.abs(dy) < 40) { g.fx(Fx.TRAP, x, y, 1, -1); hurt(g, f, f.type == BOSS ? 40 : 999); }
+        }
+    }
+    /** Estados: mientras dura uno, el enemigo no ataca. Devuelve true si este tick no actúa. */
+    boolean status(World g, Foe f, int[] room) {
+        if (f.bubble != null) {
+            Shot b = f.bubble; if (b.dead) { f.bubble = null; f.vy = -2; return true; }
+            f.x = b.x; f.y = b.y + f.h / 2; f.vy = 0; if (b.age % Shot.BUBBLE_TICK == 0) hurt(g, f, 3); if (!f.alive) b.pop(g); return true;
+        }
+        if (f.thrownT > 0) { // vuela girando; al chocar con algo se daña y se detiene
+            f.thrownT--; f.rot += .35f * Math.signum(f.vx == 0 ? 1 : f.vx); f.vy = Math.min(8, f.vy + .35f);
+            float nx = f.x + f.vx, ny = f.y + f.vy; boolean wall = g.t.solid((int) (nx + Math.signum(f.vx) * f.hw), (int) (ny - f.h / 2)), floor = f.vy > 0 && g.t.solid((int) nx, (int) ny + 1);
+            if (wall) { hurt(g, f, Math.abs(f.vx) * 2 + 3); f.vx = -f.vx * .3f; } else f.x = nx;
+            if (floor) { int y = (int) f.y; while (y < (int) ny && !g.t.solid((int) f.x, y + 1)) y++; f.y = y; if (f.vy > 4) hurt(g, f, f.vy); f.thrownT = 0; f.vy = 0; f.vx = 0; f.rot = 0; }
+            else if (!g.t.solid((int) f.x, (int) (ny - f.h))) f.y = ny; else f.vy = 0;
+            if (f.thrownT == 0) { f.rot = 0; f.vx = 0; if (f.type == DRONE) { f.state = 1; } }
+            return true;
+        }
+        if (f.frozenT > 0) { if (f.walks()) fall(g, f); if (--f.frozenT == 0) g.fx(Fx.ICE, f.x, f.y - f.h / 2, 2, -1); if (f.t % 20 == 0) hurt(g, f, 1.5f); return true; }
+        if (f.stunT > 0) { f.stunT--; if (f.walks()) fall(g, f); return true; }
+        if (f.lassoT > 0) { // atado al rayo: lo arrastra hacia el que dispara y le baja la vida
+            f.lassoT--; Robot r = f.lassoBy >= 0 && f.lassoBy < g.robots.length ? g.robots[f.lassoBy] : null;
+            if (r != null && r.alive() && Math.abs(r.px - f.x) > 24) { float nx = f.x + Math.signum(r.px - f.x) * .7f * heavy(f); if (!g.t.solid((int) (nx + Math.signum(r.px - f.x) * f.hw), (int) (f.y - f.h / 2))) f.x = nx; }
+            if (f.walks()) fall(g, f); if (f.t % 10 == 0) hurt(g, f, 1.5f); return true;
+        }
+        return false;
     }
     void stepBullets(World g) {
         for (Bullet b : bullets) {
@@ -260,9 +324,14 @@ public final class BaseRun implements Terrain.PageSource {
     void playerShots(World g) {
         for (int i = 0, n = g.shots.size(); i < n && i < g.shots.size(); i++) { // por índice: una explosión puede soltar esquirlas (nuevos disparos) mientras se recorre
             Shot s = g.shots.get(i);
-            if (s.dead || s.wait > 0 || s.owner < 0 || s.w.dmg <= 0 && s.w.radius <= 0) continue;
+            if (s.dead || s.wait > 0 || s.owner < 0 || s.w.bubble || s.w.trap || s.w.fan) continue; // la burbuja, la trampa y el ventilador actúan en su propio movimiento
+            if (s.w.tornado) { for (Foe f : foes) if (f.alive && f.thrownT == 0 && Math.abs(f.x - s.x) < 14 + f.hw && f.y > s.y - 46 && f.top() < s.y) launch(g, f, g.rng.i(2) == 0 ? -1 : 1, s.w.dmg, g.rng.r(6, 11)); continue; }
+            if (s.w.pillar) { if (s.age % 6 == 1) for (Foe f : foes) if (f.alive && Math.abs(f.x - s.x) < 9 + f.hw && f.y > s.y - 72 && f.top() < s.y + 2) hurt(g, f, s.w.dmg); continue; }
             for (Foe f : foes) if (f.hit(s.x, s.y, 3)) {
-                if (s.w.radius > 0) s.explode(g); else { hurt(g, f, s.w.dmg); if (!s.w.pierce) s.dead = true; }
+                if (s.w.ice) { freeze(g, f); s.dead = true; }
+                else if (s.w.punch) { launch(g, f, s.vx > 0 ? 1 : -1, s.w.dmg, 6); s.dead = true; }
+                else if (s.w.radius > 0) s.explode(g);
+                else if (s.w.dmg > 0) { hurt(g, f, s.w.dmg); push(f, s.vx, s.w.knock); if (!s.w.pierce) s.dead = true; }
                 break;
             }
         }

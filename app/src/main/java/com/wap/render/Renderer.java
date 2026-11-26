@@ -328,7 +328,13 @@ public final class Renderer {
     void baseThings(Gfx g, World w) {
         BaseRun run = w.run;
         for (BaseRun.Kin k : run.kin) { if (!k.on) continue; kinPiece(g, k.x(), k.y(), k.mat, k.color); }
-        for (BaseRun.Foe f : run.foes) if (f.alive) foe(g, f, w.tick);
+        for (BaseRun.Foe f : run.foes) if (f.alive) {
+            float cy = f.y - f.h / 2;
+            if (f.rot != 0) { g.save(); g.translate(f.x, cy); g.rotate(f.rot); g.translate(-f.x, -cy); foe(g, f, w.tick); g.restore(); } else foe(g, f, w.tick); // lanzado: gira
+            if (f.frozenT > 0) { float hw = f.hw + 4, top = f.y - f.h - 6; g.rrect(f.x - hw, top, hw * 2, f.y - top + 1, 3, 0x9ACDEBFF, 0xFFEAF8FF, 1.2f); g.line(f.x - hw + 3, top + 4, f.x - hw + 9, top + 10, 0xCCFFFFFF, 1.2f); } // cubo de hielo
+            if (f.stunT > 0) for (int i = 0; i < 3; i++) { double a2 = w.tick * .2 + i * 2.1; g.circle(f.x + (float) Math.cos(a2) * (f.hw + 2), f.y - f.h - 4 + (float) Math.sin(a2) * 3, 1.8f, 0xFFFFD93D, 0, 0); } // estrellitas: aturdido
+            if (f.lassoT > 0) g.circle(f.x, cy, f.hw + 5, 0, 0xAAFF8A3D, 1.5f); // atado al rayo
+        }
         for (BaseRun.Bullet b : run.bullets) if (b.kind == 1) { g.rrect(b.x - 2.5f, b.y - 9, 5, 11, 2, 0xFFD6DCE6, INK, .8f); g.rect(b.x - 2.5f, b.y - 2, 5, 2, 0xFFE8323C); }
     }
     static void kinPiece(Gfx g, float x, float y, int mat, int color) {
