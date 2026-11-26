@@ -525,6 +525,23 @@ public class Sim {
         // fondos
         for(int bg=1;bg<4;bg++){Base d=baseDePrueba();d.bg=bg;World v=new World(3,3,cargas("SHOTGUN"),d,false);Renderer rd=new Renderer();rd.reset(v);BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,v,0);rd.drawWorld(g,v,0);ImageIO.write(im,"png",new File(out,"34_fondo_"+Base.BG_NAMES[bg].toLowerCase()+".png"));}
     }
+    static void basesPorPartes(String out)throws Exception{
+        Base b=Base.empty("LARGA");for(int i=1;i<40;i++)b.addRoom(i,0);
+        for(int x=0;x<40*16;x++)if(x%23<20)b.putTile(x,8,x%5==0?Base.T_PANEL:Base.T_EARTH,0xFF8B5A2B,x%37==3?Base.M_UPDOWN:0);
+        for(int i=2;i<40;i+=3)b.putThing(i*16+8,7,i%2==0?Base.E_BADPAL:Base.E_TURRET);for(int i=1;i<40;i+=4)b.putTile(i*16+5,7,Base.T_CRATE,0,0);
+        b.toggleBoss(39,0);
+        long m0=Runtime.getRuntime().totalMemory()-Runtime.getRuntime().freeMemory();
+        World w=new World(2,3,cargas("SHOTGUN"),b,false);Robot r=w.robots[0];int maxPages=0;
+        check(w.t.m==null&&w.t.tex==null,"bases por partes: sin mapa completo en memoria");
+        for(int room=0;room<38;room+=3){int[] rr=w.run.rooms.get(room);r.px=rr[0]+100;r.py=rr[1]+100;r.vy=0;for(int i=0;i<70;i++){w.step(new int[]{Input.RIGHT,0});r.invuln=99;maxPages=Math.max(maxPages,w.t.pagesAlive());}}
+        int all=w.t.PX*w.t.PY;check(maxPages<=60&&maxPages<all/3,"bases por partes: solo se arman las páginas cerca del jugador ("+maxPages+" de "+all+")");
+        BaseRun.Foe far=null;for(BaseRun.Foe f:w.run.foes)if(f.x<w.run.rooms.get(5)[0])far=f;float fx0=far.x;for(int i=0;i<120;i++)w.step(new int[2]);check(far.x==fx0,"bases por partes: los enemigos de habitaciones lejanas esperan quietos");
+        // soltar y volver a armar páginas no cambia nada: igual en los dos teléfonos aunque uno suelte más
+        World a=new World(7,3,cargas("BAZOOKA"),Base.load(b.save()),true),z=new World(7,3,cargas("BAZOOKA"),Base.load(b.save()),true);
+        for(int i=0;i<1500;i++){int[] in={i%50<35?Input.RIGHT|(i%7==0?Input.A:0):Input.B,i%50<35?Input.LEFT|(i%9==0?Input.A:0):Input.B};a.step(in.clone());z.step(in.clone());if(i%5==0)z.t.release(new java.util.ArrayList<>(),0);}
+        check(a.hash()==z.hash(),"bases por partes: soltar páginas no cambia la partida (en línea, igual en los dos)");
+        {Renderer rd=new Renderer();rd.reset(w);int[] rr=w.run.rooms.get(36);r.px=rr[0]+200;r.py=rr[1]+256;for(int i=0;i<30;i++)w.step(new int[2]);BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);for(int i=0;i<3;i++)rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"40_base_por_partes.png"));}
+    }
     static void editorBases(String out)throws Exception{
         App q=new App(store,mute);q.seed(5);q.openBaseEditor(Base.empty("MI BASE"));
         q.baseEdTool(5,0,0);q.baseEdApply(512+100,100);q.baseEdApply(1024+100,100);Base b=q.baseEdBase();check(b.rooms.size()==3,"editor de bases: los + agregan habitaciones pegadas");
@@ -582,5 +599,5 @@ public class Sim {
         // pantalla de armas en tres tamaños
         for(int[] r:new int[][]{{1280,720},{2048,1536},{2400,1080}}){App q=new App(store,mute);q.seed(3);q.go(App.ARMS);BufferedImage im=new BufferedImage(r[0],r[1],BufferedImage.TYPE_INT_RGB);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"29_armas_"+r[0]+".png"));check(q.overflow==0,"pantalla de armas "+r[0]+"x"+r[1]+" sin textos fuera");}
     }
-    public static void main(String[] a)throws Exception{editorBases(a.length>0?a[0]:"out");bases(a.length>0?a[0]:"out");personalizarSalas(a.length>0?a[0]:"out");hieloRayoTornado(a.length>0?a[0]:"out");burbuja(a.length>0?a[0]:"out");premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    public static void main(String[] a)throws Exception{basesPorPartes(a.length>0?a[0]:"out");editorBases(a.length>0?a[0]:"out");bases(a.length>0?a[0]:"out");personalizarSalas(a.length>0?a[0]:"out");hieloRayoTornado(a.length>0?a[0]:"out");burbuja(a.length>0?a[0]:"out");premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

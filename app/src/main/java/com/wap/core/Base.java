@@ -163,14 +163,11 @@ public final class Base {
         for (int[] r : rs) { minX = Math.min(minX, r[0]); minY = Math.min(minY, r[1]); maxX = Math.max(maxX, r[0]); maxY = Math.max(maxY, r[1]); }
         int ox = PAD * CELL - minX * ROOM_PX, oy = PAD * CELL - minY * ROOM_PY; // píxel de la habitación (0, 0)
         int w = (maxX - minX + 1) * ROOM_PX + 2 * PAD * CELL, h = (maxY - minY + 1) * ROOM_PY + 2 * PAD * CELL;
-        Terrain t = new Terrain(w, h); t.locked = true; run.ox = ox; run.oy = oy;
-        int wall = run.wallColor();
-        for (int i = 0; i < w * h; i++) { t.m[i] = Terrain.STEEL; t.tex[i] = wall; }
+        Terrain t = new Terrain(w, h, run); run.ox = ox; run.oy = oy; // por páginas: el mapa se arma por partes al acercarse
         for (int[] r : rs) {
             int x0 = ox + r[0] * ROOM_PX, y0 = oy + r[1] * ROOM_PY; boolean below = false;
             for (int[] o : rs) if (o[0] == r[0] && o[1] == r[1] + 1) below = true;
-            clear(t, x0, y0, ROOM_PX, below ? ROOM_PY : ROOM_PY + PAD * CELL); // sin habitación abajo: precipicio
-            run.rooms.add(new int[]{x0, y0, ROOM_PX, ROOM_PY, r[2], r[3]});
+            run.rooms.add(new int[]{x0, y0, ROOM_PX, ROOM_PY, r[2], r[3], below ? 0 : 1}); // [6]: sin habitación abajo (precipicio)
         }
         for (Map.Entry<Long, int[]> e : tiles.entrySet()) {
             int cx = kx(e.getKey()), cy = ky(e.getKey()); int[] v = e.getValue();
@@ -187,28 +184,21 @@ public final class Base {
             run.thing(what, ox + cx * CELL + CELL / 2f, oy + cy * CELL + CELL, false);
             if (mirror && bossRoom() != null) run.thing(what, ox + mirrorX(cx) * CELL + CELL / 2f, oy + cy * CELL + CELL, true);
         }
-        for (BaseRun.Kin k : run.kin) BaseRun.paint(t, k.x(), k.y(), Terrain.KINETIC); // las piezas que se mueven parten en su lugar
-        java.util.Arrays.fill(t.dirty, true);
+        t.frostSink = (x, y) -> { run.frost.add(key(x / CELL, y / CELL)); return 0; };
         return t;
     }
-    static void clear(Terrain t, int x, int y, int w, int h) {
-        for (int j = Math.max(0, y); j < Math.min(t.H, y + h); j++) for (int i = Math.max(0, x); i < Math.min(t.W, x + w); i++) { t.m[j * t.W + i] = 0; t.tex[j * t.W + i] = 0; }
-    }
-    /** Pinta una pieza en el mapa; las que se mueven van aparte (BaseRun las mueve cada tick). */
+    /** Anota una pieza: las fijas van a la grilla (de ahí se arman las páginas y se dibujan), las que se mueven aparte y los objetos como objetos. */
     void piece(Terrain t, BaseRun run, int x, int y, int[] v, boolean mirrored) {
         int mat = v[0], color = v[1] | 0xFF000000, move = v[2];
         if (move != M_NONE && movable(mat)) { run.kin.add(new BaseRun.Kin(x, y, mat, color, move, mirrored)); return; }
         switch (mat) {
-            case T_EARTH: for (int j = 0; j < CELL; j++) for (int i = 0; i < CELL; i++) set(t, x + i, y + j, Terrain.EARTH, Terrain.earthTex(color, x + i, y + j)); break;
-            case T_WOOD: for (int j = 0; j < CELL; j++) for (int i = 0; i < CELL; i++) set(t, x + i, y + j, Terrain.WOOD, color); break;
-            case T_PANEL: t.panel(x, y); break;
-            case T_STEEL: t.steel(x, y, CELL, CELL); break;
-            case T_CRATE: t.crate(x, y, Terrain.CRATE); break;
-            case T_METAL: t.crate(x, y, Terrain.METAL); break;
-            case T_STONE: t.crate(x, y, Terrain.STONE); break;
-            case T_PC: if (t.at(x + CELL, y + CELL) == 0) t.computer(x, y, (x / CELL + y / CELL) & 3); break;
-            default:
+            case T_CRATE: t.props.add(new int[]{x, y, CELL, CELL, Terrain.CRATE}); break;
+            case T_METAL: t.props.add(new int[]{x, y, CELL, CELL, Terrain.METAL}); break;
+            case T_STONE: t.props.add(new int[]{x, y, CELL, CELL, Terrain.STONE}); break;
+            case T_PC: t.props.add(new int[]{x, y, 2 * CELL, 2 * CELL, Terrain.COMPUTER}); break;
+            default: run.cells.put(key(x / CELL, y / CELL), new int[]{mat, color});
         }
     }
-    static void set(Terrain t, int x, int y, int mat, int c) { if (x >= 0 && y >= 0 && x < t.W && y < t.H) { t.m[y * t.W + x] = (byte) mat; t.tex[y * t.W + x] = c; } }
+    /** Material del mapa para cada pieza fija. */
+    static byte matOf(int mat) { return mat == T_EARTH ? Terrain.EARTH : mat == T_WOOD ? Terrain.WOOD : mat == T_PANEL ? Terrain.PANEL : Terrain.STEEL; }
 }

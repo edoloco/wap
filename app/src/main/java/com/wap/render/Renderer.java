@@ -305,6 +305,25 @@ public final class Renderer {
         int r = (int) ((a >> 16 & 255) * (1 - k) + (b >> 16 & 255) * k), gg = (int) ((a >> 8 & 255) * (1 - k) + (b >> 8 & 255) * k), bb = (int) ((a & 255) * (1 - k) + (b & 255) * k);
         return 0xFF000000 | r << 16 | gg << 8 | bb;
     }
+    /** Bases: paredes (lo que no es habitación), piezas fijas de la grilla, escarcha y puertas del jefe; solo lo que se ve. */
+    void baseCells(Gfx g, World w, float x0, float y0) {
+        BaseRun run = w.run; final int C = Base.CELL; int wall = run.wallColor();
+        int cx0 = (int) Math.floor(x0 / C), cy0 = (int) Math.floor(y0 / C), cx1 = (int) ((x0 + vw) / C), cy1 = (int) ((y0 + vh) / C);
+        for (int cy = cy0; cy <= cy1; cy++) { // paredes, en tiras por fila
+            int start = Integer.MIN_VALUE;
+            for (int cx = cx0; cx <= cx1 + 1; cx++) {
+                boolean isWall = cx <= cx1 && run.roomAt(cx * C + 1, cy * C + 1) < 0 && !run.pitAt(cx * C + 1, cy * C + 1);
+                if (isWall && start == Integer.MIN_VALUE) start = cx;
+                if (!isWall && start != Integer.MIN_VALUE) { g.rect(start * C, cy * C, (cx - start) * C, C, wall); g.rect(start * C, cy * C, (cx - start) * C, 1, tone(wall, 1.2f, 10)); start = Integer.MIN_VALUE; }
+            }
+        }
+        for (int cy = cy0; cy <= cy1; cy++) for (int cx = cx0; cx <= cx1; cx++) {
+            int[] v = run.cells.get(Base.key(cx, cy)); if (v == null) continue;
+            kinPiece(g, cx * C, cy * C, v[0], v[1]);
+            if (run.frost.contains(Base.key(cx, cy))) { g.rect(cx * C, cy * C, C, 6, 0xDDEEF6FF); g.rect(cx * C, cy * C + 6, C, 3, 0x88EEF6FF); }
+        }
+        for (int[] d : run.doors) { g.rect(d[0], d[1], d[2], d[3], INK); g.rect(d[0] + 1, d[1] + 1, d[2] - 2, d[3] - 2, 0xFF8D99A8); }
+    }
     /** Piezas que se mueven y enemigos. */
     void baseThings(Gfx g, World w) {
         BaseRun run = w.run;
@@ -381,8 +400,8 @@ public final class Renderer {
             float bx0 = x0 * .55f, by0 = y0 * .55f;
             for (int q = (int) Math.floor(by0 / BG); q * BG < by0 + vh; q++) for (int k = (int) Math.floor(bx0 / BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
         }
-        int S = Terrain.TILE, budget = 3; Terrain t = w.t;
-        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(T.TH - 1, (int) ((y0 + vh) / S)); ty++) // qué cuadros se rehacen este cuadro
+        int S = Terrain.TILE, budget = 3; Terrain t = w.t; boolean cells = t.tex == null; // bases: se dibujan sus cuadros, no hay mapa de colores
+        if (!cells) for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(T.TH - 1, (int) ((y0 + vh) / S)); ty++) // qué cuadros se rehacen este cuadro
             for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(T.TW - 1, (int) ((x0 + vw) / S)); tx++) {
                 int id = ty * T.TW + tx; boolean d = t.dirty[id] && (!loaded[id] || budget-- > 0); // como mucho 3 relieves por cuadro
                 fresh[id] = d; if (d) { t.dirty[id] = false; loaded[id] = true; }
@@ -390,7 +409,8 @@ public final class Renderer {
         layerPass(g, t, false, x0, y0); // fondo: detrás de todo
         for (Bonus b : w.bonus) crate(g, b.x, b.y, b.kind);
         for (Shot s : w.shots) look(g, s, false);
-        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(T.TH - 1, (int) ((y0 + vh) / S)); ty++)
+        if (cells) baseCells(g, w, x0, y0);
+        else for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(T.TH - 1, (int) ((y0 + vh) / S)); ty++)
             for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(T.TW - 1, (int) ((x0 + vw) / S)); tx++) {
                 int id = ty * T.TW + tx; boolean d = fresh[id];
                 if (d) fillTile(t, tx, ty);

@@ -8,7 +8,7 @@ import java.util.ArrayList;
  * (quieto e intocable) y, cuando llegan los dos, se cierran las puertas y pelean. El primero que muere pierde.
  * Todo es determinista (lockstep): solo usa World.rng, StrictMath y el número de tick.
  */
-public final class BaseRun {
+public final class BaseRun implements Terrain.PageSource {
     public final Base base; public final boolean online;
     int ox, oy;
     /** Habitaciones en píxeles: {x, y, ancho, alto, jefe, reflejada}. */
@@ -26,6 +26,45 @@ public final class BaseRun {
     public final ArrayList<int[]> doors = new ArrayList<>();
 
     BaseRun(Base b, boolean online) { base = b; this.online = online; }
+    /** Piezas fijas por cuadro del mapa: {material de la base, color}. Escarcha de FREEZEE FLOW por cuadro. */
+    public final java.util.HashMap<Long, int[]> cells = new java.util.HashMap<>(); public final java.util.HashSet<Long> frost = new java.util.HashSet<>();
+    World world;
+    /** Habitaciones activas: donde está cada jugador y las que la rodean. Las demás duermen (sus enemigos y piezas se quedan quietos) y su mapa se suelta. */
+    public boolean[] active = new boolean[0];
+    /** Arma una página del mapa desde los datos: pared, habitaciones (y precipicios), piezas fijas, objetos, piezas que se mueven y puertas. */
+    @Override public void fill(Terrain t, int px, int py, byte[] page) {
+        final int S = Terrain.PS, x0 = px * S, y0 = py * S, C = Base.CELL;
+        java.util.Arrays.fill(page, Terrain.STEEL);
+        for (int[] r : rooms) {
+            int rx0 = Math.max(x0, r[0]), rx1 = Math.min(x0 + S, r[0] + r[2]), ry0 = Math.max(y0, r[1]), ry1 = Math.min(y0 + S, r[1] + r[3] + (r[6] == 1 ? Base.PAD * C : 0));
+            if (rx0 >= rx1 || ry0 >= ry1) continue;
+            for (int y = ry0; y < ry1; y++) java.util.Arrays.fill(page, (y - y0) * S + rx0 - x0, (y - y0) * S + rx1 - x0, (byte) 0);
+        }
+        for (int cy = y0 / C; cy < (y0 + S) / C; cy++) for (int cx = x0 / C; cx < (x0 + S) / C; cx++) {
+            int[] v = cells.get(Base.key(cx, cy)); if (v == null) continue; byte k = Base.matOf(v[0]);
+            for (int y = cy * C; y < cy * C + C; y++) java.util.Arrays.fill(page, (y - y0) * S + cx * C - x0, (y - y0) * S + cx * C + C - x0, k);
+        }
+        if (world != null) for (Prop q : world.props) if (!q.gone) box(page, x0, y0, q.x, q.y, q.w, q.h, (byte) q.kind, true);
+        for (Kin k : kin) if (k.on) box(page, x0, y0, k.x(), k.y(), C, C, Terrain.KINETIC, true);
+        for (int[] d : doors) box(page, x0, y0, d[0], d[1], d[2], d[3], Terrain.STEEL, false);
+    }
+    static void box(byte[] page, int x0, int y0, int x, int y, int w, int h, byte k, boolean onlyAir) {
+        final int S = Terrain.PS;
+        for (int j = Math.max(y, y0); j < Math.min(y + h, y0 + S); j++) for (int i = Math.max(x, x0); i < Math.min(x + w, x0 + S); i++) {
+            int q = (j - y0) * S + i - x0; if (!onlyAir || page[q] == 0) page[q] = k;
+        }
+    }
+    /** La habitación de una pieza (para saber si está activa). */
+    boolean awake(float x, float y) { int i = roomAt(x, y); return i < 0 || i < active.length && active[i]; }
+    void wake(World g) {
+        if (active.length != rooms.size()) active = new boolean[rooms.size()];
+        java.util.Arrays.fill(active, false);
+        for (int i = 0; i < 2 && i < g.robots.length; i++) {
+            Robot r = g.robots[i]; if (r.lives < 0) continue; int at = r.alive() ? roomAt(r.px, r.py - 20) : -1; if (at < 0) at = check[i]; if (at < 0) at = startRoom(i);
+            if (at < 0) continue; int[] c = rooms.get(at);
+            for (int k = 0; k < rooms.size(); k++) { int[] o = rooms.get(k); if (Math.abs(o[0] - c[0]) <= c[2] && Math.abs(o[1] - c[1]) <= c[3]) active[k] = true; } // ella y las 8 de alrededor
+        }
+    }
     public int wallColor() { switch (base.bg) { case 1: return 0xFF2E3B26; case 2: return 0xFF6B5A3E; case 3: return 0xFF2A2E3A; default: return 0xFF3A4150; } }
     public boolean held(int id) { return id >= 0 && id < 2 && held[id]; }
 
@@ -40,9 +79,10 @@ public final class BaseRun {
     void moveKin(World g) {
         if (kin.isEmpty()) return;
         double a = 2 * Math.PI * (g.tick % PERIOD) / PERIOD; boolean any = false;
-        int[] nx = new int[kin.size()], ny = new int[kin.size()]; boolean[] non = new boolean[kin.size()];
+        int[] nx = new int[kin.size()], ny = new int[kin.size()]; boolean[] non = new boolean[kin.size()], aw = new boolean[kin.size()];
         for (int i = 0; i < kin.size(); i++) {
             Kin k = kin.get(i); int s = k.mirrored ? -1 : 1, x = 0, y = 0; boolean on = true;
+            aw[i] = awake(k.x0 + Base.CELL / 2f, k.y0 + Base.CELL / 2f); if (!aw[i]) { nx[i] = k.dx; ny[i] = k.dy; non[i] = k.on; continue; } // dormida: se queda quieta
             switch (k.move) {
                 case Base.M_UPDOWN: y = -(int) Math.round(32 * (1 - StrictMath.cos(a))); break;
                 case Base.M_SIDE: x = s * (int) Math.round(32 * (1 - StrictMath.cos(a))); break;
@@ -60,9 +100,9 @@ public final class BaseRun {
         }
         for (Robot r : g.robots) r.carried = false;
         Terrain t = g.t;
-        for (Kin k : kin) if (k.on) paint(t, k.x(), k.y(), (byte) 0);
+        for (int i = 0; i < kin.size(); i++) { Kin k = kin.get(i); if (aw[i] && k.on) paint(t, k.x(), k.y(), (byte) 0); }
         for (int i = 0; i < kin.size(); i++) { Kin k = kin.get(i); k.dx = nx[i]; k.dy = ny[i]; k.on = non[i]; }
-        for (Kin k : kin) if (k.on) {
+        for (int i = 0; i < kin.size(); i++) { Kin k = kin.get(i); if (!aw[i] || !k.on) continue;
             paint(t, k.x(), k.y(), Terrain.KINETIC);
             for (Robot r : g.robots) if (r.alive() && overlaps(r, k.x(), k.y(), Base.CELL, Base.CELL)) { // si la pieza lo alcanza, lo empuja
                 if (r.py - r.h / 2 < k.y() + Base.CELL / 2) r.py = k.y(); else r.px = r.px < k.x() + Base.CELL / 2 ? k.x() - Robot.HW - 1 : k.x() + Base.CELL + Robot.HW + 1;
@@ -71,7 +111,7 @@ public final class BaseRun {
     }
     static void paint(Terrain t, int x, int y, byte to) {
         for (int j = Math.max(0, y); j < Math.min(t.H, y + Base.CELL); j++) for (int i = Math.max(0, x); i < Math.min(t.W, x + Base.CELL); i++) {
-            int q = j * t.W + i; if (to == 0 ? t.m[q] == Terrain.KINETIC : t.m[q] == 0 || t.m[q] == Terrain.DEBRIS || t.m[q] == Terrain.DECOR) t.m[q] = to;
+            int k = t.get(i, j); if (to == 0 ? k == Terrain.KINETIC : k == 0 || k == Terrain.DEBRIS || k == Terrain.DECOR) t.set(i, j, to);
         }
     }
     static boolean overlaps(Robot r, int x, int y, int w, int h) { return r.px + Robot.HW > x && r.px - Robot.HW < x + w && r.py > y && r.py - r.h < y + h; } // el robot ocupa las filas py - h .. py - 1
@@ -234,6 +274,8 @@ public final class BaseRun {
         int[] r = rooms.get(idx); float x = r[0] + r[2] / 2f + dx * r[2], y = r[1] + r[3] / 2f + dy * r[3]; return roomAt(x, y) >= 0;
     }
     public int lastRoom(int who) { return who >= 0 && who < 2 ? check[who] : -1; }
+    /** En el precipicio bajo una habitación sin piso. */
+    public boolean pitAt(float x, float y) { for (int[] r : rooms) if (r[6] == 1 && x >= r[0] && x < r[0] + r[2] && y >= r[1] + r[3] && y < r[1] + r[3] + Base.PAD * Base.CELL) return true; return false; }
     public int roomAt(float x, float y) { for (int i = 0; i < rooms.size(); i++) { int[] r = rooms.get(i); if (x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3]) return i; } return -1; }
     int startRoom(int who) { float[] s = start(who); return roomAt(s[0], s[1] - 4); }
     float[] start(int who) {
@@ -284,14 +326,14 @@ public final class BaseRun {
             for (Robot r : g.robots) if (r.alive() && r.px + Robot.HW > s[0] && r.px - Robot.HW < s[0] + s[2] && r.py > s[1] && r.py - r.h < s[1] + s[3]) { // nadie queda atrapado en una puerta
                 if (s[3] > s[2]) r.px = s[0] < x + w / 2 ? s[0] + s[2] + Robot.HW + 1 : s[0] - Robot.HW - 1; else r.py = s[1] < y + h / 2 ? s[1] + s[3] + r.h + 1 : s[1];
             }
-            for (int j = s[1]; j < s[1] + s[3]; j++) for (int i = s[0]; i < s[0] + s[2]; i++) { int q = j * g.t.W + i; g.t.m[q] = Terrain.STEEL; g.t.tex[q] = 0xFF8D99A8; }
+            for (int j = s[1]; j < s[1] + s[3]; j++) for (int i = s[0]; i < s[0] + s[2]; i++) g.t.set(i, j, Terrain.STEEL);
             g.t.markArea(s[0], s[1], s[0] + s[2], s[1] + s[3]);
         }
         g.fx(Fx.DOOR, x + w / 2f, y + h / 2f, 0, -1);
     }
     void openDoors(World g) {
-        for (int[] s : doors) { for (int j = s[1]; j < s[1] + s[3]; j++) for (int i = s[0]; i < s[0] + s[2]; i++) { int q = j * g.t.W + i; g.t.m[q] = 0; g.t.tex[q] = 0; } g.t.markArea(s[0], s[1], s[0] + s[2], s[1] + s[3]); }
-        doors.clear();
+        java.util.ArrayList<int[]> old = new java.util.ArrayList<>(doors); doors.clear();
+        for (int[] s : old) { for (int j = s[1]; j < s[1] + s[3]; j++) for (int i = s[0]; i < s[0] + s[2]; i++) g.t.set(i, j, 0); g.t.markArea(s[0], s[1], s[0] + s[2], s[1] + s[3]); }
     }
     public int bossIdx() { for (int i = 0; i < rooms.size(); i++) if (rooms.get(i)[4] == 1) return i; return -1; }
     void boss(World g) {
@@ -326,8 +368,10 @@ public final class BaseRun {
     /** Antes de mover a los personajes: el que espera en la sala del jefe no se mueve. */
     void pre(World g, int[] in) { for (int i = 0; i < Math.min(2, in.length); i++) if (held[i]) in[i] = 0; }
     void post(World g) {
+        wake(g);
         moveKin(g);
-        for (Foe f : foes) if (f.alive) stepFoe(g, f);
+        for (Foe f : foes) if (f.alive && awake(f.homeX, f.homeY - 4)) stepFoe(g, f); // los de habitaciones dormidas esperan
+        if (g.tick % 60 == 0) { java.util.ArrayList<int[]> keep = new java.util.ArrayList<>(); for (int i = 0; i < rooms.size(); i++) if (active[i]) keep.add(rooms.get(i)); g.t.release(keep, Base.PAD * Base.CELL + 8); }
         playerShots(g); stepBullets(g);
         for (int i = 0; i < g.robots.length && i < 2; i++) {
             Robot r = g.robots[i]; if (!r.alive() || r.finalT > 0) continue;

@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 27;
+    public static final int RULES = 28;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t; public final Rng rng;
@@ -34,7 +34,7 @@ public final class World {
      * reflejada y se encuentran en la sala del jefe). Sin premios al azar: solo los que se pusieron en el editor.
      */
     public World(int seed, int lives, Wpn[][] loads, Base base, boolean online) {
-        rng = new Rng(seed); run = new BaseRun(base, online); t = base.build(online, run);
+        rng = new Rng(seed); run = new BaseRun(base, online); t = base.build(online, run); run.world = this;
         robots = new Robot[2];
         for (int i = 0; i < 2; i++) { robots[i] = new Robot(i, lives); robots[i].team = i; System.arraycopy(loads[i], 0, robots[i].loadout, 0, Robot.SLOTS); robots[i].px = -9999; }
         for (int[] q : t.props) props.add(new Prop(q));

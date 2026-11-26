@@ -6,10 +6,40 @@ public final class Terrain {
     public final int W, H, TW, TH, FW, FH;
     public static final int TW0 = (W0 + TILE - 1) / TILE, TH0 = (H0 + TILE - 1) / TILE;
     public Terrain() { this(W0, H0); }
-    public Terrain(int w, int h) {
+    public Terrain(int w, int h) { this(w, h, null); }
+    /**
+     * Con src: mapa por páginas (bases). No hay colores por píxel (el Renderer dibuja los cuadros de la base) y el
+     * material se guarda en páginas de 256 x 256 que se arman al tocarlas (src las llena) y se sueltan cuando quedan
+     * lejos de los jugadores, como los chunks de Minecraft. Todo lo que cambia en el mapa se puede volver a armar.
+     */
+    public Terrain(int w, int h, PageSource src) {
         W = w; H = h; TW = (W + TILE - 1) / TILE; TH = (H + TILE - 1) / TILE; FW = W / FRAG + 1; FH = H / FRAG + 1;
-        tex = new int[W * H]; m = new byte[W * H]; dirty = new boolean[TW * TH]; touched = new boolean[TW * TH];
+        dirty = new boolean[TW * TH]; touched = new boolean[TW * TH]; this.src = src;
+        if (src == null) { tex = new int[W * H]; m = new byte[W * H]; pages = null; PX = PY = 0; }
+        else { tex = null; m = null; PX = (W + PS - 1) / PS; PY = (H + PS - 1) / PS; pages = new byte[PX * PY][]; locked = true; }
     }
+    // ---------- Páginas (bases)
+    public interface PageSource { void fill(Terrain t, int px, int py, byte[] page); }
+    public static final int PS = 256, PSH = 8;
+    public final byte[][] pages; public final int PX, PY; final PageSource src; public int built;
+    byte[] page(int x, int y) {
+        int p = (y >> PSH) * PX + (x >> PSH); byte[] b = pages[p];
+        if (b == null) { b = new byte[PS * PS]; pages[p] = b; built++; src.fill(this, x >> PSH, y >> PSH, b); }
+        return b;
+    }
+    /** Material en (x, y) (dentro del mapa). */
+    public byte get(int x, int y) { return pages == null ? m[y * W + x] : page(x, y)[(y & (PS - 1)) << PSH | x & (PS - 1)]; }
+    public void set(int x, int y, int v) { if (x < 0 || y < 0 || x >= W || y >= H) return; if (pages == null) m[y * W + x] = (byte) v; else page(x, y)[(y & (PS - 1)) << PSH | x & (PS - 1)] = (byte) v; }
+    /** Suelta las páginas que no tocan esos rectángulos {x, y, ancho, alto} (se volverán a armar si alguien las toca). */
+    public void release(java.util.List<int[]> keep, int margin) {
+        if (pages == null) return;
+        for (int py = 0; py < PY; py++) for (int px = 0; px < PX; px++) {
+            int p = py * PX + px; if (pages[p] == null) continue; int x0 = px * PS, y0 = py * PS; boolean k = false;
+            for (int[] r : keep) if (x0 < r[0] + r[2] + margin && x0 + PS > r[0] - margin && y0 < r[1] + r[3] + margin && y0 + PS > r[1] - margin) { k = true; break; }
+            if (!k) pages[p] = null;
+        }
+    }
+    public int pagesAlive() { int n = 0; if (pages != null) for (byte[] b : pages) if (b != null) n++; return n; }
     /** 0 es aire; STEEL es indestructible; lo demás se destruye. */
     public static final byte PANEL = 1, STEEL = 2, CRATE = 3, VENT = 4, COMPUTER = 5, DEBRIS = 6, DECOR = 7, METAL = 8, STONE = 9, EARTH = 10, WOOD = 11, KINETIC = 12; // KINETIC: pieza que se mueve en una base (choca, la dibuja el Renderer)
     /** Objetos con resistencia propia: {x, y, ancho, alto, material}. */
@@ -35,8 +65,8 @@ public final class Terrain {
     static final int THIN = 6, SMALL = 420;
     static final int FRONT = 0xFF8214FF, TOP = 0xFF4A00A8, DARK = 0xFF2B1A4D, DARK_TOP = 0xFF1B1036;
     static final int G = 32, FILL = 0xFF8214FF;
-    public final int[] tex;
-    public final byte[] m;
+    public final int[] tex; // null en las bases
+    public final byte[] m; // null en las bases (ver get/set)
     public final boolean[] dirty;
     /**
      * Capas del editor que no chocan con nada (solo se ven): FONDO, detrás de todo (se dibuja más claro), y SOBRE,
@@ -47,13 +77,13 @@ public final class Terrain {
     public static final int BACKDROP = 100, OVERLAY = 101;
     public int[] layer(int mat) { if (mat == BACKDROP) { if (back == null) back = new int[W * H]; return back; } if (front == null) front = new int[W * H]; return front; }
 
-    public boolean solid(int x, int y) { if (x < 0 || y < 0 || x >= W || y >= H) return true; byte k = m[y * W + x]; return k != 0 && k != DEBRIS && k != DECOR; }
-    public int at(int x, int y) { return x < 0 || y < 0 || x >= W || y >= H ? 2 : m[y * W + x]; }
+    public boolean solid(int x, int y) { if (x < 0 || y < 0 || x >= W || y >= H) return true; byte k = pages == null ? m[y * W + x] : get(x, y); return k != 0 && k != DEBRIS && k != DECOR; }
+    public int at(int x, int y) { return x < 0 || y < 0 || x >= W || y >= H ? 2 : pages == null ? m[y * W + x] : get(x, y); }
 
     /** Bases: el terreno no se rompe (es un plataformero: un hoyo en el piso sería un precipicio). */
     public boolean locked;
     private void disc(int cx, int cy, int rx, int ry, int from, int to) {
-        if (locked && to == 0) return;
+        if (locked) return; // bases: ni se rompe ni se agrega tierra
         int x0 = Math.max(0, cx - rx), x1 = Math.min(W - 1, cx + rx), y0 = Math.max(0, cy - ry), y1 = Math.min(H - 1, cy + ry);
         long a = (long) rx * rx * ry * ry; if (a == 0) return;
         for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) {
@@ -123,22 +153,22 @@ public final class Terrain {
     public void carveE(int cx, int cy, int rx, int ry) { disc(cx, cy, rx, ry, -1, 0); }
     /** Borra un objeto roto del mapa. */
     public void erase(int x, int y, int w, int h) {
-        for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) if (at(i, j) != STEEL) { if (i >= 0 && j >= 0 && i < W && j < H) m[j * W + i] = 0; }
+        for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) if (at(i, j) != STEEL) set(i, j, 0);
         mark(x, y, x + w, y + h);
     }
     /** Quita un objeto del mapa para moverlo (solo sus propias celdas). */
     void lift(int x, int y, int w, int h, int kind) {
-        for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) if (at(i, j) == kind) m[j * W + i] = 0;
+        for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) if (at(i, j) == kind) set(i, j, 0);
         mark(x, y, x + w, y + h);
     }
     /** Pone un objeto en el mapa en su nueva posición. */
     void stamp(int x, int y, int w, int h, int kind) {
-        for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) if (i >= 0 && j >= 0 && i < W && j < H) { int k = m[j * W + i]; if (k == 0 || k == DEBRIS || k == DECOR) m[j * W + i] = (byte) kind; }
+        for (int j = y; j < y + h; j++) for (int i = x; i < x + w; i++) if (i >= 0 && j >= 0 && i < W && j < H) { int k = at(i, j); if (k == 0 || k == DEBRIS || k == DECOR) set(i, j, kind); }
         mark(x, y, x + w, y + h);
     }
     public void addDirt(int cx, int cy, int r) { disc(cx, cy, r, r, 0, 1); }
 
-    private void put(int x, int y, int mat, int c) { if (x >= 0 && y >= 0 && x < W && y < H) { m[y * W + x] = (byte) mat; tex[y * W + x] = c; } }
+    private void put(int x, int y, int mat, int c) { if (x >= 0 && y >= 0 && x < W && y < H) { set(x, y, mat); if (tex != null) tex[y * W + x] = c; } }
     private boolean clearArea(int x, int y, int w, int h) {
         for (int j = y; j < y + h; j += 4) for (int i = x; i < x + w; i += 4) if (at(i, j) != 0) return false;
         return true;
@@ -320,14 +350,17 @@ public final class Terrain {
      * los borra y devuelve true (así unas partículas de tierra no frenan un salto). Si hay más, es un techo de verdad: false.
      */
     public boolean crumble(int x0, int y0, int x1, int y1, int max) {
-        int n = 0;
+        if (locked) return false; int n = 0;
         for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) if (solid(x, y)) { if (!inside(x, y) || hard(m[y * W + x]) || m[y * W + x] == PANEL || ++n > max) return false; }
         if (n == 0) return false;
         for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) if (solid(x, y)) m[y * W + x] = 0;
         mark(x0, y0, x1, y1); return true;
     }
     /** Escarcha de FREEZEE FLOW: aclara hacia el blanco la superficie (píxeles sólidos que tocan aire) en ese radio. */
+    /** En las bases la escarcha se guarda por cuadro (no hay colores por píxel). */
+    public java.util.function.IntBinaryOperator frostSink;
     public void frost(int cx, int cy, int r) {
+        if (tex == null) { if (frostSink != null) frostSink.applyAsInt(cx, cy); return; }
         for (int y = cy - r; y <= cy + r; y++) for (int x = cx - r; x <= cx + r; x++) {
             if (!inside(x, y) || !solid(x, y) || isProp(m[y * W + x])) continue;
             if (solid(x - 1, y) && solid(x + 1, y) && solid(x, y - 1) && solid(x, y + 1)) continue; // solo la superficie
