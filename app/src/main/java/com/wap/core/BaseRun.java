@@ -88,7 +88,7 @@ public final class BaseRun {
                 case DRONE: hw = 12; h = 16; hp = 10; this.y = y - 8; break;
                 case TURRET: hw = 9; h = 15; hp = 10; break;
                 case BADPAL: hw = 10; h = 18; hp = 12; break;
-                default: hw = 30; h = 62; hp = 160;
+                default: hw = 30; h = 62; hp = 300;
             }
             maxHp = hp;
         }
@@ -99,7 +99,7 @@ public final class BaseRun {
         boolean hit(float px, float py, float pad) { float tp = type == TURRET || type == BADPAL ? Math.min(top(), y - 38) : top(); return alive && px > x - hw - pad && px < x + hw + pad && py > tp - pad && py < y + pad; }
     }
     /** Disparo de un enemigo: 0 bola de energía, 1 misil que cae, 2 onda por el suelo (jefe). */
-    public static final class Bullet { public int kind, life = 300; public float x, y, vx, vy; boolean dead; }
+    public static final class Bullet { public int kind, life = 300; public float x, y, vx, vy; boolean dead; public boolean mine; } // mine: la devolvió el FAN, ahora daña a los enemigos
 
     void thing(int what, float x, float bottom, boolean mirrored) {
         if (what == Base.START) { starts[mirrored ? 1 : 0] = new float[]{x, bottom}; return; }
@@ -125,7 +125,7 @@ public final class BaseRun {
         f.vy = Math.min(6, f.vy + .25f); float ny = f.y + f.vy;
         if (g.t.solid((int) f.x, (int) ny + 1) || g.t.solid((int) (f.x - f.hw + 2), (int) ny + 1) || g.t.solid((int) (f.x + f.hw - 2), (int) ny + 1)) {
             int y = (int) f.y; while (y < (int) ny + 1 && !g.t.solid((int) f.x, y + 1) && !g.t.solid((int) (f.x - f.hw + 2), y + 1) && !g.t.solid((int) (f.x + f.hw - 2), y + 1)) y++;
-            f.y = y; if (f.vy > 4 && f.type == BOSS) { g.fx(Fx.SLAM, f.x, f.y, 2, -1); for (int s = -1; s <= 1; s += 2) { Bullet b = new Bullet(); b.kind = 2; b.x = f.x + s * (f.hw + 4); b.y = f.y - 6; b.vx = s * 3.2f; b.life = 140; bullets.add(b); } }
+            f.y = y; if (f.vy > 4 && f.type == BOSS) { g.fx(Fx.SLAM, f.x, f.y, 2, -1); for (int s = -1; s <= 1; s += 2) { Bullet b = new Bullet(); b.kind = 2; b.x = f.x + s * (f.hw + 4); b.y = f.y - 6; b.vx = s * (f.hp < f.maxHp / 2 ? 4.2f : 3.6f); b.life = 140; bullets.add(b); } }
             f.vy = 0;
         } else f.y = ny;
     }
@@ -166,21 +166,21 @@ public final class BaseRun {
                     if (f.t > 60) { f.state = 2; f.t = 0; f.dir = g.rng.i(2) == 0 ? -1 : 1; }
                 }
                 break; }
-            default: { // jefe: salta hacia el jugador y aplasta (ondas por el suelo); entre saltos dispara de a tres
-                fall(g, f); Robot r = target(g, f, 2000); boolean ground = grounded(g, f);
-                if (r != null) { f.dir = r.px < f.x ? -1 : 1; f.aim = (float) StrictMath.atan2(r.py - 27 - (f.y - 40), r.px - f.x); }
+            default: { // jefe: salta hacia el jugador y aplasta (ondas por el suelo); entre saltos dispara en abanico. Con media vida, furioso: más rápido y más balas
+                fall(g, f); Robot r = target(g, f, 2000); boolean ground = grounded(g, f), mad = f.hp < f.maxHp / 2;
+                if (r != null) { f.dir = r.px < f.x ? -1 : 1; float lead = r.vx * 14; f.aim = (float) StrictMath.atan2(r.py - 27 - (f.y - 40), r.px + lead - f.x); } // apunta adelantándose
                 if (ground) f.vx = 0;
                 float nx = f.x + f.vx; if (!g.t.solid((int) (nx + Math.signum(f.vx) * f.hw), (int) f.y - 20) && nx > room[0] + f.hw && nx < room[0] + room[2] - f.hw) f.x = nx; else f.vx = 0;
-                int cyc = f.t % 200;
-                if (r != null && ground && cyc == 0) { f.vy = -7.5f; f.vx = Math.max(-3.5f, Math.min(3.5f, (r.px - f.x) / 52f)); f.y -= 2; }
-                if (r != null && ground && (cyc == 90 || cyc == 120)) for (int s = -1; s <= 1; s++) {
-                    float a = f.aim + s * .25f; fire(g, f.x + f.dir * 20, f.y - 40, f.x + f.dir * 20 + (float) StrictMath.cos(a) * 100, f.y - 40 + (float) StrictMath.sin(a) * 100, 3f, 0);
-                }
+                int period = mad ? 110 : 150, cyc = f.t % period;
+                if (r != null && ground && cyc == 0) { f.vy = mad ? -8.5f : -7.5f; f.vx = Math.max(-4.5f, Math.min(4.5f, (r.px - f.x) / 44f)); f.y -= 2; }
+                if (r != null && ground && (cyc == 50 || cyc == 75 || mad && cyc == 95)) { int n = mad ? 2 : 1;
+                    for (int s = -n; s <= n; s++) { float a = f.aim + s * .2f; fire(g, f.x + f.dir * 20, f.y - 40, f.x + f.dir * 20 + (float) StrictMath.cos(a) * 100, f.y - 40 + (float) StrictMath.sin(a) * 100, mad ? 3.8f : 3.3f, 0); } }
+                if (r != null && !ground && f.vy > 0 && Math.abs(r.px - f.x) < 60) f.vx *= .8f; // cae encima
             }
         }
         for (Robot r : g.robots) if (r.alive() && !held(r.id) && r.px + Robot.HW > f.x - f.hw && r.px - Robot.HW < f.x + f.hw && r.py > f.top() && r.py - r.h < f.y) {
             boolean crush = f.type == BOSS && f.vy > 2 && r.py - r.h > f.y - 30;
-            r.damage(g, crush ? 22 : f.type == BOSS ? 12 : 7, (r.px < f.x ? -1 : 1) * 2.5f, -2, -1, f.x, f.y - f.h / 2); // tocarlo duele
+            r.damage(g, crush ? 28 : f.type == BOSS ? 14 : 7, (r.px < f.x ? -1 : 1) * 2.5f, -2, -1, f.x, f.y - f.h / 2); // tocarlo duele
         }
     }
     /** Un disparo o una explosión del jugador. Devuelve si tocó a alguien. */
@@ -189,7 +189,7 @@ public final class BaseRun {
         return false;
     }
     void hurt(World g, Foe f, float dmg) {
-        if (!f.alive || dmg <= 0) return; f.hp -= Math.max(3, dmg); f.hurtT = 8;
+        if (!f.alive || dmg <= 0) return; f.hp -= Math.max(3, dmg) * (f.type == BOSS ? .8f : 1); f.hurtT = 8;
         if (f.hp <= 0) {
             f.alive = false; g.fx(Fx.EXPLODE, f.x, f.y - f.h / 2, f.type == BOSS ? 60 : 20, -1).b = 0; g.fx(Fx.FOE_DIE, f.x, f.y - f.h / 2, f.type, -1);
             if (f == boss) win(g);
@@ -204,7 +204,8 @@ public final class BaseRun {
             if (b.kind == 1) b.vy = Math.min(6, b.vy + .12f);
             b.x += b.vx; b.y += b.vy;
             if (b.kind == 2 && !g.t.solid((int) b.x, (int) b.y + 8)) { b.dead = true; continue; } // la onda se acaba donde se acaba el suelo
-            Robot hit = null; for (Robot r : g.robots) if (r.alive() && !held(r.id) && Math.abs(r.px - b.x) < Robot.HW + 3 && b.y > r.py - r.h - 3 && b.y < r.py + 3) { hit = r; break; }
+            if (b.mine && hurtFoe(g, b.x, b.y, b.kind == 2 ? 10 : 8, 2)) { b.dead = true; if (b.kind == 1) g.explode(b.x, b.y, 18, 9, 8, 2, -1); continue; }
+            Robot hit = null; if (!b.mine) for (Robot r : g.robots) if (r.alive() && !held(r.id) && Math.abs(r.px - b.x) < Robot.HW + 3 && b.y > r.py - r.h - 3 && b.y < r.py + 3) { hit = r; break; }
             boolean wall = g.t.solid((int) b.x, (int) b.y) && g.t.at((int) b.x, (int) b.y) != Terrain.KINETIC || b.kind != 2 && g.t.at((int) b.x, (int) b.y) == Terrain.KINETIC;
             if (hit != null || wall) {
                 b.dead = true;
@@ -260,7 +261,18 @@ public final class BaseRun {
         }
         return new int[]{r[0] + r[2] / 2, r[1] + 40};
     }
-    boolean insideBoss(Robot r, int[] room) { return r.px > room[0] + 26 && r.px < room[0] + room[2] - 26 && r.py - 27 > room[1] + 10 && r.py < room[1] + room[3] - 4; }
+    /** Adentro de verdad: lejos de todas las puertas (si entra cayendo desde arriba, recién cuenta al pisar el suelo). */
+    boolean insideBoss(Robot r, int[] room) { return r.px - Robot.HW > room[0] + 16 && r.px + Robot.HW < room[0] + room[2] - 16 && r.py - r.h > room[1] + 16 && r.py < room[1] + room[3] - 4 && r.grounded; }
+    /** El FAN sopla todo: balas de los enemigos (las devuelve contra ellos) y a los enemigos mismos (el jefe apenas se mueve). */
+    public void fan(World g, float x, float y, float vx, float vy) {
+        for (Bullet b : bullets) if (Math.abs(b.x - x) < 14 && Math.abs(b.y - y) < 14) { b.vx += vx * .22f; b.vy += vy * .22f; if (b.kind == 2) b.kind = 0; if (b.vx * vx > 0) b.mine = true; }
+        for (Foe f : foes) if (f.alive && f.hit(x, y, 6)) {
+            float k = f.type == BOSS ? .03f : f.type == DRONE ? .45f : .25f, nx = f.x + vx * k;
+            if (!g.t.solid((int) (nx + Math.signum(vx) * f.hw), (int) (f.y - f.h / 2))) f.x = nx;
+            if (f.type == DRONE) { float ny = f.y + vy * k; if (!g.t.solid((int) f.x, (int) (ny - f.h))) f.y = ny; }
+            if (f.type == BADPAL && f.state == 1) f.t = Math.max(0, f.t - 1); // lo desconcentra: tarda más en disparar
+        }
+    }
     void closeDoors(World g, int[] room) {
         int x = room[0], y = room[1], w = room[2], h = room[3], th = 10;
         int[][] sides = {{x, y, th, h}, {x + w - th, y, th, h}, {x, y, w, th}, {x, y + h - th, w, th}};
@@ -268,6 +280,9 @@ public final class BaseRun {
             int mx = s[0] + s[2] / 2 + (s == sides[0] ? -20 : s == sides[1] ? 20 : 0), my = s[1] + s[3] / 2 + (s == sides[2] ? -20 : s == sides[3] ? 20 : 0);
             if (roomAt(mx, my) < 0) continue; // ahí ya hay pared o precipicio
             doors.add(s);
+            for (Robot r : g.robots) if (r.alive() && r.px + Robot.HW > s[0] && r.px - Robot.HW < s[0] + s[2] && r.py > s[1] && r.py - r.h < s[1] + s[3]) { // nadie queda atrapado en una puerta
+                if (s[3] > s[2]) r.px = s[0] < x + w / 2 ? s[0] + s[2] + Robot.HW + 1 : s[0] - Robot.HW - 1; else r.py = s[1] < y + h / 2 ? s[1] + s[3] + r.h + 1 : s[1];
+            }
             for (int j = s[1]; j < s[1] + s[3]; j++) for (int i = s[0]; i < s[0] + s[2]; i++) { int q = j * g.t.W + i; g.t.m[q] = Terrain.STEEL; g.t.tex[q] = 0xFF8D99A8; }
             g.t.markArea(s[0], s[1], s[0] + s[2], s[1] + s[3]);
         }

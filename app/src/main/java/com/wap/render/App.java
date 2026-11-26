@@ -164,6 +164,7 @@ public final class App {
     public void baseEdTest() { testBase(); }
     public void tickN(int n) { for (int i = 0; i < n; i++) tick(); }
     public World world() { return w; }
+    public void showFight() { fightT = FIGHT_T - 14; }
     public boolean usesPointers() { return screen == EDIT || screen == PAD_EDIT || screen == BASE_EDIT; }
     static final String BASE_TAG = "\u0002", NEW_BASE = "\u0001BASE";
     /** BASES: las bases creadas en el editor. Tocar una abre un menú chico: jugar solo o llevarla a una sala en línea. */
@@ -565,8 +566,8 @@ public final class App {
             case Fx.TRAP: au.play(f.a > 0 ? Audio.BIG : Audio.PICK); break;
             case Fx.FOE: au.play(Audio.SHOT); break;
             case Fx.FOE_DIE: au.play(f.a == BaseRun.BOSS ? Audio.BIG : Audio.BOOM); break;
-            case Fx.DOOR: au.play(Audio.HOOK); if (f.a == 0) { toast = "¡SE CERRARON LAS PUERTAS!"; toastT = 120; } break;
-            case Fx.FIGHT: au.play(Audio.BIG); toast = "¡A PELEAR!"; toastT = 150; break;
+            case Fx.DOOR: au.play(Audio.HOOK); if (f.a == 0) { fightT = FIGHT_T; au.play(Audio.BIG); } break;
+            case Fx.FIGHT: au.play(Audio.BIG); fightT = FIGHT_T; break;
             case Fx.FALL: au.play(Audio.DEATH); break;
             default:
         }
@@ -780,7 +781,7 @@ public final class App {
             case RIVALS: rivalsScreen(g); focusBox(g); break;
             case LEVEL_SEL: levelSel(g); focusBox(g); break;
             default:
-                ren.overlay(g, s); if (ren.bolted > 0) g.rect(0, 0, W, H, (int) (ren.bolted * 7) << 24 | 0xF4FAFF); hud(g); // relámpago: destello blanco suave en toda la pantalla
+                ren.overlay(g, s); if (ren.bolted > 0) g.rect(0, 0, W, H, (int) (ren.bolted * 7) << 24 | 0xF4FAFF); hud(g); if (fightT > 0) fightText(g); // relámpago: destello blanco suave en toda la pantalla
                 if (online && ls.stall > 45) txtS(g, "ESPERANDO AL OTRO TELÉFONO...", W / 2, H * .5f, 16 * u, CREAM, 0);
                 if (online && ls.desync) txtS(g, "PARTIDA DESINCRONIZADA", W / 2, H - 8 * u, 12 * u, RED, 0);
                 if (screen == PLAY) {
@@ -1031,6 +1032,19 @@ public final class App {
         { String d = Wpn.ALL[cur].desc; if (PixelFont.width(d, 8) <= W - gx - 4) txt(g, d, gx + 2, H - 3, 8, SKY, -1); else PixelFont.tiny(g, d, gx + 2, H - 8, SKY, -1); }
         if (devMode) { String t = "MODO DESARROLLADOR"; float tw = PixelFont.width(t, 8) + 8; g.rect(W - tw - 2, H - 13, tw, 12, PURPLE); txt(g, t, W - tw / 2 - 2, H - 4, 8, CREAM, 0); }
         if (toastT > 0) { g.rect(0, H / 2 - 10, W, 20, toast.startsWith("MODO") ? MINT : 0xE0101330); txtS(g, toast, W / 2, H / 2 + 4, 8, CREAM, 0); } // aviso de los toques a FAN
+    }
+    /** "¡A LUCHAR!" al llegar al jefe: letras grandes que tiemblan, saltan y cambian de color. */
+    static final int FIGHT_T = 150; int fightT; final java.util.Random shakeRnd = new java.util.Random();
+    void fightText(Gfx g) {
+        fightT--; String t = "¡A LUCHAR!"; float k = Math.min(1, (FIGHT_T - fightT) / 10f), out = Math.min(1, fightT / 20f);
+        float size = fit(t, 56 * u, W - 20) * (1.5f - .5f * k), cw = PixelFont.width(t, size) / t.length(), x0 = W / 2 - PixelFont.width(t, size) / 2, y = H * .42f;
+        int[] cols = {RED, GOLD, CREAM, 0xFFFF7A1A};
+        if (out < 1 && fightT % 4 < 2) return; // al final parpadea y se va
+        for (int i = 0; i < t.length(); i++) {
+            float jx = (shakeRnd.nextFloat() - .5f) * 6 * u, jy = (shakeRnd.nextFloat() - .5f) * 8 * u + (float) Math.sin(fightT * .6f + i) * 3 * u;
+            int c = cols[(i + fightT / 3) % cols.length]; String ch = t.substring(i, i + 1);
+            txtS(g, ch, x0 + i * cw + cw / 2 + jx, y + jy, size, c, 0);
+        }
     }
     /** Vida del jefe de la base. */
     void bossBar(Gfx g, float x, float y, float wd, BaseRun.Foe b) {

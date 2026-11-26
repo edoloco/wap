@@ -69,7 +69,17 @@ public final class Base {
         return seen.size() == rooms.size();
     }
     /** Marca la habitación del jefe (solo una). Tocar la misma la desmarca. */
-    public void toggleBoss(int rx, int ry) { int[] r = room(rx, ry); if (r == null) return; boolean on = r[2] == 0; for (int[] o : rooms) o[2] = 0; r[2] = on ? 1 : 0; }
+    public void toggleBoss(int rx, int ry) { int[] r = room(rx, ry); if (r == null) return; boolean on = r[2] == 0; for (int[] o : rooms) o[2] = 0; r[2] = on ? 1 : 0; if (on) bossFrame(r); }
+    /** La sala del jefe parte con ribetes de acero en sus bordes, menos en los lados que se conectan con la base. */
+    public void bossFrame(int[] r) {
+        boolean L = room(r[0] - 1, r[1]) != null, Rr = room(r[0] + 1, r[1]) != null, U = room(r[0], r[1] - 1) != null, D = room(r[0], r[1] + 1) != null;
+        int x0 = r[0] * RW, y0 = r[1] * RH;
+        for (int i = 0; i < RW; i++) for (int j = 0; j < RH; j++) {
+            boolean edge = i == 0 && !L || i == RW - 1 && !Rr || j == 0 && !U || j == RH - 1 && !D;
+            if (!edge) continue; long k = key(x0 + i, y0 + j); Integer th = things.get(k);
+            if (th != null && th == START) continue; things.remove(k); tiles.put(k, new int[]{T_STEEL, 0, M_NONE});
+        }
+    }
     public int[] bossRoom() { for (int[] r : rooms) if (r[2] == 1) return r; return null; }
     /** En línea hace falta la sala del jefe al final (ninguna habitación más a la derecha): ahí se juntan los dos. */
     public boolean canOnline() { int[] b = bossRoom(); if (b == null) return false; for (int[] r : rooms) if (r[0] > b[0]) return false; return true; }
@@ -165,14 +175,17 @@ public final class Base {
         for (Map.Entry<Long, int[]> e : tiles.entrySet()) {
             int cx = kx(e.getKey()), cy = ky(e.getKey()); int[] v = e.getValue();
             int[] home = roomOfCell(cx, cy); if (home == null) continue;
+            boolean half = mirror && home[2] == 1 && Math.floorMod(cx, RW) >= RW / 2; // en línea la sala del jefe es simétrica: su mitad izquierda se refleja (así se abre al lado del jugador 2)
+            if (half) continue;
             piece(t, run, ox + cx * CELL, oy + cy * CELL, v, false);
-            if (mirror && home[2] == 0 && bossRoom() != null) piece(t, run, ox + (mirrorX(cx) - (v[0] == T_PC ? 1 : 0)) * CELL, oy + cy * CELL, v, true); // el computador mide 2 cuadros
+            if (mirror && bossRoom() != null) piece(t, run, ox + (mirrorX(cx) - (v[0] == T_PC ? 1 : 0)) * CELL, oy + cy * CELL, v, true); // el computador mide 2 cuadros
         }
         for (Map.Entry<Long, Integer> e : things.entrySet()) {
             int cx = kx(e.getKey()), cy = ky(e.getKey()); int what = e.getValue();
             int[] home = roomOfCell(cx, cy); if (home == null) continue;
+            if (mirror && home[2] == 1 && (Math.floorMod(cx, RW) >= RW / 2 || what == START)) continue;
             run.thing(what, ox + cx * CELL + CELL / 2f, oy + cy * CELL + CELL, false);
-            if (mirror && home[2] == 0 && bossRoom() != null) run.thing(what, ox + mirrorX(cx) * CELL + CELL / 2f, oy + cy * CELL + CELL, true);
+            if (mirror && bossRoom() != null) run.thing(what, ox + mirrorX(cx) * CELL + CELL / 2f, oy + cy * CELL + CELL, true);
         }
         for (BaseRun.Kin k : run.kin) BaseRun.paint(t, k.x(), k.y(), Terrain.KINETIC); // las piezas que se mueven parten en su lugar
         java.util.Arrays.fill(t.dirty, true);

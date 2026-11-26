@@ -19,6 +19,7 @@ public final class Shot {
         if (w.bubble) { bubbleMove(g); return; }
         if (w.tornado) { tornadoMove(g); return; }
         if (w.fan) for (Shot o : g.shots) if (o != this && !o.w.fan && o.wait == 0 && Math.abs(o.x - x) < 12 && Math.abs(o.y - y) < 12) { o.vx += vx * .14f; o.vy += vy * .14f; o.stuck = false; } // el ventilador desvía balas
+        if (w.fan && g.run != null) g.run.fan(g, x, y, vx, vy); // en las bases, también a los enemigos y sus balas
         if (w.accel != 0) { float s = (float) StrictMath.hypot(vx, vy); if (s > .01f && s < 14) { vx += vx / s * w.accel; vy += vy / s * w.accel; } }
         if (w.jitter != 0 && age % 6 == 0) { float a = g.rng.r(-w.jitter, w.jitter), c = (float) StrictMath.cos(a), n = (float) StrictMath.sin(a), t = vx * c - vy * n; vy = vx * n + vy * c; vx = t; }
         if (w.smoke && age % 2 == 0) g.fx(Fx.SMOKE, x, y, 0, 0);

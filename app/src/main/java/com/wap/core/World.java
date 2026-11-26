@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 26;
+    public static final int RULES = 27;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t; public final Rng rng;

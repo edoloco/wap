@@ -495,7 +495,18 @@ public class Sim {
         int[] br=run.rooms.get(2);r.px=br[0]+120;r.py=br[1]+br[3]-33;r.vy=0;for(int i=0;i<5;i++)w.step(new int[2]);
         check(run.bossOn&&!run.doors.isEmpty()&&run.boss!=null,"base: la sala del jefe cierra sus puertas y aparece el jefe");
         {r.invuln=999;for(int i=0;i<200;i++)w.step(new int[2]);Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=br[0]+256;rd.camY=br[1]+150;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"33_base_jefe.png"));}
-        for(int i=0;i<60&&!w.finished;i++)run.hurtFoe(w,run.boss.x,run.boss.y-20,5,4);check(w.finished&&run.won&&w.winner==0,"base: vencer al jefe gana la base");
+        for(int i=0;i<200&&!w.finished;i++)run.hurtFoe(w,run.boss.x,run.boss.y-20,5,4);check(w.finished&&run.won&&w.winner==0,"base: vencer al jefe gana la base");
+        // la sala del jefe parte con ribetes de acero, menos donde se conecta; entrar cayendo desde arriba no deja atrapado
+        {Base d=Base.empty("ARRIBA");d.addRoom(1,0);d.addRoom(2,0);d.addRoom(2,-1);d.toggleBoss(2,0);
+         check(d.tiles.get(Base.key(47,4))!=null&&d.tiles.get(Base.key(47,4))[0]==Base.T_STEEL&&d.tiles.get(Base.key(32,4))==null&&d.tiles.get(Base.key(40,0))==null&&d.tiles.get(Base.key(40,8))[0]==Base.T_STEEL,"sala del jefe: ribetes de acero menos en los lados que conectan");
+         World v=new World(4,3,cargas("FAN"),d,false);Robot p=v.robots[0];int[] bq=v.run.rooms.get(v.run.bossIdx());
+         p.px=bq[0]+200;p.py=bq[1]-60;p.vy=0;p.invuln=9999;for(int i=0;i<90;i++)v.step(new int[2]);
+         check(v.run.bossOn,"sala del jefe: entrando desde arriba también empieza la pelea");int xq=p.px;for(int i=0;i<30;i++)v.step(new int[]{Input.RIGHT,0});check(p.px>xq+10&&p.py>bq[1]+16,"sala del jefe: entrando desde arriba no queda atrapado ("+(p.px-xq)+" px)");
+         // el FAN devuelve las balas de los enemigos
+         BaseRun.Bullet bl=new BaseRun.Bullet();bl.kind=0;bl.x=p.px+50;bl.y=p.py-30;bl.vx=-2.5f;v.run.bullets.add(bl);p.facing=1;for(int i=0;i<30;i++)v.step(new int[]{Input.A,0});
+         check(bl.mine||bl.vx>0,"FAN: sopla las balas de los enemigos de vuelta");}
+        {World v=new World(9,3,cargas("SHOTGUN"),Base.load(f),true);int[] bq=v.run.rooms.get(v.run.bossIdx());int y=bq[1]+4*32;
+         check(!v.t.solid(bq[0]+4,y)&&!v.t.solid(bq[0]+bq[2]-4,y),"en línea: la sala del jefe se abre a los dos lados (simétrica)");}
         // en línea: el jugador 2 juega la base reflejada; llegan a la misma sala y pelean
         World a=new World(9,3,cargas("SHOTGUN"),Base.load(f),true),z=new World(9,3,cargas("SHOTGUN"),Base.load(f),true);
         check(a.robots[1].px>a.run.rooms.get(a.run.bossIdx())[0]+512&&a.robots[0].px<a.run.rooms.get(a.run.bossIdx())[0],"en línea: el jugador 2 parte al otro lado, en la base reflejada");
@@ -503,9 +514,9 @@ public class Sim {
         for(int i=0;i<900;i++){a.step(new int[]{i%40<30?Input.RIGHT:Input.B,i%40<30?Input.LEFT:Input.B});z.step(new int[]{i%40<30?Input.RIGHT:Input.B,i%40<30?Input.LEFT:Input.B});}
         check(a.hash()==z.hash(),"en línea: la base es igual en los dos teléfonos");
         a=new World(9,3,cargas("SHOTGUN"),Base.load(f),true);int[] bb=a.run.rooms.get(a.run.bossIdx());Robot p0=a.robots[0],p1=a.robots[1];a.step(new int[2]);
-        p0.px=bb[0]+100;p0.py=bb[1]+bb[3]-33;p0.vy=0;a.step(new int[2]);check(a.run.held[0]&&!a.run.fight,"en línea: el primero que llega espera al otro");
+        p0.px=bb[0]+100;p0.py=bb[1]+256;p0.vy=0;for(int i=0;i<3;i++)a.step(new int[2]);check(a.run.held[0]&&!a.run.fight,"en línea: el primero que llega espera al otro");
         float h0=p0.hp;p0.damage(a,30,0,0,1,p0.px,p0.py);check(p0.hp==h0,"en línea: el que espera no recibe daño");
-        p1.px=bb[0]+bb[2]-100;p1.py=bb[1]+bb[3]-33;p1.vy=0;for(int i=0;i<3;i++)a.step(new int[2]);check(a.run.fight&&!a.run.doors.isEmpty(),"en línea: llegan los dos, se cierran las puertas y pelean");
+        p1.px=bb[0]+bb[2]-100;p1.py=bb[1]+256;p1.vy=0;for(int i=0;i<3;i++)a.step(new int[2]);check(a.run.fight&&!a.run.doors.isEmpty(),"en línea: llegan los dos, se cierran las puertas y pelean");
         p1.invuln=0;p1.damage(a,999,0,0,0,p1.px,p1.py);for(int i=0;i<3;i++)a.step(new int[2]);check(a.finished&&a.winner==0,"en línea: el que muere en la pelea pierde");
         // fondos
         for(int bg=1;bg<4;bg++){Base d=baseDePrueba();d.bg=bg;World v=new World(3,3,cargas("SHOTGUN"),d,false);Renderer rd=new Renderer();rd.reset(v);BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,v,0);rd.drawWorld(g,v,0);ImageIO.write(im,"png",new File(out,"34_fondo_"+Base.BG_NAMES[bg].toLowerCase()+".png"));}
@@ -522,6 +533,7 @@ public class Sim {
         q.baseEdTool(5,0,0);for(int r=0;r<3;r++){q.baseEdApply(1024+100,100);}BufferedImage im2=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);q.draw(new J(im2));ImageIO.write(im2,"png",new File(out,"35b_editor_salas.png"));
         q.baseEdTest();check(q.screen==App.PLAY&&q.world().run!=null,"editor de bases: PROBAR juega la base");
         q.tickN(200);BufferedImage im3=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);q.draw(new J(im3));ImageIO.write(im3,"png",new File(out,"36_jugando_base.png"));
+        q.showFight();q.draw(new J(im3));ImageIO.write(im3,"png",new File(out,"36b_a_luchar.png"));
         q.saveBase(Base.empty("OTRA"));q.go(App.BASES);BufferedImage im4=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);q.overflow=0;q.draw(new J(im4));ImageIO.write(im4,"png",new File(out,"37_bases.png"));check(q.overflow==0,"pantalla BASES sin textos fuera");
         q.go(App.LEVEL_LIST);q.draw(new J(im4));ImageIO.write(im4,"png",new File(out,"38_editor_lista.png"));
     }
