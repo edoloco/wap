@@ -233,6 +233,7 @@ public final class Robot {
     }
     /** El gancho sale en el ángulo de la mira (se ajusta manteniendo X y moviendo arriba o abajo). */
     private void throwHook(World g, int in) {
+        if (g.run != null) return; // en las bases no hay gancho: el plataformeo es a puro salto
         int side = ((in & Input.RIGHT) != 0 ? 1 : 0) - ((in & Input.LEFT) != 0 ? 1 : 0);
         if (side != 0) facing = side;
         float a = (float) StrictMath.toRadians(aim);

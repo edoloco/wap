@@ -153,7 +153,7 @@ public final class Base {
         for (int[] r : rs) { minX = Math.min(minX, r[0]); minY = Math.min(minY, r[1]); maxX = Math.max(maxX, r[0]); maxY = Math.max(maxY, r[1]); }
         int ox = PAD * CELL - minX * ROOM_PX, oy = PAD * CELL - minY * ROOM_PY; // píxel de la habitación (0, 0)
         int w = (maxX - minX + 1) * ROOM_PX + 2 * PAD * CELL, h = (maxY - minY + 1) * ROOM_PY + 2 * PAD * CELL;
-        Terrain t = new Terrain(w, h); run.ox = ox; run.oy = oy;
+        Terrain t = new Terrain(w, h); t.locked = true; run.ox = ox; run.oy = oy;
         int wall = run.wallColor();
         for (int i = 0; i < w * h; i++) { t.m[i] = Terrain.STEEL; t.tex[i] = wall; }
         for (int[] r : rs) {

@@ -250,9 +250,27 @@ public final class Renderer {
         Robot me = w.robots[who];
         float tx = me.px + me.facing * vw * .1f + me.vx * 12, ty = me.py - 36;
         if (me.piloting()) { Shot d = me.droneShot; tx = d.x + (float) Math.cos(d.ang) * vw * .15f; ty = d.y + (float) Math.sin(d.ang) * vh * .12f; } // la cámara sigue al dron
+        if (w.run != null && !first && w.run.roomAt(me.px, me.py - 20) < 0) return; // base: el que cae al precipicio sale de cuadro; la cámara no lo sigue
         if (first) { camX = tx; camY = ty; first = false; }
         camX += (tx - camX) * .1f; camY += (ty - camY) * .12f;
+        if (w.run != null) { baseCamera(w, me, tx, ty); return; }
         camX = Math.max(vw / 2f, Math.min(T.W - vw / 2f, camX)); camY = Math.max(vh / 2f, Math.min(T.H - vh / 2f, camY));
+    }
+    /** Bases: la cámara no sale de las habitaciones (no se asoma a la pared ni al precipicio) y no sigue al que cae. */
+    void baseCamera(World w, Robot me, float tx, float ty) {
+        BaseRun run = w.run; int at = run.roomAt(me.px, me.py - 20);
+        if (at < 0) return;
+        int[] r = run.rooms.get(at);
+        float lx = run.neighbor(at, -1, 0) ? -1e9f : r[0] + vw / 2f, hx = run.neighbor(at, 1, 0) ? 1e9f : r[0] + r[2] - vw / 2f;
+        float ly = run.neighbor(at, 0, -1) ? -1e9f : r[1] + vh / 2f, hy = run.neighbor(at, 0, 1) ? 1e9f : r[1] + r[3] - vh / 2f;
+        if (lx > hx) { lx = hx = r[0] + r[2] / 2f; } if (ly > hy) { ly = hy = r[1] + r[3] / 2f; }
+        camX = Math.max(lx, Math.min(hx, camX)); camY = Math.max(ly, Math.min(hy, camY));
+        camX = Math.max(vw / 2f, Math.min(T.W - vw / 2f, camX)); camY = Math.max(vh / 2f, Math.min(T.H - vh / 2f, camY));
+    }
+    /** Bajo las habitaciones sin piso: negro (ahí se cae y se pierde la vida). */
+    void pits(Gfx g, World w) {
+        BaseRun run = w.run;
+        for (int i = 0; i < run.rooms.size(); i++) { int[] r = run.rooms.get(i); if (!run.neighbor(i, 0, 1)) g.rect(r[0] - 1, r[1] + r[3], r[2] + 2, Base.PAD * Base.CELL + 4, 0xFF000000); }
     }
     /** El mundo se dibuja suavizado, con zoom libre; solo la interfaz queda en pixel art. */
     // ---------- BASES
@@ -434,6 +452,7 @@ public final class Renderer {
             for (int i = 0; i < 2; i++) { float rr = 11 + i * 4 + (float) Math.sin((w.tick + i * 9) * .3f) * 1.5f; g.save(); g.translate(o.px, cy + (i == 0 ? -6 : 8)); g.scale(1, .35f); g.circle(0, 0, rr, 0, 0xCCFF8A1A, 2.2f); g.circle(0, 0, rr, 0, 0xEEFFE6B0, .8f); g.restore(); }
         }
         g.additive(false);
+        if (w.run != null) pits(g, w);
         layerPass(g, t, true, x0, y0); // encima de todo
         for (int i = 0; i < fresh.length; i++) fresh[i] = false;
         g.restore();

@@ -50,7 +50,10 @@ public final class Terrain {
     public boolean solid(int x, int y) { if (x < 0 || y < 0 || x >= W || y >= H) return true; byte k = m[y * W + x]; return k != 0 && k != DEBRIS && k != DECOR; }
     public int at(int x, int y) { return x < 0 || y < 0 || x >= W || y >= H ? 2 : m[y * W + x]; }
 
+    /** Bases: el terreno no se rompe (es un plataformero: un hoyo en el piso sería un precipicio). */
+    public boolean locked;
     private void disc(int cx, int cy, int rx, int ry, int from, int to) {
+        if (locked && to == 0) return;
         int x0 = Math.max(0, cx - rx), x1 = Math.min(W - 1, cx + rx), y0 = Math.max(0, cy - ry), y1 = Math.min(H - 1, cy + ry);
         long a = (long) rx * rx * ry * ry; if (a == 0) return;
         for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++) {

@@ -19,7 +19,7 @@ public final class BaseRun {
     /** Premios puestos en el editor: {tipo de Bonus, x, y}. */
     final ArrayList<float[]> prizes = new ArrayList<>();
     final float[][] starts = new float[2][];
-    final int[] check = {-1, -1}; final int[][] spawnCache = new int[64][];
+    final int[] check = {-1, -1}, fallT = new int[2]; final int[][] spawnCache = new int[64][];
     /** held: esperando al rival en la sala del jefe. fight: pelea final en línea. bossOn: puertas cerradas con el jefe. */
     public final boolean[] held = new boolean[2]; public boolean fight, bossOn, won; public Foe boss;
     /** Puertas cerradas (rectángulos de acero): {x, y, ancho, alto}. */
@@ -227,6 +227,11 @@ public final class BaseRun {
     }
 
     // ---------- Habitaciones, precipicios, inicio y la sala del jefe
+    /** Hay habitación pegada en esa dirección (para la cámara y el negro de los precipicios). */
+    public boolean neighbor(int idx, int dx, int dy) {
+        int[] r = rooms.get(idx); float x = r[0] + r[2] / 2f + dx * r[2], y = r[1] + r[3] / 2f + dy * r[3]; return roomAt(x, y) >= 0;
+    }
+    public int lastRoom(int who) { return who >= 0 && who < 2 ? check[who] : -1; }
     public int roomAt(float x, float y) { for (int i = 0; i < rooms.size(); i++) { int[] r = rooms.get(i); if (x >= r[0] && x < r[0] + r[2] && y >= r[1] && y < r[1] + r[3]) return i; } return -1; }
     int startRoom(int who) { float[] s = start(who); return roomAt(s[0], s[1] - 4); }
     float[] start(int who) {
@@ -311,8 +316,12 @@ public final class BaseRun {
         for (int i = 0; i < g.robots.length && i < 2; i++) {
             Robot r = g.robots[i]; if (!r.alive() || r.finalT > 0) continue;
             int at = roomAt(r.px, r.py - 20);
-            if (at < 0) { if (!online || !fight) { g.fx(Fx.FALL, r.px, r.py, 0, r.id); r.die(g, -1); } else r.die(g, -1); continue; } // fuera de las habitaciones: cayó a un precipicio
-            check[i] = at;
+            if (at < 0) { // fuera de las habitaciones: cae al precipicio, a lo negro, y al rato pierde la vida
+                int[] last = check[i] >= 0 ? rooms.get(check[i]) : null;
+                if (++fallT[i] > 45 || last == null || r.py - r.h > last[1] + last[3] + 8) { fallT[i] = 0; g.fx(Fx.FALL, r.px, r.py, 0, r.id); r.die(g, -1); }
+                continue;
+            }
+            fallT[i] = 0; check[i] = at;
             if (held[i]) { r.vx = 0; r.invuln = Math.max(r.invuln, 2); }
         }
         boss(g);

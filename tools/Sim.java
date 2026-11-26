@@ -479,8 +479,15 @@ public class Sim {
         int lives=r.lives;r.px=run.rooms.get(1)[0]+7*32+16;r.py=run.rooms.get(1)[1]+200;r.vy=0;int t=0;for(;t<200&&r.lives==lives;t++)w.step(new int[2]);
         check(r.lives==lives-1&&t<120,"base: caer al precipicio quita una vida al instante ("+t+" ticks)");
         for(int i=0;i<200&&!r.alive();i++)w.step(new int[2]);check(r.alive()&&run.roomAt(r.px,r.py-20)==1,"base: reaparece en la habitación donde cayó");
+        {Renderer rd=new Renderer();rd.reset(w);BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);for(int i=0;i<60;i++){w.step(new int[2]);rd.drawWorld(g,w,0);}
+         int[] r1=run.rooms.get(1);r.px=r1[0]+7*32+16;r.py=r1[1]+200;r.vy=0;float cy0=0;boolean still=true;int lv=r.lives;
+         for(int i=0;i<80&&r.lives==lv;i++){w.step(new int[2]);rd.drawWorld(g,w,0);if(run.roomAt(r.px,r.py-20)<0){if(cy0==0)cy0=rd.camY;else if(Math.abs(rd.camY-cy0)>.01f)still=false;}if(i==30)ImageIO.write(im,"png",new File(out,"39_cayendo.png"));}
+         check(still,"base: la cámara no sigue al que cae al precipicio");check(r.lives==lv-1,"base: cae a lo negro y pierde la vida");}
+        // en las bases el piso no se rompe y no hay gancho
+        {int[] r0=run.rooms.get(0);int fx=r0[0]+200,fy=r0[1]+8*32+4;boolean before=w.t.solid(fx,fy);w.explode(fx,fy-6,30,20,30,2,0);check(before&&w.t.solid(fx,fy),"base: las explosiones no rompen el piso");
+         r.rope=0;w.step(new int[]{Input.UP|Input.B,0});w.step(new int[]{Input.UP|Input.B,0});check(r.rope==0,"base: no se puede usar el gancho");}
         // enemigos: la torreta dispara y el plasma los derrota
-        boolean shot=false;r.invuln=0;float hp=r.hp;for(int i=0;i<300;i++){w.step(new int[2]);if(!run.bullets.isEmpty())shot=true;r.invuln=0;}check(shot&&r.hp<hp,"base: la torreta ve al jugador y le dispara");
+        BaseRun.Foe tu=null;for(BaseRun.Foe e:run.foes)if(e.type==BaseRun.TURRET)tu=e;r.px=(int)tu.x-150;r.py=(int)tu.y+1;r.vy=0;r.hp=r.maxHp;boolean shot=false;r.invuln=0;float hp=r.hp;for(int i=0;i<300;i++){w.step(new int[2]);if(!run.bullets.isEmpty())shot=true;r.invuln=0;}check(shot&&r.hp<hp,"base: la torreta ve al jugador y le dispara");
         BaseRun.Foe bp=null;for(BaseRun.Foe e:run.foes)if(e.type==BaseRun.BADPAL)bp=e;r.hp=r.maxHp;r.px=(int)bp.x-90;r.py=(int)bp.y;r.facing=1;r.vy=0;
         for(int i=0;i<200&&bp.alive;i++){w.step(new int[]{i%12<6?Input.A:0,0});r.px=(int)bp.x-90;r.py=(int)bp.y;r.facing=1;r.invuln=30;}check(!bp.alive,"base: los enemigos son fáciles de abatir");
         {Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=run.rooms.get(1)[0]+256;rd.camY=run.rooms.get(1)[1]+150;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"32_base_lab.png"));}
