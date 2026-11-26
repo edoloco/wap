@@ -9,7 +9,7 @@ public final class Level {
     public String name = "";
     /** Altura de la superficie del agua en el mapa; -1 si no hay agua. */
     public int water = -1;
-    public byte[] m = new byte[Terrain.W * Terrain.H]; public int[] tex = new int[Terrain.W * Terrain.H];
+    public byte[] m = new byte[Terrain.W0 * Terrain.H0]; public int[] tex = new int[Terrain.W0 * Terrain.H0];
     public final ArrayList<int[]> props = new ArrayList<>();
     /** Capas que no chocan (ver Terrain.back y front); null si no hay. */
     public int[] back, front;
@@ -53,12 +53,12 @@ public final class Level {
         for (int ty = 0; ty < th; ty++) for (int tx = 0; tx < tw; tx++) {
             int c = 0xFF20264A, cb = 0, cf = 0;
             for (int sy = 0; sy < 3 && c == 0xFF20264A; sy++) for (int sx = 0; sx < 3; sx++) {
-                int x = tx * Terrain.W / tw + sx * Terrain.W / tw / 3, y = ty * Terrain.H / th + sy * Terrain.H / th / 3, q = y * Terrain.W + x, k = m[q];
+                int x = tx * Terrain.W0 / tw + sx * Terrain.W0 / tw / 3, y = ty * Terrain.H0 / th + sy * Terrain.H0 / th / 3, q = y * Terrain.W0 + x, k = m[q];
                 if (front != null && front[q] != 0 && cf == 0) cf = front[q]; if (back != null && back[q] != 0 && cb == 0) cb = back[q];
                 if (k != 0 && k != Terrain.DEBRIS && k != Terrain.DECOR) { c = tex[q] | 0xFF000000; if (c == 0xFF000000) c = 0xFF8214FF; break; }
             }
             if (c == 0xFF20264A && cb != 0) c = backTone(cb); if (cf != 0) c = frontTone(cf);
-            if (water >= 0 && ty * Terrain.H / th > water) c = 0xFF000000 | ((c >> 16 & 255) * 6 / 10 + 0x18) << 16 | ((c >> 8 & 255) * 6 / 10 + 0x38) << 8 | (c & 255) * 6 / 10 + 0x66;
+            if (water >= 0 && ty * Terrain.H0 / th > water) c = 0xFF000000 | ((c >> 16 & 255) * 6 / 10 + 0x18) << 16 | ((c >> 8 & 255) * 6 / 10 + 0x38) << 8 | (c & 255) * 6 / 10 + 0x66;
             t[ty * tw + tx] = c;
         }
         return t;

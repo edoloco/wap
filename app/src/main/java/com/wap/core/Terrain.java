@@ -1,18 +1,26 @@
 package com.wap.core;
 /** Mapa destructible píxel a píxel, como en Liero, con bloques de escenario estilo plataformas. */
 public final class Terrain {
-    public static final int W = 1800, H = 1000, TILE = 128;
+    /** Tamaño de los mapas de batalla. Las bases (modo BASES) usan mapas del tamaño que necesiten. */
+    public static final int W0 = 1800, H0 = 1000, TILE = 128;
+    public final int W, H, TW, TH, FW, FH;
+    public static final int TW0 = (W0 + TILE - 1) / TILE, TH0 = (H0 + TILE - 1) / TILE;
+    public Terrain() { this(W0, H0); }
+    public Terrain(int w, int h) {
+        W = w; H = h; TW = (W + TILE - 1) / TILE; TH = (H + TILE - 1) / TILE; FW = W / FRAG + 1; FH = H / FRAG + 1;
+        tex = new int[W * H]; m = new byte[W * H]; dirty = new boolean[TW * TH]; touched = new boolean[TW * TH]; stamp = new int[W * H];
+    }
     /** 0 es aire; STEEL es indestructible; lo demás se destruye. */
-    public static final byte PANEL = 1, STEEL = 2, CRATE = 3, VENT = 4, COMPUTER = 5, DEBRIS = 6, DECOR = 7, METAL = 8, STONE = 9, EARTH = 10, WOOD = 11;
+    public static final byte PANEL = 1, STEEL = 2, CRATE = 3, VENT = 4, COMPUTER = 5, DEBRIS = 6, DECOR = 7, METAL = 8, STONE = 9, EARTH = 10, WOOD = 11, KINETIC = 12; // KINETIC: pieza que se mueve en una base (choca, la dibuja el Renderer)
     /** Objetos con resistencia propia: {x, y, ancho, alto, material}. */
     public final java.util.ArrayList<int[]> props = new java.util.ArrayList<>();
     public static boolean isProp(int k) { return k == CRATE || k == COMPUTER || k == METAL || k == STONE; }
     /** El radio de una explosión no los recorta píxel a píxel. */
-    static boolean hard(int k) { return k == STEEL || k == WOOD || isProp(k); }
+    static boolean hard(int k) { return k == STEEL || k == WOOD || k == KINETIC || isProp(k); }
     /** Madera: no la recortan las explosiones; se rompe por trozos irregulares (ver World.hitWood). */
-    public static final int FRAG = 20, FW = W / FRAG + 1, FH = H / FRAG + 1;
+    public static final int FRAG = 20;
     /** Trozo de madera al que pertenece un píxel: el punto semilla más cercano de una grilla con desorden. */
-    public static int frag(int x, int y) {
+    public int frag(int x, int y) {
         int cx = x / FRAG, cy = y / FRAG, best = 0, bd = Integer.MAX_VALUE;
         for (int j = cy - 1; j <= cy + 1; j++) for (int i = cx - 1; i <= cx + 1; i++) {
             if (i < 0 || j < 0 || i >= FW || j >= FH) continue;
@@ -21,16 +29,15 @@ public final class Terrain {
         }
         return best;
     }
-    public static int fragX(int f) { int i = f % FW, j = f / FW; return i * FRAG + (hash(i, j) & 15) + 2; }
-    public static int fragY(int f) { int i = f % FW, j = f / FW; return j * FRAG + (hash(j + 91, i + 7) & 15) + 2; }
+    public int fragX(int f) { int i = f % FW, j = f / FW; return i * FRAG + (hash(i, j) & 15) + 2; }
+    public int fragY(int f) { int i = f % FW, j = f / FW; return j * FRAG + (hash(j + 91, i + 7) & 15) + 2; }
     /** Tamaño bajo el cual un trozo deja de chocar: grosor en píxeles y área de una pieza suelta. */
     static final int THIN = 6, SMALL = 420;
     static final int FRONT = 0xFF8214FF, TOP = 0xFF4A00A8, DARK = 0xFF2B1A4D, DARK_TOP = 0xFF1B1036;
     static final int G = 32, FILL = 0xFF8214FF;
-    public final int[] tex = new int[W * H];
-    public static final int TW = (W + TILE - 1) / TILE, TH = (H + TILE - 1) / TILE;
-    public final byte[] m = new byte[W * H];
-    public final boolean[] dirty = new boolean[TW * TH];
+    public final int[] tex;
+    public final byte[] m;
+    public final boolean[] dirty;
     /**
      * Capas del editor que no chocan con nada (solo se ven): FONDO, detrás de todo (se dibuja más claro), y SOBRE,
      * encima de todo (más oscuro). 0 = nada. Se crean al usarlas; null si el nivel no tiene.
@@ -56,7 +63,7 @@ public final class Terrain {
         mark(x0, y0, x1, y1);
         if (from < 0) cleanup(x0, y0, x1, y1);
     }
-    private int[] sat = new int[0], sat2 = new int[0]; private final int[] stamp = new int[W * H], stack = new int[SMALL * 5], found = new int[SMALL + 1]; private int cur;
+    private int[] sat = new int[0], sat2 = new int[0]; private final int[] stamp; private final int[] stack = new int[SMALL * 5], found = new int[SMALL + 1]; private int cur;
     private boolean col(int i) { byte k = m[i]; return k != 0 && k != DEBRIS && k != DECOR; }
     /** Tras una destrucción, marca astillas y pedazos sueltos: se siguen viendo, pero ya no chocan con nada. */
     private void cleanup(int x0, int y0, int x1, int y1) {
@@ -106,7 +113,7 @@ public final class Terrain {
         for (int ty = c; ty <= d; ty++) for (int tx = a; tx <= b; tx++) { dirty[ty * TW + tx] = true; touched[ty * TW + tx] = true; }
     }
     /** Cuadros tocados desde que el editor los limpió (para deshacer guardando solo lo que cambió). */
-    public final boolean[] touched = new boolean[TW * TH];
+    public final boolean[] touched;
     /** Marca un cuadro para volver a dibujarlo (deshacer). */
     public void redraw(int tile) { dirty[tile] = true; }
     public void carve(int cx, int cy, int r) { disc(cx, cy, r, r, -1, 0); }
@@ -280,7 +287,7 @@ public final class Terrain {
 
     // ---------- Herramientas del editor de niveles
     public static final int EDGE = 16, GRID = G;
-    static boolean inside(int x, int y) { return x >= EDGE && y >= EDGE && x < W - EDGE && y < H - EDGE; }
+    boolean inside(int x, int y) { return x >= EDGE && y >= EDGE && x < W - EDGE && y < H - EDGE; }
     /** Color de tierra con textura de arena (puntos al azar), para que no se vea plana. */
     static int earthTex(int c, int x, int y) {
         int k = vein(x, y);

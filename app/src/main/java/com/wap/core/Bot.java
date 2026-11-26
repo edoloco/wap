@@ -1,7 +1,7 @@
 package com.wap.core;
 /** Contrincante: solo genera entradas, igual que un jugador, y usa salto, paredes, gancho y armas. */
 public final class Bot {
-    static final int C = 20, GW = Terrain.W / C, GH = Terrain.H / C;
+    static final int C = 20, GW = Terrain.W0 / C, GH = Terrain.H0 / C;
     final Rng r; final int me; final float skill; final short[] dist = new short[GW * GH]; final int[] queue = new int[GW * GH];
     int navT, comboT, combo, moveT, moveDir = 1, stuckT, lastX, lastY, jumpT, jumpHold, hookT, hookHold, fireHold;
     int aimT, aimGoal, hookDir, checkT, lastCost = 9999, frust, climbDir;

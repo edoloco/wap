@@ -4,7 +4,7 @@ import com.wap.net.*;
 import java.util.ArrayList; import java.util.List;
 /** Pantallas y flujo de la aplicación. No conoce Android; recibe entradas y dibuja por Gfx. */
 public final class App {
-    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8, RIVALS = 9, LEVEL_SEL = 10, PAD_EDIT = 11, DEV = 12, CUSTOM = 13;
+    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8, RIVALS = 9, LEVEL_SEL = 10, PAD_EDIT = 11, DEV = 12, CUSTOM = 13, BASES = 14, BASE_EDIT = 15;
     /** Servicios del teléfono para jugar en red. */
     public interface Device { String name(); void listen(boolean on);
         /** Pide un texto con el teclado del teléfono; done recibe el texto o null si se cancela. */
@@ -37,7 +37,9 @@ public final class App {
     final ArrayList<float[]> dmgNums = new ArrayList<>();
     String myName = ""; String[] names = {"PLAYER 1", "PLAYER 2"};
     /** Niveles guardados: archivos de la app. levelName es el elegido para jugar ("" = aleatorio). */
-    public Files files = new Files.Memory(); String levelName = ""; final Editor editor = new Editor(this);
+    public Files files = new Files.Memory(); String levelName = ""; final Editor editor = new Editor(this); final BaseEditor baseEd = new BaseEditor(this);
+    /** Base que se está jugando (null: batalla), si se prueba desde su editor y la que se lleva a una sala en línea. */
+    Base playBase, netBase; boolean testingBase; String baseMenu; int basePage;
     /** Nivel que se está probando desde el editor (al terminar se vuelve al editor). */
     String testing; Level testLevel;
     public String levelName() { return levelName; }
@@ -91,6 +93,7 @@ public final class App {
     }
     public void seed(int s) { seed = s; }
     public void start() {
+        if (playBase != null) { startBase(); return; }
         seed = seed * 1103515245 + 12345; Rng r = new Rng(seed ^ 0x5A5A);
         int n = 1 + rivals; Wpn[][] loads = new Wpn[n][SLOTS]; int[] team = new int[n];
         for (int k = 0; k < SLOTS; k++) loads[0][k] = Wpn.ALL[Wpn.usable(slots[k])];
@@ -111,6 +114,71 @@ public final class App {
         String[] nm = new String[n]; nm[0] = or(myName, "PLAYER 1"); for (int i = 1; i < n; i++) nm[i] = "PLAYER " + (i + 1);
         setNames(nm, n > 2); ren.teams = teams;
         pad.clear();
+    }
+    // ---------- BASES
+    /** Juega la base elegida, solo: el jugador con sus 4 armas; sin rivales. */
+    void startBase() {
+        seed = seed * 1103515245 + 12345; Wpn[][] loads = new Wpn[2][SLOTS];
+        for (int k = 0; k < SLOTS; k++) { loads[0][k] = Wpn.ALL[Wpn.usable(slots[k])]; loads[1][k] = loads[0][k]; }
+        RobotArt.COLOR[0] = myColor; me = 0; online = false;
+        w = new World(seed, lives, loads, playBase, false); w.setMaxHp(hpMax);
+        if (devMode) { w.godId = devGod ? 0 : -1; w.ammoId = devAmmo ? 0 : -1; w.robotRate = devSpeed / 100f; w.shotRate = devShot / 100f; }
+        devAcc = 0; dmgNums.clear(); ren.reset(w); cd = 90; screen = PLAY; overT = 0; bots = new Bot[2]; ren.teams = false;
+        setNames(new String[]{or(myName, "PLAYER 1"), "PLAYER 2"}, false); pad.clear();
+    }
+    static String baseFile(String name) { return file(name).replace(".wapn", ".wapb"); }
+    List<String> baseCache;
+    public List<String> baseNames() {
+        if (baseCache == null) {
+            List<String> l = new ArrayList<>();
+            for (String f : files.list()) if (f.endsWith(".wapb")) { Base b = loadBaseFile(f); if (b != null) l.add(b.name); }
+            java.util.Collections.sort(l); baseCache = l;
+        }
+        return new ArrayList<>(baseCache);
+    }
+    Base loadBaseFile(String f) { try { byte[] d = files.read(f); return d == null ? null : Base.load(d); } catch (Exception e) { return null; } }
+    public Base loadBase(String name) { return loadBaseFile(baseFile(name)); }
+    public void saveBase(Base b) { files.write(baseFile(b.name), b.save()); baseCache = null; forgetThumb(BASE_TAG + b.name); }
+    void deleteBase(String name) { files.delete(baseFile(name)); baseCache = null; forgetThumb(BASE_TAG + name); }
+    String unusedBaseName() { List<String> l = baseNames(); for (int i = 1; ; i++) { String n = "BASE " + i; if (!l.contains(n)) return n; } }
+    public void openBaseEditor(Base b) { baseEd.open(b); go(BASE_EDIT); }
+    /** Sale del editor de bases: la guarda (o la borra) y vuelve a la lista del editor. */
+    public void leaveBaseEditor(boolean delete) {
+        if (delete) { deleteBase(baseEd.b.name); toast = "BASE BORRADA"; } else { saveBase(baseEd.b); toast = "BASE GUARDADA"; }
+        toastT = 120; testingBase = false; playBase = null; go(LEVEL_LIST);
+    }
+    void testBase() { saveBase(baseEd.b); playBase = baseEd.b; testingBase = true; testing = null; startBase(); }
+    void renameBase() {
+        if (dev == null) return; final String old = baseEd.b.name;
+        dev.askText("Nombre de la base", old, NAME_MAX, n -> {
+            if (n == null) return; n = clean(n); if (n.isEmpty() || n.equals(old)) return;
+            if (baseNames().contains(n)) { toast = "YA EXISTE UNA BASE CON ESE NOMBRE"; toastT = 150; return; }
+            deleteBase(old); baseEd.b.name = n; saveBase(baseEd.b);
+        });
+    }
+    /** Para las pruebas: herramienta del editor de bases (y su opción: material, enemigo o premio) y aplicarla en un punto de la base. */
+    public void baseEdTool(int tool, int opt, int move) { baseEd.tool = tool; if (tool == BaseEditor.PIECE) baseEd.mat = opt; if (tool == BaseEditor.ENEMY) baseEd.enemy = opt; if (tool == BaseEditor.PRIZE) baseEd.prize = opt; baseEd.move = move; }
+    public void baseEdApply(float x, float y) { baseEd.begin(); baseEd.apply(x, y); baseEd.end(); }
+    public Base baseEdBase() { return baseEd.b; }
+    public void baseEdUndo() { baseEd.restore(baseEd.undo, baseEd.redo); }
+    public void baseEdTest() { testBase(); }
+    public void tickN(int n) { for (int i = 0; i < n; i++) tick(); }
+    public World world() { return w; }
+    public boolean usesPointers() { return screen == EDIT || screen == PAD_EDIT || screen == BASE_EDIT; }
+    static final String BASE_TAG = "\u0002", NEW_BASE = "\u0001BASE";
+    /** BASES: las bases creadas en el editor. Tocar una abre un menú chico: jugar solo o llevarla a una sala en línea. */
+    void basesScreen(Gfx g) {
+        List<String> l = new ArrayList<>(); for (String n : baseNames()) l.add(BASE_TAG + n);
+        basePage = grid(g, "BASES", l, basePage, baseMenu, n -> baseMenu = n, l.isEmpty() ? "AÚN NO HAY BASES · CRÉALAS EN EL EDITOR DE NIVELES" : l.size() + (l.size() == 1 ? " BASE" : " BASES"));
+        if (toastT > 0) { g.rect(0, 22, W, 14, RED); txtS(g, toast, W / 2, 33, 8, CREAM, 0); }
+        if (baseMenu != null) {
+            veil(g); String n = baseMenu.substring(1); btns.clear(); acts.clear();
+            txtS(g, n, W / 2, H * .3f, fit(n, 24 * u, W - 20), GOLD, 0);
+            menu(g, W / 2 - 120 * u, H * .38f, 240 * u, new String[]{"JUGAR", "CREAR SALA EN LÍNEA", "VOLVER"}, new Runnable[]{
+                () -> { Base b = loadBase(n); baseMenu = null; if (b != null) { playBase = b; testingBase = false; testing = null; start(); } },
+                () -> { Base b = loadBase(n); if (b == null) return; if (!b.canOnline()) { toast = "EN LÍNEA: LA SALA DEL JEFE DEBE IR AL FINAL, A LA DERECHA"; toastT = 200; baseMenu = null; return; } baseMenu = null; netBase = b; openLobby(); },
+                () -> baseMenu = null});
+        }
     }
     // ---------- Niveles guardados
     static String file(String name) { return name.replaceAll("[^A-Z0-9ÁÉÍÓÚÑÜ _-]", "_") + ".wapn"; }
@@ -146,7 +214,7 @@ public final class App {
     }
     /** Prueba el nivel contra el rival; al terminar se vuelve al editor. */
     void testLevel() { Level l = editor.level(); saveLevel(l); testLevel = l; testing = l.name; editor.close(); start(); }
-    void backToEditor() { Level l = testLevel; testing = null; testLevel = null; openEditor(l); }
+    void backToEditor() { if (testingBase && playBase != null) { Base b = playBase; playBase = null; testingBase = false; openBaseEditor(b); return; } Level l = testLevel; testing = null; testLevel = null; openEditor(l); }
     void renameLevel() {
         if (dev == null) return; final String old = editor.name;
         dev.askText("Nombre del nivel", old, NAME_MAX, n -> {
@@ -163,12 +231,14 @@ public final class App {
     static final String NEW_EMPTY = "\u0001VACIO", NEW_RANDOM = "\u0001AZAR";
     /** EDITOR DE NIVELES: los mismos cuadritos con miniatura; los dos primeros crean un nivel nuevo. */
     void levels(Gfx g) {
-        List<String> l = levelNames(); l.add(0, NEW_RANDOM); l.add(0, NEW_EMPTY);
+        List<String> l = levelNames(); int nl = l.size(); l.add(0, NEW_BASE); l.add(0, NEW_RANDOM); l.add(0, NEW_EMPTY); List<String> bs = baseNames(); for (String n : bs) l.add(BASE_TAG + n);
         levelPage = grid(g, "EDITOR DE NIVELES", l, levelPage, null, n -> {
-            if (n.equals(NEW_EMPTY)) openEditor(Level.empty(unusedName("NIVEL")));
+            if (n.equals(NEW_BASE)) { Base b = Base.empty(unusedBaseName()); saveBase(b); openBaseEditor(b); }
+            else if (n.startsWith(BASE_TAG)) { Base b = loadBase(n.substring(1)); if (b != null) openBaseEditor(b); }
+            else if (n.equals(NEW_EMPTY)) openEditor(Level.empty(unusedName("NIVEL")));
             else if (n.equals(NEW_RANDOM)) { seed = seed * 1103515245 + 12345; openEditor(Level.random(seed, unusedName("NIVEL"))); }
             else { Level v = loadLevel(n); if (v != null) openEditor(v); }
-        }, (l.size() - 2) + (l.size() - 2 == 1 ? " NIVEL GUARDADO" : " NIVELES GUARDADOS"));
+        }, nl + (nl == 1 ? " NIVEL" : " NIVELES") + " · " + bs.size() + (bs.size() == 1 ? " BASE" : " BASES"));
         if (toastT > 0) { g.rect(0, 22, W, 14, MINT); txtS(g, toast, W / 2, 33, 8, CREAM, 0); }
     }
     int levelPage, selPage;
@@ -221,9 +291,10 @@ public final class App {
     int[] thumb(String name) {
         int[] t = thumbs.get(name); if (t != null) return t;
         t = new int[THUMB * THUMB]; int[] snap = null;
-        byte[] b = name.isEmpty() || name.startsWith("\u0001") ? null : files.read(thumbFile(name)); // la captura guardada junto al nivel
+        byte[] b = name.isEmpty() || name.startsWith("\u0001") || name.startsWith(BASE_TAG) ? null : files.read(thumbFile(name)); // la captura guardada junto al nivel
+        if (name.startsWith(BASE_TAG) || name.equals(NEW_BASE)) { Base bb = name.equals(NEW_BASE) ? Base.empty("") : loadBase(name.substring(1)); if (bb != null) snap = bb.snapshot(THUMB, THUMB_H); b = null; }
         if (b != null && b.length == THUMB * THUMB_H * 4) { snap = new int[THUMB * THUMB_H]; for (int i = 0; i < snap.length; i++) snap[i] = (b[i * 4] & 255) << 24 | (b[i * 4 + 1] & 255) << 16 | (b[i * 4 + 2] & 255) << 8 | b[i * 4 + 3] & 255; }
-        if (snap == null) { // niveles guardados antes de esta versión (o el aleatorio): se hace la captura una vez
+        if (snap == null && !name.startsWith(BASE_TAG) && !name.equals(NEW_BASE)) { // niveles guardados antes de esta versión (o el aleatorio): se hace la captura una vez
             Level l = name.isEmpty() ? Level.random(4242, "") : name.equals(NEW_EMPTY) ? Level.empty("") : loadLevel(name);
             if (l != null) { if (!name.isEmpty() && !name.startsWith("\u0001")) saveLevel(l); snap = l.snapshot(THUMB, THUMB_H); }
         }
@@ -249,14 +320,15 @@ public final class App {
         txt(g, info + (pages > 1 ? " · DESLIZA PARA VER MÁS" : ""), W / 2, 28, 8, MUTE, 0);
         for (int k = 0; k < per; k++) {
             int i = page * per + k; if (i >= items.size()) break;
-            final String n = items.get(i); float x = x0 + k % cols * cw, y = y0 + k / cols * (ch + 4); boolean sel = n.equals(selected), make = n.startsWith("\u0001");
-            box(g, x + 2, y, cw - 4, ch, sel ? GOLD : make ? MINT : BLUE, sel ? CREAM : make ? 0xFF9CF5C9 : SKY, sel ? 0xFFB8862A : make ? 0xFF1F8A5B : NAVY);
+            final String n = items.get(i); float x = x0 + k % cols * cw, y = y0 + k / cols * (ch + 4); boolean sel = n.equals(selected), make = n.startsWith("\u0001"), isBase = n.startsWith(BASE_TAG);
+            box(g, x + 2, y, cw - 4, ch, sel ? GOLD : make ? MINT : isBase ? PURPLE : BLUE, sel ? CREAM : make ? 0xFF9CF5C9 : isBase ? 0xFFB46BFF : SKY, sel ? 0xFFB8862A : make ? 0xFF1F8A5B : isBase ? 0xFF4A00A8 : NAVY);
             int[] t = thumb(n.equals(NEW_RANDOM) ? "" : n); int id = thumbIds.get(n.equals(NEW_RANDOM) ? "" : n); boolean fresh = thumbUp.add(id);
             float tx = Math.round(x + cw / 2 - THUMB / 2f), ty = y + 4;
             g.rect(tx - 1, ty - 1, THUMB + 2, THUMB_H + 2, INK); g.tile(id, t, THUMB, fresh, tx, ty);
             if (n.isEmpty()) txtS(g, "?", x + cw / 2, ty + 32, 24, GOLD, 0);
             if (make) { g.rect(tx, ty, THUMB, THUMB_H, 0x88101330); txtS(g, "+", x + cw / 2, ty + 32, 24, MINT, 0); }
-            String shown = n.isEmpty() ? "ALEATORIO" : n.equals(NEW_EMPTY) ? "NUEVO VACÍO" : n.equals(NEW_RANDOM) ? "NUEVO AL AZAR" : n;
+            if (isBase) { g.rect(tx, ty, 26, 9, 0xCC4A00A8); txt(g, "BASE", tx + 13, ty + 8, 8, CREAM, 0); }
+            String shown = n.isEmpty() ? "ALEATORIO" : n.equals(NEW_EMPTY) ? "NUEVO VACÍO" : n.equals(NEW_RANDOM) ? "NUEVO AL AZAR" : n.equals(NEW_BASE) ? "NUEVA BASE" : isBase ? n.substring(1) : n;
             int fit = (int) ((cw - 8) / 6); if (shown.length() > fit) shown = shown.substring(0, Math.max(3, fit - 1)) + ".";
             txtS(g, shown, x + cw / 2, y + ch - 7, 8, sel ? DEEP : CREAM, 0);
             btn(x + 2, y, cw - 4, ch, () -> pick.accept(n));
@@ -279,11 +351,11 @@ public final class App {
         int cx = Math.round(x + w / 2), cy = Math.round(y + h / 2 - 1);
         for (int i = 0; i < 5; i++) g.rect(cx + (dir > 0 ? -2 + i : 2 - i), cy - 4 + i, 1, 9 - 2 * i, CREAM);
     }
-    void gridSet(int p) { if (screen == LEVEL_SEL) selPage = p; else levelPage = p; focus = 0; }
-    void gridGo(int d) { int p = (screen == LEVEL_SEL ? selPage : levelPage) + d; gridSet(Math.floorMod(p, Math.max(1, gridPages))); au.play(Audio.MENU); }
+    void gridSet(int p) { if (screen == LEVEL_SEL) selPage = p; else if (screen == BASES) basePage = p; else levelPage = p; focus = 0; }
+    void gridGo(int d) { int p = (screen == LEVEL_SEL ? selPage : screen == BASES ? basePage : levelPage) + d; gridSet(Math.floorMod(p, Math.max(1, gridPages))); au.play(Audio.MENU); }
     // ---------- Deslizar el dedo en las pantallas de cuadritos: el toque se decide al soltar
     float swX0, swX, swTapX, swTapY; boolean swOn;
-    boolean gridScreen() { return screen == LEVEL_SEL || screen == LEVEL_LIST; }
+    boolean gridScreen() { return (screen == LEVEL_SEL || screen == LEVEL_LIST || screen == BASES) && baseMenu == null; }
     /** Para las pruebas: elegir herramienta y aplicarla en un punto del mapa. */
     public void editorTool(int t) { editor.setTool(t); }
     public void editorFill(boolean f) { editor.fill = f; }
@@ -324,12 +396,13 @@ public final class App {
     Link.Hello hello(int seedV, int lives) {
         Link.Hello h = new Link.Hello(); h.rules = World.rules(); h.seed = seedV; h.lives = lives; h.color = myColor; h.slots = slots.clone();
         h.name = myName;
+        if (netBase != null && seedV != 0) h.base = netBase.save(); // la base viaja en el saludo, como los niveles
         if (devMode && seedV != 0) { h.dev = (devGod ? 1 : 0) | (devAmmo ? 2 : 0) | (devDmg ? 4 : 0) | 8; h.devSpeed = devSpeed; h.devShot = devShot; h.devPrizes = devPrizes; h.devKinds = devKinds; } // solo cuentan las del anfitrión
         if (seedV != 0 && !levelName.isEmpty()) { Level lv = loadLevel(levelName); if (lv != null) h.level = lv.save(); } // el anfitrión manda su nivel
         return h;
     }
     void openLobby() {
-        go(LOBBY); netMsg = "Busca una sala o crea la tuya. Ambos teléfonos deben estar en la misma red Wi-Fi."; if (dev != null) dev.listen(true);
+        go(LOBBY); netMsg = netBase != null ? "Crea la sala con la base " + netBase.name + ". El otro teléfono se une desde EN LÍNEA; tú juegas la base y él la juega en espejo." : "Busca una sala o crea la tuya. Ambos teléfonos deben estar en la misma red Wi-Fi."; if (dev != null) dev.listen(true);
         try { if (browser == null) browser = new Lan.Browser(); } catch (Exception e) { netMsg = "No se pueden buscar salas en esta red. Igual puedes crear una."; }
     }
     /** Solo para pruebas de escritorio. */
@@ -341,7 +414,7 @@ public final class App {
     }
     void hostRoom() {
         if (busy) return; busy = true; hosting = true; if (browser != null) { browser.close(); browser = null; }
-        final String name = !myName.isEmpty() ? "Sala de " + myName : dev != null ? dev.name() : "Sala WAP";
+        final String name = (!myName.isEmpty() ? "Sala de " + myName : dev != null ? dev.name() : "Sala WAP") + (netBase != null ? " · BASE " + netBase.name : "");
         if (server != null) { try { server.close(); } catch (Exception e) { } server = null; } // una sala anterior que quedó abierta
         new Thread(() -> {
             try {
@@ -385,7 +458,8 @@ public final class App {
         Level lv = null; received = null; receivedSaved = false;
         if (h.level.length > 0) try { lv = Level.load(h.level); } catch (Exception e) { endOnline("El nivel del otro teléfono no se pudo abrir."); return; }
         if (lv != null && me == 1) { received = lv; receivedSaved = levelNames().contains(lv.name) && java.util.Arrays.equals(loadLevel(lv.name).save(), h.level); } // se descarga solo para esta partida
-        int hostHp = h.lives >>> 16; w = new World(h.seed, h.lives & 0xFFFF, a, b, lv); w.setMaxHp(hostHp == 0 ? 100 : hostHp); netDev = h.dev;
+        int hostHp = h.lives >>> 16; Base hb = null; if (h.base.length > 0) try { hb = Base.load(h.base); } catch (Exception e) { endOnline("La base del otro teléfono no se pudo abrir."); return; }
+        w = hb != null ? new World(h.seed, h.lives & 0xFFFF, new Wpn[][]{a, b}, hb, true) : new World(h.seed, h.lives & 0xFFFF, a, b, lv); playBase = null; w.setMaxHp(hostHp == 0 ? 100 : hostHp); netDev = h.dev;
         if ((h.dev & 8) != 0) { w.godId = (h.dev & 1) != 0 ? World.EVERYONE : -1; w.ammoId = (h.dev & 2) != 0 ? World.EVERYONE : -1; w.robotRate = h.devSpeed / 100f; w.shotRate = h.devShot / 100f; w.bonusMax = h.devPrizes; w.bonusKinds = h.devKinds; }
         bot = null; link = l; l.startReader(); ls = new Lockstep(l, me); online = true;
         ren.reset(w); cd = 90; screen = PLAY; overT = 0; pad.clear();
@@ -415,6 +489,9 @@ public final class App {
         if (screen == PAD_EDIT) { save(); go(PAINT); return; }
         if (screen == DEV) { save(); go(TITLE); return; }
         if (screen == EDIT) { leaveEditor(false); return; }
+        if (screen == BASE_EDIT) { leaveBaseEditor(false); return; }
+        if (screen == BASES) { if (baseMenu != null) baseMenu = null; else go(TITLE); return; }
+        if (testingBase && (screen == OVER || screen == PAUSE)) { backToEditor(); return; }
         if (screen == LEVEL_LIST) { go(TITLE); return; }
         if (screen == LEVEL_SEL) { go(CUSTOM); return; }
         if (screen == RIVALS) { saveRivals(); go(CUSTOM); return; }
@@ -425,7 +502,7 @@ public final class App {
     void save() { st.put("traje", String.format("%06X", myColor & 0xFFFFFF)); st.put("nombre", myName); st.put("nivel", levelName); for (int i = 0; i < SLOTS; i++) st.put(key(i), Wpn.ALL[slots[i]].name); st.put("level", "" + level); st.put("vidas", "" + lives); st.put("vidamax", "" + hpMax); st.put("mando", pad.save()); st.put("dev", (devMode ? "1" : "0") + (devGod ? "1" : "0") + (devStill ? "1" : "0") + (devAmmo ? "1" : "0") + (devDmg ? "1" : "0")); st.put("devvel", "" + devSpeed); st.put("devarmas", "" + devShot); st.put("devpremios", devPrizes + "," + devKinds); }
     public void go(int s) { screen = s; focus = 0; pad.clear(); }
     /** Toques del mando en pantalla, convertidos a la capa de interfaz. */
-    public void pointer(int id, float x, float y, boolean down) { if (screen == EDIT) editor.pointer(id, x, y, down); else if (screen == PAD_EDIT) pad.editPointer(id, x / uiScale, y / uiScale, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
+    public void pointer(int id, float x, float y, boolean down) { if (screen == BASE_EDIT) baseEd.pointer(id, x, y, down); else if (screen == EDIT) editor.pointer(id, x, y, down); else if (screen == PAD_EDIT) pad.editPointer(id, x / uiScale, y / uiScale, down); else pad.pointer(id, x / uiScale, y / uiScale, down); }
     public boolean tap(float x, float y) {
         if (gridScreen()) { swOn = true; swX0 = swX = x; swTapX = x / uiScale; swTapY = y / uiScale; return true; }
         return tapNow(x, y);
@@ -454,7 +531,7 @@ public final class App {
         if (screen == PLAY) {
             if (cd > 0) cd--;
             else {
-                { int[] ins = new int[w.robots.length]; ins[0] = m; for (int i = 1; i < ins.length; i++) ins[i] = devMode && devStill ? 0 : bots[i].think(w);
+                { int[] ins = new int[w.robots.length]; ins[0] = m; for (int i = 1; i < ins.length; i++) ins[i] = devMode && devStill || i >= bots.length || bots[i] == null ? 0 : bots[i].think(w);
                     w.step(ins); ren.tick(w); // velocidades del modo desarrollador: dentro de World.step (personajes y armas por separado)
                     sounds();
                     ren.consume(w, false); }
@@ -465,6 +542,7 @@ public final class App {
         else if (screen == DEV) { if ((press & Input.B) != 0) back(); }
         else if (screen == PAINT) navPaint(press, keys);
         else if (screen == EDIT) editor.tick(keys, press);
+        else if (screen == BASE_EDIT) { baseEd.tick(keys, press); if (toastT > 0) toastT--; }
         else navList(press);
     }
     void sounds() {
@@ -485,6 +563,11 @@ public final class App {
             case Fx.SPLASH: au.play(Audio.JUMP); break;
             case Fx.LASSO: au.play(f.a == 1 ? Audio.HOOK : Audio.JUMP); break;
             case Fx.TRAP: au.play(f.a > 0 ? Audio.BIG : Audio.PICK); break;
+            case Fx.FOE: au.play(Audio.SHOT); break;
+            case Fx.FOE_DIE: au.play(f.a == BaseRun.BOSS ? Audio.BIG : Audio.BOOM); break;
+            case Fx.DOOR: au.play(Audio.HOOK); if (f.a == 0) { toast = "¡SE CERRARON LAS PUERTAS!"; toastT = 120; } break;
+            case Fx.FIGHT: au.play(Audio.BIG); toast = "¡A PELEAR!"; toastT = 150; break;
+            case Fx.FALL: au.play(Audio.DEATH); break;
             default:
         }
     }
@@ -685,6 +768,8 @@ public final class App {
         switch (screen) {
             case TITLE: title(g); break;
             case CUSTOM: custom(g); break;
+            case BASES: basesScreen(g); focusBox(g); break;
+            case BASE_EDIT: baseEd.draw(g); break;
             case ARMS: arms(g); break;
             case PAINT: paint(g); break;
             case PAD_EDIT: padEdit(g); break;
@@ -709,18 +794,21 @@ public final class App {
                 } else if (screen == PAUSE) {
                     veil(g); txtS(g, "PAUSA", W / 2, H * .3f, 40 * u, GOLD, 0);
                     if (online) { txt(g, "LA PARTIDA SIGUE MIENTRAS ESTÁS AQUÍ", W / 2, H * .37f, 12 * u, CREAM, 0); menu(g, W / 2 - 120 * u, H * .42f, 240 * u, new String[]{"SEGUIR", "SALIR DE LA PARTIDA"}, new Runnable[]{() -> screen = PLAY, () -> endOnline(null)}); }
-                    else if (testing != null) menu(g, W / 2 - 110 * u, H * .4f, 220 * u, new String[]{"SEGUIR", "VOLVER AL EDITOR"}, new Runnable[]{() -> screen = PLAY, this::backToEditor});
+                    else if (testing != null || testingBase) menu(g, W / 2 - 110 * u, H * .4f, 220 * u, new String[]{"SEGUIR", "VOLVER AL EDITOR"}, new Runnable[]{() -> screen = PLAY, this::backToEditor});
+                    else if (playBase != null) menu(g, W / 2 - 110 * u, H * .4f, 220 * u, new String[]{"SEGUIR", "VOLVER A BASES"}, new Runnable[]{() -> screen = PLAY, () -> { playBase = null; go(BASES); }});
                     else menu(g, W / 2 - 110 * u, H * .4f, 220 * u, new String[]{"SEGUIR", "VOLVER AL MENÚ"}, new Runnable[]{() -> screen = PLAY, () -> go(TITLE)});
                 } else {
                     veil(g); boolean win = w.winnerTeam == w.robots[me].team;
-                    txtS(g, win ? "¡GANASTE!" : "PERDISTE", W / 2, H * .28f, 48 * u, win ? GOLD : RED, 0);
+                    String big = win ? w.run != null && !online ? "¡BASE SUPERADA!" : "¡GANASTE!" : "PERDISTE";
+                    txtS(g, big, W / 2, H * .28f, fit(big, 48 * u, W - 16), win ? GOLD : RED, 0);
                     txt(g, "BAJAS " + w.robots[me].kills + "   MUERTES " + w.robots[me].deaths, W / 2, H * .37f, 14 * u, CREAM, 0);
                     if (online && received != null && !receivedSaved) { // nivel del otro teléfono: ¿conservarlo?
                         txt(g, "¿QUIERES CONSERVAR EL NIVEL \"" + received.name + "\"?", W / 2, H * .44f, 12 * u, GOLD, 0);
                         menu(g, W / 2 - 110 * u, H * .48f, 220 * u, new String[]{"SÍ, GUARDARLO", "NO, VOLVER AL MENÚ"}, new Runnable[]{this::keepReceived, () -> endOnline(null)});
                     }
                     else if (online) menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"VOLVER AL MENÚ"}, new Runnable[]{() -> endOnline(null)});
-                    else if (testing != null) menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"VOLVER AL EDITOR", "JUGAR OTRA VEZ"}, new Runnable[]{this::backToEditor, this::start});
+                    else if (testing != null || testingBase) menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"VOLVER AL EDITOR", "JUGAR OTRA VEZ"}, new Runnable[]{this::backToEditor, this::start});
+                    else if (playBase != null) menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"JUGAR OTRA VEZ", "VOLVER A BASES"}, new Runnable[]{this::start, () -> { playBase = null; go(BASES); }});
                     else menu(g, W / 2 - 110 * u, H * .44f, 220 * u, new String[]{"REVANCHA", "VOLVER AL MENÚ"}, new Runnable[]{this::start, () -> go(TITLE)});
                 }
         }
@@ -806,8 +894,8 @@ public final class App {
         hero(g, hero, W * .25f, H * .92f);
         float x = W * .47f, wd = W - x - 6;
         txtS(g, "WAP", x, H * .15f, 48 * u, GOLD, -1);
-        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA\nRED LOCAL", "EDITOR DE NIVELES", "ELEGIR 4 ARMAS", "PERSONALIZAR"));
-        List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> { armsFor = -1; go(ARMS); }, () -> go(CUSTOM)));
+        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA\nRED LOCAL", "BASES", "EDITOR DE NIVELES", "ELEGIR 4 ARMAS", "PERSONALIZAR"));
+        List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(() -> { playBase = null; testingBase = false; start(); }, () -> { netBase = null; openLobby(); }, () -> { baseMenu = null; go(BASES); }, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> { armsFor = -1; go(ARMS); }, () -> go(CUSTOM)));
         if (devMode) { l.add("DESARROLLADOR"); a.add(() -> go(DEV)); }
         if (up != null) { l.add(up.label()); a.add(() -> up.act()); txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
         l.add("SALIR DEL JUEGO"); a.add(() -> { save(); if (dev != null) dev.exit(); });
@@ -944,6 +1032,11 @@ public final class App {
         if (devMode) { String t = "MODO DESARROLLADOR"; float tw = PixelFont.width(t, 8) + 8; g.rect(W - tw - 2, H - 13, tw, 12, PURPLE); txt(g, t, W - tw / 2 - 2, H - 4, 8, CREAM, 0); }
         if (toastT > 0) { g.rect(0, H / 2 - 10, W, 20, toast.startsWith("MODO") ? MINT : 0xE0101330); txtS(g, toast, W / 2, H / 2 + 4, 8, CREAM, 0); } // aviso de los toques a FAN
     }
+    /** Vida del jefe de la base. */
+    void bossBar(Gfx g, float x, float y, float wd, BaseRun.Foe b) {
+        box(g, x, y, wd, 13, 0xE61B1F4A, RED, DEEP); txt(g, "JEFE", x + 5, y + 10, 8, GOLD, -1);
+        float k = Math.max(0, b.hp / b.maxHp), bx = x + 30, bw2 = wd - 36; g.rect(bx, y + 4, bw2, 5, DEEP); g.rect(bx, y + 4, bw2 * k, 5, k > .3f ? RED : GOLD);
+    }
     void hud(Gfx g) {
         for (float[] d : dmgNums) { // modo desarrollador: daño de cada golpe
             float x = (d[0] - ren.vx0) * ren.zoom / uiScale, y = (d[1] - ren.vy0) * ren.zoom / uiScale - d[3] * .5f;
@@ -951,8 +1044,13 @@ public final class App {
             txtS(g, t, x, y, 10, d[2] >= 20 ? RED : GOLD, 0); }
         Robot me = w.robots[this.me];
         float bw = 168 * u; bar(g, 4, 4, bw, me, this.me);
-        if (w.robots.length == 2) bar(g, W - 4 - bw, 4, bw, w.robots[1 - this.me], 1 - this.me);
+        if (w.run != null && !online) { BaseRun.Foe b = w.run.boss; if (b != null && b.alive) bossBar(g, W - 4 - bw, 4, bw, b); } // base solo: la vida del jefe
+        else if (w.robots.length == 2) bar(g, W - 4 - bw, 4, bw, w.robots[1 - this.me], 1 - this.me);
         else { float y = 4; for (Robot o : w.robots) if (o != me) { mini(g, W - 4 - bw, y, bw, o); y += 15; } } // varios rivales: barras chicas
+        if (w.run != null && online && !w.finished) {
+            if (w.run.held[this.me]) txtS(g, "ESPERANDO A TU RIVAL EN LA SALA DEL JEFE...", W / 2, H * .3f, fit("ESPERANDO A TU RIVAL EN LA SALA DEL JEFE...", 12 * u, W - 10), GOLD, 0);
+            else if (w.run.held[1 - this.me]) txtS(g, "TU RIVAL YA TE ESPERA EN LA SALA DEL JEFE", W / 2, H * .3f, fit("TU RIVAL YA TE ESPERA EN LA SALA DEL JEFE", 10 * u, W - 10), CREAM, 0);
+        }
         if (me.piloting()) { // manejando el dron: cómo se usa y cuánta batería le queda
             Shot d = me.droneShot; float k = d.w.fuse > 0 ? d.life / (float) d.w.fuse : 1;
             txtS(g, "DRON: CRUCETA GIRA   A MISILES   B EXPLOTA", W / 2, 52, 8, GOLD, 0);

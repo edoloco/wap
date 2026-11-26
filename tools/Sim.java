@@ -90,7 +90,7 @@ public class Sim {
          check(T3.bucket(200,350,Terrain.EARTH,0xFFE8EEF4)&&(T3.tex[350*1800+200]&0xFF)>0xC0,"el balde le cambia el color a una zona de tierra");check(T3.bucket(1500,200,Terrain.EARTH,0xFF8B5A2B)&&T3.at(1500,200)==Terrain.EARTH,"un hueco abierto se llena entero, como en Paint");
          World ww=new World(1,1,k,k,Level.empty("MADERA"));ww.robots[0].px=100;ww.robots[1].px=1700;ww.t.rect(600,400,800,560,true,4,Terrain.WOOD,0xFFC8955A);int solid0=0;for(int y=400;y<=560;y+=2)for(int xx=600;xx<=800;xx+=2)if(ww.t.solid(xx,y))solid0++;
          check(ww.t.at(700,480)==Terrain.WOOD&&ww.t.tex[480*1800+700]==0xFFC8955A,"la madera es de color liso");ww.t.carve(700,480,30);check(ww.t.solid(700,480),"la madera no se recorta como la tierra");
-         int f=Terrain.frag(700,480);boolean broke=false;for(int i=0;i<10&&!broke;i++){ww.hitWood(700,480,5);broke=ww.t.at(700,480)!=Terrain.WOOD;}int solid1=0;for(int y=400;y<=560;y+=2)for(int xx=600;xx<=800;xx+=2)if(ww.t.solid(xx,y))solid1++;
+         int f=ww.t.frag(700,480);boolean broke=false;for(int i=0;i<10&&!broke;i++){ww.hitWood(700,480,5);broke=ww.t.at(700,480)!=Terrain.WOOD;}int solid1=0;for(int y=400;y<=560;y+=2)for(int xx=600;xx<=800;xx+=2)if(ww.t.solid(xx,y))solid1++;
          boolean fx=false;for(Fx e:ww.fx)fx|=e.type==Fx.WOOD;check(broke&&solid1>solid0*.9f&&solid1<solid0&&fx,"aguanta varios golpes y se rompe solo un trozo ("+solid0+"→"+solid1+")");
          ww.explode(640,440,30,20,20,2,0);int solid2=0;for(int y=400;y<=560;y+=2)for(int xx=600;xx<=800;xx+=2)if(ww.t.solid(xx,y))solid2++;check(solid2<solid1&&solid2>solid1/3,"una explosión rompe los trozos cercanos ("+solid1+"→"+solid2+")");}
         {Wpn[] k=new Wpn[4];java.util.Arrays.fill(k,Wpn.ALL[Wpn.index("BAZOOKA")]);World tw4=new World(3,2,new Wpn[][]{k,k,k,k},new int[]{0,0,1,1},null);check(tw4.robots.length==4,"partida con 4 robots");
@@ -170,7 +170,7 @@ public class Sim {
         for(int seed=1;seed<=12;seed++){Rng q=new Rng(seed*77);Wpn[] a=new Wpn[Robot.SLOTS],b=new Wpn[Robot.SLOTS];for(int i=0;i<Robot.SLOTS;i++){a[i]=Wpn.ALL[q.i(Wpn.ALL.length)];b[i]=Wpn.ALL[q.i(Wpn.ALL.length)];}
             World w=new World(seed,5,a,b);Bot x=new Bot(seed,0,.9f),y=new Bot(seed+9,1,.9f);int[] in=new int[2];Robot r0=w.robots[0];
             for(int i=0;i<60*60*4&&!w.finished;i++){in[0]=x.think(w);in[1]=y.think(w);w.step(in);for(Fx f:w.fx){if(f.type==Fx.HOOK&&f.a==0)hooks++;if(f.type==Fx.JUMP&&f.a==0)jumps++;}w.fx.clear();
-                for(Robot o:w.robots)if(o.alive()&&o.px<0||o.py<0||o.px>Terrain.W||o.py>Terrain.H+1)ex++;}
+                for(Robot o:w.robots)if(o.alive()&&o.px<0||o.py<0||o.px>Terrain.W0||o.py>Terrain.H0+1)ex++;}
             if(w.finished)finished++;kills[0]+=w.robots[0].kills;kills[1]+=w.robots[1].kills;System.out.println("  semilla "+seed+" ticks "+w.tick+" bajas "+w.robots[0].kills+"-"+w.robots[1].kills+" fin "+w.finished);}
         check(ex==0,"nadie sale del mapa");check(kills[0]+kills[1]>12,"los bots se combaten y hay bajas: "+kills[0]+"/"+kills[1]);check(hooks>50&&jumps>500,"los bots saltan ("+jumps+") y usan gancho ("+hooks+")");System.out.println("  terminadas "+finished+"/12, "+(System.currentTimeMillis()-t0)+" ms");
     }
@@ -208,29 +208,29 @@ public class Sim {
         t.brush(300,300,12,Terrain.STEEL,0xFF3E6FB0);check(t.solid(300,300)&&t.at(300,300)==Terrain.STEEL,"el material acero se pinta y choca");
         t.carve(300,300,30);check(t.solid(300,300)&&t.solid(305,305),"una explosión no rompe el acero pintado");
         t.brush(600,300,12,Terrain.BACKDROP,0xFF5E8C3A);t.brush(700,300,12,Terrain.OVERLAY,0xFFE03C3C);
-        check(!t.solid(600,300)&&!t.solid(700,300)&&t.back[300*Terrain.W+600]!=0&&t.front[300*Terrain.W+700]!=0,"fondo y sobre se ven pero no chocan");
-        t.carve(600,300,20);check(t.back[300*Terrain.W+600]!=0,"las explosiones no borran el fondo");
-        t.cell(803,305,8,Terrain.EARTH,0xFFE03C3C,false);check(t.at(800,304)==Terrain.EARTH&&t.at(807,311)==Terrain.EARTH&&t.at(808,304)==0&&t.tex[304*Terrain.W+800]==0xFFE03C3C&&t.tex[311*Terrain.W+807]==0xFFE03C3C,"pixel: llena una celda de 8 alineada a la grilla, con color parejo");
+        check(!t.solid(600,300)&&!t.solid(700,300)&&t.back[300*Terrain.W0+600]!=0&&t.front[300*Terrain.W0+700]!=0,"fondo y sobre se ven pero no chocan");
+        t.carve(600,300,20);check(t.back[300*Terrain.W0+600]!=0,"las explosiones no borran el fondo");
+        t.cell(803,305,8,Terrain.EARTH,0xFFE03C3C,false);check(t.at(800,304)==Terrain.EARTH&&t.at(807,311)==Terrain.EARTH&&t.at(808,304)==0&&t.tex[304*Terrain.W0+800]==0xFFE03C3C&&t.tex[311*Terrain.W0+807]==0xFFE03C3C,"pixel: llena una celda de 8 alineada a la grilla, con color parejo");
         t.cell(803,305,8,Terrain.EARTH,0,true);check(t.at(803,305)==0,"pixel: borrar vacía la celda");
         t.polygon(new int[]{1000,200,1100,200,1100,300,1000,300},true,true,4,Terrain.WOOD,0xFFC8955A);check(t.at(1050,250)==Terrain.WOOD&&t.at(1150,250)==0,"puntos: el polígono relleno se dibuja");
         t.polygon(new int[]{1200,200,1300,260,1200,320},false,false,4,Terrain.EARTH,0xFF8B5A2B);check(t.at(1250,230)==Terrain.EARTH&&t.at(1240,260)==0,"puntos: el contorno abierto dibuja solo las líneas");
         check(t.bucket(1050,250,Terrain.STEEL,0xFF7D8590)&&t.at(1050,250)==Terrain.STEEL,"el balde cambia la zona al material elegido (acero)");
-        {Terrain u=new Terrain();u.frame2();Terrain open=new Terrain();open.frame2();check(open.bucket(500,500,Terrain.BACKDROP,0xFF7FD6FF)&&open.back[30*Terrain.W+30]!=0&&open.back[(Terrain.H-30)*Terrain.W+Terrain.W-30]!=0,"balde en un nivel vacío: pinta todo el lienzo, como en Paint");
-         open.oval(400,400,700,700,false,6,Terrain.BACKDROP,0xFFE03C3C);check(open.bucket(550,550,Terrain.BACKDROP,0xFF3FB34F)&&open.back[550*Terrain.W+550]==0xFF3FB34F&&open.back[300*Terrain.W+300]==0xFF7FD6FF,"fondo de un color, una forma cerrada de otro color encima: el balde rellena solo la forma");
-         open.oval(900,400,1200,700,false,6,Terrain.BACKDROP,0xFF7FD6FF);check(open.bucket(1050,550,Terrain.BACKDROP,0xFFFFD93D)&&open.back[300*Terrain.W+300]==0xFFFFD93D,"si la forma es del mismo color que lo de afuera, el balde lo pinta todo (como en Paint)");
-         {Terrain e=new Terrain();e.frame2();e.rect(300,300,800,800,true,4,Terrain.EARTH,0xFF8B5A2B);e.oval(450,450,650,650,false,6,Terrain.EARTH,0xFF3E6FB0);check(e.bucket(550,550,Terrain.EARTH,0xFFE03C3C)&&e.tex[350*Terrain.W+350]!=Terrain.earthTexT(0xFFE03C3C,350,350)&&e.tex[550*Terrain.W+550]==Terrain.earthTexT(0xFFE03C3C,550,550),"tierra con vetas: el balde respeta un contorno de otro color");
-          check(e.bucket(350,350,Terrain.EARTH,0xFFFFD93D)&&e.tex[790*Terrain.W+790]==Terrain.earthTexT(0xFFFFD93D,790,790),"tierra con vetas: el balde pinta toda la zona del mismo color");}
+        {Terrain u=new Terrain();u.frame2();Terrain open=new Terrain();open.frame2();check(open.bucket(500,500,Terrain.BACKDROP,0xFF7FD6FF)&&open.back[30*Terrain.W0+30]!=0&&open.back[(Terrain.H0-30)*Terrain.W0+Terrain.W0-30]!=0,"balde en un nivel vacío: pinta todo el lienzo, como en Paint");
+         open.oval(400,400,700,700,false,6,Terrain.BACKDROP,0xFFE03C3C);check(open.bucket(550,550,Terrain.BACKDROP,0xFF3FB34F)&&open.back[550*Terrain.W0+550]==0xFF3FB34F&&open.back[300*Terrain.W0+300]==0xFF7FD6FF,"fondo de un color, una forma cerrada de otro color encima: el balde rellena solo la forma");
+         open.oval(900,400,1200,700,false,6,Terrain.BACKDROP,0xFF7FD6FF);check(open.bucket(1050,550,Terrain.BACKDROP,0xFFFFD93D)&&open.back[300*Terrain.W0+300]==0xFFFFD93D,"si la forma es del mismo color que lo de afuera, el balde lo pinta todo (como en Paint)");
+         {Terrain e=new Terrain();e.frame2();e.rect(300,300,800,800,true,4,Terrain.EARTH,0xFF8B5A2B);e.oval(450,450,650,650,false,6,Terrain.EARTH,0xFF3E6FB0);check(e.bucket(550,550,Terrain.EARTH,0xFFE03C3C)&&e.tex[350*Terrain.W0+350]!=Terrain.earthTexT(0xFFE03C3C,350,350)&&e.tex[550*Terrain.W0+550]==Terrain.earthTexT(0xFFE03C3C,550,550),"tierra con vetas: el balde respeta un contorno de otro color");
+          check(e.bucket(350,350,Terrain.EARTH,0xFFFFD93D)&&e.tex[790*Terrain.W0+790]==Terrain.earthTexT(0xFFFFD93D,790,790),"tierra con vetas: el balde pinta toda la zona del mismo color");}
          u.oval(400,400,600,600,false,9,Terrain.EARTH,0xFF8B5A2B);check(u.bucket(500,500,Terrain.EARTH,0xFFE03C3C)&&u.at(500,500)==Terrain.EARTH&&u.at(700,700)==0,"balde en un hueco cerrado: lo rellena");
          {Terrain c=new Terrain();c.frame2();c.bucket(500,500,Terrain.BACKDROP,0xFF7FD6FF);c.rect(400,400,600,600,true,4,Terrain.WOOD,0xFFC8955A);
-          check(c.back[500*Terrain.W+500]==0xFF7FD6FF,"capas: la madera pintada encima no borra el fondo");
-          c.wipe(500,500,30);check(c.at(500,500)==0&&c.back[500*Terrain.W+500]==0xFF7FD6FF,"capas: al romper la madera aparece el fondo dibujado");
+          check(c.back[500*Terrain.W0+500]==0xFF7FD6FF,"capas: la madera pintada encima no borra el fondo");
+          c.wipe(500,500,30);check(c.at(500,500)==0&&c.back[500*Terrain.W0+500]==0xFF7FD6FF,"capas: al romper la madera aparece el fondo dibujado");
           {App q=new App(store,mute);q.seed(6);q.openEditor(Level.empty("ROMPER"));World ew=q.editorWorld();ew.t.bucket(600,500,Terrain.BACKDROP,0xFF7FD6FF);ew.t.rect(500,400,700,600,true,4,Terrain.WOOD,0xFFC8955A);
            Level l2=Level.load(Level.of(ew,"ROMPER").save());World g2=new World(3,1,set("GRENADE","BAZOOKA","SHOTGUN","MINE","CHAINGUN"),set("GRENADE","BAZOOKA","SHOTGUN","MINE","CHAINGUN"),l2);
-           for(int i=0;i<30;i++)g2.explode(600,500,40,60,40,1,-1);check(g2.t.at(600,500)!=Terrain.WOOD&&g2.t.back[500*Terrain.W+600]==0xFF7FD6FF,"en la partida, al romper la madera con explosiones queda el fondo dibujado");}
-          c.bucket(450,450,Terrain.WOOD,0xFF6B4226);check(c.back[450*Terrain.W+450]==0xFF7FD6FF,"capas: el balde de madera no toca el fondo");
-          c.bucket(450,450,Terrain.BACKDROP,0xFFE03C3C);check(c.at(450,450)==Terrain.WOOD&&c.back[450*Terrain.W+450]==0xFFE03C3C&&c.back[100*Terrain.W+100]==0xFFE03C3C,"capas: el balde de fondo pinta su capa (también detrás de la madera) sin tocar la madera");
-          c.bucket(700,700,Terrain.OVERLAY,0xFF3FB34F);check(c.at(450,450)==Terrain.WOOD&&c.back[450*Terrain.W+450]==0xFFE03C3C&&c.front[700*Terrain.W+700]==0xFF3FB34F,"capas: el balde de sobre pinta su capa sin borrar las otras");}
-         u.oval(1000,400,1200,600,false,6,Terrain.BACKDROP,0xFF7FD6FF);check(u.bucket(1100,500,Terrain.BACKDROP,0xFF7FD6FF)&&u.back[500*Terrain.W+1100]!=0&&u.back[300*Terrain.W+1100]==0,"balde con FONDO dentro de un contorno de fondo: lo rellena");
+           for(int i=0;i<30;i++)g2.explode(600,500,40,60,40,1,-1);check(g2.t.at(600,500)!=Terrain.WOOD&&g2.t.back[500*Terrain.W0+600]==0xFF7FD6FF,"en la partida, al romper la madera con explosiones queda el fondo dibujado");}
+          c.bucket(450,450,Terrain.WOOD,0xFF6B4226);check(c.back[450*Terrain.W0+450]==0xFF7FD6FF,"capas: el balde de madera no toca el fondo");
+          c.bucket(450,450,Terrain.BACKDROP,0xFFE03C3C);check(c.at(450,450)==Terrain.WOOD&&c.back[450*Terrain.W0+450]==0xFFE03C3C&&c.back[100*Terrain.W0+100]==0xFFE03C3C,"capas: el balde de fondo pinta su capa (también detrás de la madera) sin tocar la madera");
+          c.bucket(700,700,Terrain.OVERLAY,0xFF3FB34F);check(c.at(450,450)==Terrain.WOOD&&c.back[450*Terrain.W0+450]==0xFFE03C3C&&c.front[700*Terrain.W0+700]==0xFF3FB34F,"capas: el balde de sobre pinta su capa sin borrar las otras");}
+         u.oval(1000,400,1200,600,false,6,Terrain.BACKDROP,0xFF7FD6FF);check(u.bucket(1100,500,Terrain.BACKDROP,0xFF7FD6FF)&&u.back[500*Terrain.W0+1100]!=0&&u.back[300*Terrain.W0+1100]==0,"balde con FONDO dentro de un contorno de fondo: lo rellena");
 }
         {App q=new App(store,mute);q.seed(4);q.openEditor(Level.empty("DESHACER"));q.editorTool(0);int c0=q.editorSolidCount();
          q.editorStroke(400,500,800,500);int c1=q.editorSolidCount();q.editorStroke(400,700,800,700);int c2=q.editorSolidCount();
@@ -241,8 +241,8 @@ public class Sim {
          BufferedImage ub=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);q.draw(new J(ub));ImageIO.write(ub,"png",new File(out,"20_deshacer.png"));}
         {App q=new App(store,mute);q.seed(5);q.openEditor(Level.empty("DESHACER2"));World ew=q.editorWorld();
          q.editorTool(1);q.editorSize(0);q.editorTool(0);q.editorSize(2);q.editorTool(1);check(q.editorCell()==0,"la grilla del pixel no cambia al cambiar el grosor de otra herramienta");
-         q.editorTool(7);q.editorMat(3);q.editorApply(600,500);check(ew.t.back!=null&&ew.t.back[100*Terrain.W+100]!=0,"balde de fondo en el nivel vacío");
-         q.editorUndo();check(ew.t.back==null||ew.t.back[100*Terrain.W+100]==0,"deshacer quita el fondo pintado con balde");q.editorRedo();check(ew.t.back[100*Terrain.W+100]!=0,"rehacer lo vuelve a pintar");
+         q.editorTool(7);q.editorMat(3);q.editorApply(600,500);check(ew.t.back!=null&&ew.t.back[100*Terrain.W0+100]!=0,"balde de fondo en el nivel vacío");
+         q.editorUndo();check(ew.t.back==null||ew.t.back[100*Terrain.W0+100]==0,"deshacer quita el fondo pintado con balde");q.editorRedo();check(ew.t.back[100*Terrain.W0+100]!=0,"rehacer lo vuelve a pintar");
          q.editorTool(11);q.editorApply(700,400);int np=ew.props.size();q.editorUndo();check(ew.props.size()==np-1,"deshacer quita una caja");q.editorRedo();check(ew.props.size()==np,"rehacer la vuelve a poner");
          q.editorTool(16);int w0=ew.water;q.editorApply(500,640);q.editorUndo();check(ew.water==w0,"deshacer el agua");
          long t0=System.nanoTime();for(int i=0;i<300;i++){q.editorTool(i%2==0?0:7);q.editorMat(i%5);if(i%2==0)q.editorStroke(100+i*5,200,300+i*5,800);else q.editorApply(100+(i*37)%1500,100+(i*53)%800);}
@@ -253,8 +253,8 @@ public class Sim {
         ew.t.brush(400,600,40,Terrain.BACKDROP,0xFF7FD6FF);ew.t.brush(900,850,30,Terrain.OVERLAY,0xFF3FB34F);ew.t.brush(1300,860,20,Terrain.STEEL,0xFFE03C3C);
         ew.t.rect(300,700,700,900,true,4,Terrain.BACKDROP,0xFF7FD6FF);ew.t.rect(760,700,1100,900,true,4,Terrain.STEEL,0xFF3E6FB0);ew.t.rect(1150,700,1500,900,true,4,Terrain.OVERLAY,0xFF3FB34F);
         {BufferedImage mb=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);J mg=new J(mb);q.ren.camX=900;q.ren.camY=800;q.ren.zoomMul=.45f;q.draw(mg);ImageIO.write(mb,"png",new File(out,"19_marcas_editor.png"));}
-        check(ew.t.tex[800*Terrain.W+900]==0xFF3E6FB0&&ew.t.back[800*Terrain.W+500]==0xFF7FD6FF,"acero y fondo se pintan en color plano");
-        Level l=Level.load(Level.of(ew,"CAPAS").save());check(l.back!=null&&l.front!=null&&l.back[600*Terrain.W+400]!=0&&l.front[850*Terrain.W+900]!=0&&l.m[860*Terrain.W+1300]==Terrain.STEEL,"el nivel guarda y lee el fondo, lo de encima y el acero");
+        check(ew.t.tex[800*Terrain.W0+900]==0xFF3E6FB0&&ew.t.back[800*Terrain.W0+500]==0xFF7FD6FF,"acero y fondo se pintan en color plano");
+        Level l=Level.load(Level.of(ew,"CAPAS").save());check(l.back!=null&&l.front!=null&&l.back[600*Terrain.W0+400]!=0&&l.front[850*Terrain.W0+900]!=0&&l.m[860*Terrain.W0+1300]==Terrain.STEEL,"el nivel guarda y lee el fondo, lo de encima y el acero");
         Level plain=Level.load(Level.empty("SIN CAPAS").save());check(plain.back==null&&plain.front==null,"un nivel sin capas no las guarda");
         q.draw(new J(new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB)));
         BufferedImage b=new BufferedImage(1600,720,BufferedImage.TYPE_INT_RGB);J g=new J(b);
@@ -389,9 +389,9 @@ public class Sim {
         World w=flat();Robot a=w.robots[0];w.robots[1].px=1700;a.aim=60;run(w,0,1);w.step(new int[]{Input.UP|Input.B,0});int t=0;for(;t<120&&a.rope==1;t++)w.step(new int[]{Input.B,0});
         check(a.rope==2,"el gancho siempre engancha algo, aunque esté lejos ("+t+" cuadros)");
         // pedacitos sobre la cabeza no frenan el salto
-        w=flat();a=w.robots[0];w.robots[1].px=1700;Terrain T=w.t;int hy=a.py-a.h-12;for(int x=a.px-3;x<=a.px+3;x+=2)T.m[hy*Terrain.W+x]=Terrain.EARTH;T.m[(hy-1)*Terrain.W+a.px]=Terrain.EARTH;
+        w=flat();a=w.robots[0];w.robots[1].px=1700;Terrain T=w.t;int hy=a.py-a.h-12;for(int x=a.px-3;x<=a.px+3;x+=2)T.m[hy*Terrain.W0+x]=Terrain.EARTH;T.m[(hy-1)*Terrain.W0+a.px]=Terrain.EARTH;
         run(w,0,1);run(w,Input.B,1);int top=a.py;for(int i=0;i<30;i++){run(w,Input.B,1);top=Math.min(top,a.py);}check(top<hy-a.h+a.h/2,"unos pedacitos de tierra sobre la cabeza no frenan el salto (llegó a "+top+")");
-        w=flat();a=w.robots[0];w.robots[1].px=1700;T=w.t;hy=a.py-a.h-12;for(int y=hy-6;y<=hy;y++)for(int x=a.px-20;x<=a.px+20;x++)T.m[y*Terrain.W+x]=Terrain.EARTH;
+        w=flat();a=w.robots[0];w.robots[1].px=1700;T=w.t;hy=a.py-a.h-12;for(int y=hy-6;y<=hy;y++)for(int x=a.px-20;x<=a.px+20;x++)T.m[y*Terrain.W0+x]=Terrain.EARTH;
         run(w,0,1);run(w,Input.B,1);top=a.py;for(int i=0;i<30;i++){run(w,Input.B,1);top=Math.min(top,a.py);}check(top>=hy+1+a.h-1&&T.solid(a.px,hy),"un techo de verdad sí frena el salto");
     }
     static void golpe(){
@@ -460,6 +460,64 @@ public class Sim {
         for(int i=0;i<16&&b.bubble!=null;i++)w.step(new int[]{0,i%2==0?Input.A:0});check(b.bubble==null&&s.dead,"disparando 7 veces rompe la burbuja y sale");
         w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+600;run(w,0,2);s=w.spawn(bs,0,a.px+20,a.py-200,0,0);float sy=s.y;for(int i=0;i<100;i++)w.step(new int[2]);check(s.y<sy-30,"la burbuja sola flota hacia arriba ("+(sy-s.y)+" px en 100 cuadros)");
     }
+    static Base baseDePrueba(){
+        Base b=Base.empty("PRUEBA");b.addRoom(1,0);b.addRoom(2,0);b.toggleBoss(2,0);
+        for(int x=16;x<48;x++)if(x<20||x>23)b.putTile(x,8,x<32?Base.T_EARTH:Base.T_STEEL,0xFF8B5A2B,0);
+        b.putTile(20,8,Base.T_PANEL,0,Base.M_SIDE);b.putThing(12,7,Base.E_BADPAL);b.putThing(28,7,Base.E_TURRET);b.putThing(26,3,Base.E_DRONE);b.putThing(6,7,Base.P_CAPSULE);
+        return b;}
+    static Wpn[][] cargas(String n){Wpn[] a=new Wpn[4];for(int i=0;i<4;i++)a[i]=Wpn.ALL[Wpn.index(n)];return new Wpn[][]{a,a.clone()};}
+    static void bases(String out)throws Exception{
+        Base b=baseDePrueba();byte[] f=b.save();Base c=Base.load(f);check(java.util.Arrays.equals(f,c.save())&&c.rooms.size()==3&&c.bossRoom()!=null&&c.canOnline(),"base: se guarda y se abre igual");
+        check(!b.canAdd(5,5)&&b.canAdd(1,1)&&!b.removeRoom(1,0),"base: las habitaciones van pegadas y no quedan sueltas");
+        World w=new World(3,3,cargas("PLASMA GUN"),c,false);BaseRun run=w.run;Robot r=w.robots[0];
+        check(run.roomAt(r.px,r.py-20)==0&&!w.robots[1].alive(),"base: el jugador parte en el inicio, solo");
+        check(run.kin.size()==1&&run.foes.size()==3&&w.bonus.size()==1,"base: pieza que se mueve, 3 enemigos y la cápsula");
+        // pieza que se mueve: lo lleva encima
+        BaseRun.Kin k=run.kin.get(0);for(int i=0;i<3;i++)w.step(new int[2]);r.px=k.x()+16;r.py=k.y();r.vy=0;w.step(new int[2]);int x0=r.px,kx0=k.x();for(int i=0;i<40;i++)w.step(new int[2]);
+        check(r.py==k.y()&&r.px-x0==k.x()-kx0&&k.x()!=kx0,"base: la pieza que se mueve lleva al que va encima ("+(r.px-x0)+" px, pieza "+(k.x()-kx0)+", y "+r.py+"/"+k.y()+")");
+        // precipicio: pierde una vida y reaparece en esa habitación
+        int lives=r.lives;r.px=run.rooms.get(1)[0]+7*32+16;r.py=run.rooms.get(1)[1]+200;r.vy=0;int t=0;for(;t<200&&r.lives==lives;t++)w.step(new int[2]);
+        check(r.lives==lives-1&&t<120,"base: caer al precipicio quita una vida al instante ("+t+" ticks)");
+        for(int i=0;i<200&&!r.alive();i++)w.step(new int[2]);check(r.alive()&&run.roomAt(r.px,r.py-20)==1,"base: reaparece en la habitación donde cayó");
+        // enemigos: la torreta dispara y el plasma los derrota
+        boolean shot=false;r.invuln=0;float hp=r.hp;for(int i=0;i<300;i++){w.step(new int[2]);if(!run.bullets.isEmpty())shot=true;r.invuln=0;}check(shot&&r.hp<hp,"base: la torreta ve al jugador y le dispara");
+        BaseRun.Foe bp=null;for(BaseRun.Foe e:run.foes)if(e.type==BaseRun.BADPAL)bp=e;r.hp=r.maxHp;r.px=(int)bp.x-90;r.py=(int)bp.y;r.facing=1;r.vy=0;
+        for(int i=0;i<200&&bp.alive;i++){w.step(new int[]{i%12<6?Input.A:0,0});r.px=(int)bp.x-90;r.py=(int)bp.y;r.facing=1;r.invuln=30;}check(!bp.alive,"base: los enemigos son fáciles de abatir");
+        {Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=run.rooms.get(1)[0]+256;rd.camY=run.rooms.get(1)[1]+150;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"32_base_lab.png"));}
+        // sala del jefe: se cierran las puertas y aparece la máquina; al vencerla se gana
+        int[] br=run.rooms.get(2);r.px=br[0]+120;r.py=br[1]+br[3]-33;r.vy=0;for(int i=0;i<5;i++)w.step(new int[2]);
+        check(run.bossOn&&!run.doors.isEmpty()&&run.boss!=null,"base: la sala del jefe cierra sus puertas y aparece el jefe");
+        {r.invuln=999;for(int i=0;i<200;i++)w.step(new int[2]);Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=br[0]+256;rd.camY=br[1]+150;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"33_base_jefe.png"));}
+        for(int i=0;i<60&&!w.finished;i++)run.hurtFoe(w,run.boss.x,run.boss.y-20,5,4);check(w.finished&&run.won&&w.winner==0,"base: vencer al jefe gana la base");
+        // en línea: el jugador 2 juega la base reflejada; llegan a la misma sala y pelean
+        World a=new World(9,3,cargas("SHOTGUN"),Base.load(f),true),z=new World(9,3,cargas("SHOTGUN"),Base.load(f),true);
+        check(a.robots[1].px>a.run.rooms.get(a.run.bossIdx())[0]+512&&a.robots[0].px<a.run.rooms.get(a.run.bossIdx())[0],"en línea: el jugador 2 parte al otro lado, en la base reflejada");
+        Bot b0=new Bot(1,0,1),b1=new Bot(2,1,1),c0=new Bot(1,0,1),c1=new Bot(2,1,1);
+        for(int i=0;i<900;i++){a.step(new int[]{i%40<30?Input.RIGHT:Input.B,i%40<30?Input.LEFT:Input.B});z.step(new int[]{i%40<30?Input.RIGHT:Input.B,i%40<30?Input.LEFT:Input.B});}
+        check(a.hash()==z.hash(),"en línea: la base es igual en los dos teléfonos");
+        a=new World(9,3,cargas("SHOTGUN"),Base.load(f),true);int[] bb=a.run.rooms.get(a.run.bossIdx());Robot p0=a.robots[0],p1=a.robots[1];a.step(new int[2]);
+        p0.px=bb[0]+100;p0.py=bb[1]+bb[3]-33;p0.vy=0;a.step(new int[2]);check(a.run.held[0]&&!a.run.fight,"en línea: el primero que llega espera al otro");
+        float h0=p0.hp;p0.damage(a,30,0,0,1,p0.px,p0.py);check(p0.hp==h0,"en línea: el que espera no recibe daño");
+        p1.px=bb[0]+bb[2]-100;p1.py=bb[1]+bb[3]-33;p1.vy=0;for(int i=0;i<3;i++)a.step(new int[2]);check(a.run.fight&&!a.run.doors.isEmpty(),"en línea: llegan los dos, se cierran las puertas y pelean");
+        p1.invuln=0;p1.damage(a,999,0,0,0,p1.px,p1.py);for(int i=0;i<3;i++)a.step(new int[2]);check(a.finished&&a.winner==0,"en línea: el que muere en la pelea pierde");
+        // fondos
+        for(int bg=1;bg<4;bg++){Base d=baseDePrueba();d.bg=bg;World v=new World(3,3,cargas("SHOTGUN"),d,false);Renderer rd=new Renderer();rd.reset(v);BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,v,0);rd.drawWorld(g,v,0);ImageIO.write(im,"png",new File(out,"34_fondo_"+Base.BG_NAMES[bg].toLowerCase()+".png"));}
+    }
+    static void editorBases(String out)throws Exception{
+        App q=new App(store,mute);q.seed(5);q.openBaseEditor(Base.empty("MI BASE"));
+        q.baseEdTool(5,0,0);q.baseEdApply(512+100,100);q.baseEdApply(1024+100,100);Base b=q.baseEdBase();check(b.rooms.size()==3,"editor de bases: los + agregan habitaciones pegadas");
+        q.baseEdApply(1024+100,100);q.baseEdTool(5,0,0);
+        q.baseEdTool(0,2,Base.M_UPDOWN);q.baseEdApply(20*32+5,6*32+5);check(b.tiles.get(Base.key(20,6))[2]==Base.M_UPDOWN&&b.tiles.get(Base.key(20,6))[0]==Base.T_PANEL,"editor de bases: pieza en la grilla, con movimiento");
+        q.baseEdTool(0,0,0);for(int x=16;x<48;x++)q.baseEdApply(x*32+3,8*32+3);q.baseEdTool(2,2,0);q.baseEdApply(25*32+3,7*32+3);q.baseEdTool(3,1,0);q.baseEdApply(10*32+3,7*32+3);
+        check(b.things.get(Base.key(25,7))==Base.E_BADPAL&&b.things.get(Base.key(10,7))==Base.P_LIFE,"editor de bases: enemigos y premios en su cuadro");
+        int n=b.tiles.size();q.baseEdUndo();check(q.baseEdBase().things.get(Base.key(10,7))==null,"editor de bases: deshacer");
+        for(int[] r:new int[][]{{1280,720},{2048,1536},{2400,1080}}){BufferedImage im=new BufferedImage(r[0],r[1],BufferedImage.TYPE_INT_RGB);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"35_editor_bases_"+r[0]+".png"));check(q.overflow==0,"editor de bases "+r[0]+" sin textos fuera");}
+        q.baseEdTool(5,0,0);for(int r=0;r<3;r++){q.baseEdApply(1024+100,100);}BufferedImage im2=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);q.draw(new J(im2));ImageIO.write(im2,"png",new File(out,"35b_editor_salas.png"));
+        q.baseEdTest();check(q.screen==App.PLAY&&q.world().run!=null,"editor de bases: PROBAR juega la base");
+        q.tickN(200);BufferedImage im3=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);q.draw(new J(im3));ImageIO.write(im3,"png",new File(out,"36_jugando_base.png"));
+        q.saveBase(Base.empty("OTRA"));q.go(App.BASES);BufferedImage im4=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);q.overflow=0;q.draw(new J(im4));ImageIO.write(im4,"png",new File(out,"37_bases.png"));check(q.overflow==0,"pantalla BASES sin textos fuera");
+        q.go(App.LEVEL_LIST);q.draw(new J(im4));ImageIO.write(im4,"png",new File(out,"38_editor_lista.png"));
+    }
     static void personalizarSalas(String out)throws Exception{
         // una sala vieja que sigue anunciándose no duplica la sala del mismo teléfono
         try(com.wap.net.Lan.Browser br=new com.wap.net.Lan.Browser();com.wap.net.Lan.Beacon b1=new com.wap.net.Lan.Beacon("Sala de EDO",47812,World.RULES)){Thread.sleep(400);
@@ -482,7 +540,7 @@ public class Sim {
         int bx=b.px;float h0=b.hp;for(int i=0;i<60;i++)w.step(new int[]{0,Input.RIGHT|Input.B});check(Math.abs(b.px-bx)<3&&b.hp<h0,"congelado: no se mueve y pierde vida");
         {Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=b.px-30;rd.camY=b.py-40;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);w.step(new int[]{0,Input.A});w.step(new int[]{0,0});w.step(new int[]{0,Input.A});rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"27_freezee.png"));}
         for(int i=0;i<16&&b.frozenT>0;i++)w.step(new int[]{0,i%2==0?Input.A:0});check(b.frozenT==0,"7 disparos rompen el hielo");check(b.iceImm>0,"al salir queda un momento sin poder recongelarse");
-        b.px=a.px+700;for(int i=0;i<60;i++)w.step(new int[]{Input.A,0});int frost=0;for(int y=b.py-60;y<b.py+10;y++)for(int x=a.px;x<a.px+300;x++){int c=w.t.tex[y*Terrain.W+x];if(w.t.solid(x,y)&&(c&255)>180&&(c>>16&255)>180)frost++;}check(frost>5,"deja escarcha blanca en el suelo ("+frost+" px)");
+        b.px=a.px+700;for(int i=0;i<60;i++)w.step(new int[]{Input.A,0});int frost=0;for(int y=b.py-60;y<b.py+10;y++)for(int x=a.px;x<a.px+300;x++){int c=w.t.tex[y*Terrain.W0+x];if(w.t.solid(x,y)&&(c&255)>180&&(c>>16&255)>180)frost++;}check(frost>5,"deja escarcha blanca en el suelo ("+frost+" px)");
         // ELECTRIC THUNDER
         w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+120;a.facing=1;run(w,0,2);for(int k=0;k<4;k++)a.loadout[k]=Wpn.ALL[Wpn.index("ELECTRIC THUNDER")];a.ammo[3]=1;h0=b.hp;boolean bolt=false;
         boolean stun=false;for(int i=0;i<14;i++){w.step(new int[]{i<2?Input.A:0,0});for(Fx f:w.fx)if(f.type==Fx.BOLT)bolt=true;stun|=b.stunT>0;w.fx.clear();}check(stun,"ELECTRIC THUNDER: aturde al rival");
@@ -501,5 +559,5 @@ public class Sim {
         // pantalla de armas en tres tamaños
         for(int[] r:new int[][]{{1280,720},{2048,1536},{2400,1080}}){App q=new App(store,mute);q.seed(3);q.go(App.ARMS);BufferedImage im=new BufferedImage(r[0],r[1],BufferedImage.TYPE_INT_RGB);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"29_armas_"+r[0]+".png"));check(q.overflow==0,"pantalla de armas "+r[0]+"x"+r[1]+" sin textos fuera");}
     }
-    public static void main(String[] a)throws Exception{personalizarSalas(a.length>0?a[0]:"out");hieloRayoTornado(a.length>0?a[0]:"out");burbuja(a.length>0?a[0]:"out");premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    public static void main(String[] a)throws Exception{editorBases(a.length>0?a[0]:"out");bases(a.length>0?a[0]:"out");personalizarSalas(a.length>0?a[0]:"out");hieloRayoTornado(a.length>0?a[0]:"out");burbuja(a.length>0?a[0]:"out");premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

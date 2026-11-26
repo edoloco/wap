@@ -28,9 +28,15 @@ public final class Renderer {
     public float camX = 900, camY = 500, shake; public float zoom = 3; float vx0, vy0, vw, vh; boolean first = true;
 
     final Recolor white = new Recolor();
-    public void reset(World w) { java.util.Arrays.fill(okB, false); java.util.Arrays.fill(okF, false); ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < Terrain.TW * Terrain.TH; i++) w.t.dirty[i] = true; bgNew = true; java.util.Arrays.fill(loaded, false); }
+    /** Mapa que se está dibujando (los de batalla y las bases tienen distinto tamaño). */
+    Terrain T = new Terrain(1, 1);
+    void size(Terrain t) {
+        T = t; int n = t.TW * t.TH; if (loaded.length == n) return;
+        loaded = new boolean[n]; fresh = new boolean[n]; hasB = new boolean[n]; hasF = new boolean[n]; okB = new boolean[n]; okF = new boolean[n];
+    }
+    public void reset(World w) { size(w.t); java.util.Arrays.fill(okB, false); java.util.Arrays.fill(okF, false); ps.clear(); beams.clear(); booms.clear(); first = true; for (int i = 0; i < T.TW * T.TH; i++) w.t.dirty[i] = true; bgNew = true; java.util.Arrays.fill(loaded, false); }
     static int hash(int x, int y) { int h = x * 374761393 + y * 668265263; h = (h ^ h >> 13) * 1274126177; return h ^ h >> 16; }
-    final boolean[] loaded = new boolean[Terrain.TW * Terrain.TH];
+    boolean[] loaded = new boolean[0];
     static boolean air(Terrain t, int x, int y) { int k = t.at(x, y); return k == 0 || k == Terrain.DEBRIS || k == Terrain.DECOR; }
     static int tone(int c, float m, int add) {
         return 0xFF000000 | Math.min(255, (int) ((c >> 16 & 255) * m) + add) << 16 | Math.min(255, (int) ((c >> 8 & 255) * m) + add) << 8 | Math.min(255, (int) ((c & 255) * m) + add);
@@ -41,7 +47,7 @@ public final class Renderer {
         final int S = Terrain.TILE; int q = 0; boolean any = false;
         for (int wy = ty * S; wy < ty * S + S; wy++) for (int wx = tx * S; wx < tx * S + S; wx++) {
             int c = 0;
-            if (wx < Terrain.W && wy < Terrain.H) { int v = a[wy * Terrain.W + wx];
+            if (wx < T.W && wy < T.H) { int v = a[wy * T.W + wx];
                 if (v != 0) { any = true; // color plano: el fondo más claro, lo de encima más oscuro
                     c = front ? Level.frontTone(v) : Level.backTone(v); if (marks) c = mark(c, front ? "SOBRE" : "FONDO", wx, wy);
                     if (front) c = c & 0xFFFFFF | 0xF0000000; } }
@@ -49,13 +55,13 @@ public final class Renderer {
         }
         return any;
     }
-    final int[] pxL = new int[Terrain.TILE * Terrain.TILE]; final boolean[] fresh = new boolean[Terrain.TW * Terrain.TH], hasB = new boolean[Terrain.TW * Terrain.TH], hasF = new boolean[Terrain.TW * Terrain.TH], okB = new boolean[Terrain.TW * Terrain.TH], okF = new boolean[Terrain.TW * Terrain.TH];
+    final int[] pxL = new int[Terrain.TILE * Terrain.TILE]; boolean[] fresh = new boolean[0], hasB = fresh, hasF = fresh, okB = fresh, okF = fresh;
     /** Dibuja una capa (fondo o encima) en los cuadros visibles. */
     void layerPass(Gfx g, Terrain t, boolean front, float x0, float y0) {
         int[] a = front ? t.front : t.back; if (a == null) return; int S = Terrain.TILE; boolean[] has = front ? hasF : hasB, ok = front ? okF : okB;
-        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(Terrain.TH - 1, (int) ((y0 + vh) / S)); ty++)
-            for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(Terrain.TW - 1, (int) ((x0 + vw) / S)); tx++) {
-                int id = ty * Terrain.TW + tx; boolean d = fresh[id] || !ok[id];
+        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(T.TH - 1, (int) ((y0 + vh) / S)); ty++)
+            for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(T.TW - 1, (int) ((x0 + vw) / S)); tx++) {
+                int id = ty * T.TW + tx; boolean d = fresh[id] || !ok[id];
                 if (d) { has[id] = fillLayer(a, tx, ty, front); ok[id] = true; }
                 if (has[id]) g.tile((front ? 200000 : 100000) + id, pxL, S, d, tx * S, ty * S);
             }
@@ -76,13 +82,13 @@ public final class Renderer {
         final int S = Terrain.TILE; int q = 0;
         for (int wy = ty * S; wy < ty * S + S; wy++) for (int wx = tx * S; wx < tx * S + S; wx++) {
             int c = 0, k = t.at(wx, wy);
-            if (wx >= Terrain.W || wy >= Terrain.H || k == 0 || k == Terrain.DECOR) c = 0;
+            if (wx >= T.W || wy >= T.H || k == 0 || k == Terrain.DECOR || k == Terrain.KINETIC) c = 0; // las piezas que se mueven se dibujan aparte
             else if (Terrain.isProp(k)) c = 0;
-            else if (k == Terrain.DEBRIS) c = t.tex[wy * Terrain.W + wx] & 0xFFFFFF | 0x80000000;
+            else if (k == Terrain.DEBRIS) c = t.tex[wy * T.W + wx] & 0xFFFFFF | 0x80000000;
             else if (air(t, wx - 1, wy) || air(t, wx + 1, wy) || air(t, wx, wy - 1) || air(t, wx, wy + 1) || Terrain.isProp(t.at(wx, wy - 1))) c = INK;
-            else if (k == Terrain.STEEL) { c = t.tex[wy * Terrain.W + wx]; if (marks) c = mark(c, "ACERO", wx, wy); } // plano; en el editor, con su marca de agua
-            else if (!Terrain.isProp(k) && air(t, wx, wy - 2)) c = tone(t.tex[wy * Terrain.W + wx], 1.25f, 30);
-            else c = t.tex[wy * Terrain.W + wx];
+            else if (k == Terrain.STEEL) { c = t.tex[wy * T.W + wx]; if (marks) c = mark(c, "ACERO", wx, wy); } // plano; en el editor, con su marca de agua
+            else if (!Terrain.isProp(k) && air(t, wx, wy - 2)) c = tone(t.tex[wy * T.W + wx], 1.25f, 30);
+            else c = t.tex[wy * T.W + wx];
             px[q++] = c;
         }
     }
@@ -246,14 +252,104 @@ public final class Renderer {
         if (me.piloting()) { Shot d = me.droneShot; tx = d.x + (float) Math.cos(d.ang) * vw * .15f; ty = d.y + (float) Math.sin(d.ang) * vh * .12f; } // la cámara sigue al dron
         if (first) { camX = tx; camY = ty; first = false; }
         camX += (tx - camX) * .1f; camY += (ty - camY) * .12f;
-        camX = Math.max(vw / 2f, Math.min(Terrain.W - vw / 2f, camX)); camY = Math.max(vh / 2f, Math.min(Terrain.H - vh / 2f, camY));
+        camX = Math.max(vw / 2f, Math.min(T.W - vw / 2f, camX)); camY = Math.max(vh / 2f, Math.min(T.H - vh / 2f, camY));
     }
     /** El mundo se dibuja suavizado, con zoom libre; solo la interfaz queda en pixel art. */
+    // ---------- BASES
+    /** Fondos de las bases: cielo y siluetas en dos planos que se mueven más lento que el mapa. */
+    void scenery(Gfx g, int kind, float x0, float y0) {
+        int sky0 = kind == 1 ? 0xFF8EC9F0 : kind == 2 ? 0xFF7FD0F5 : 0xFF2B3A66, sky1 = kind == 1 ? 0xFFD8EFFA : kind == 2 ? 0xFFFCE9C4 : 0xFF6E5A8C;
+        int bands = 8; for (int i = 0; i < bands; i++) g.rect(x0, y0 + vh * i / bands, vw, vh / bands + 1, mix(sky0, sky1, i / (float) (bands - 1)));
+        float hz = y0 + vh * .62f; // horizonte
+        if (kind == 2) { // playa: sol, mar con olas y arena
+            g.circle(x0 + vw * .78f, y0 + vh * .22f, 22, 0xFFFFF1B0, 0, 0);
+            g.rect(x0, hz, vw, vh * .2f, 0xFF2E8FCB); g.rect(x0, hz, vw, 2, 0xFFBDE8FF);
+            float off = -(x0 * .3f) % 40; for (float x = x0 + off - 40; x < x0 + vw + 40; x += 40) g.line(x, hz + 10, x + 16, hz + 10, 0x88FFFFFF, 1.2f);
+            g.rect(x0, hz + vh * .2f, vw, vh * .2f, 0xFFF0D28C);
+            for (int i = 0; i < 6; i++) { float px = x0 - (x0 * .25f) % 300 + i * 300; palm(g, px + 60, hz + vh * .2f); }
+        } else if (kind == 1) { // bosque: montañas lejanas y pinos
+            float off = -(x0 * .15f) % 260; for (float x = x0 + off - 260; x < x0 + vw + 260; x += 260) g.poly(new float[]{x, hz, x + 130, hz - 70, x + 260, hz}, 0xFF9DB6C8, 0, 0);
+            g.rect(x0, hz, vw, vh, 0xFF5E8C3A);
+            float o2 = -(x0 * .35f) % 46; for (float x = x0 + o2 - 46; x < x0 + vw + 46; x += 46) { float hh = 46 + (hash((int) Math.floor((x + x0 * .35f) / 46), 3) & 15); g.poly(new float[]{x, hz + 6, x + 15, hz - hh, x + 30, hz + 6}, 0xFF2F6B3A, 0, 0); g.rect(x + 13, hz + 2, 4, 8, 0xFF5B3A22); }
+        } else { // ciudad: edificios con ventanas
+            float off = -(x0 * .18f) % 70; for (float x = x0 + off - 70; x < x0 + vw + 70; x += 70) { int k = hash((int) Math.floor((x + x0 * .18f) / 70), 9); float hh = 60 + (k & 63); g.rect(x, hz - hh, 60, hh + vh, 0xFF3A3F66); }
+            float o2 = -(x0 * .38f) % 58; for (float x = x0 + o2 - 58; x < x0 + vw + 58; x += 58) {
+                int k = hash((int) Math.floor((x + x0 * .38f) / 58), 5); float hh = 40 + (k & 63); g.rect(x, hz - hh + 30, 48, hh + vh, 0xFF22264A);
+                for (float wy = hz - hh + 38; wy < hz + 20; wy += 10) for (float wx = x + 6; wx < x + 44; wx += 9) if ((hash((int) wx, (int) wy) & 3) != 0) g.rect(wx, wy, 4, 5, 0xFFFFD56B);
+            }
+        }
+    }
+    void palm(Gfx g, float x, float y) {
+        g.poly(new float[]{x - 2, y, x + 2, y, x + 8, y - 50, x + 5, y - 50}, 0xFF8A6A3A, 0, 0);
+        for (int i = 0; i < 5; i++) { float a = -2.6f + i * .55f, cx = x + 6, cy = y - 50; g.poly(new float[]{cx, cy, cx + (float) Math.cos(a) * 26, cy + (float) Math.sin(a) * 26 + 6, cx + (float) Math.cos(a + .2f) * 20, cy + (float) Math.sin(a + .2f) * 20}, 0xFF3F9A4A, 0, 0); }
+    }
+    static int mix(int a, int b, float k) {
+        int r = (int) ((a >> 16 & 255) * (1 - k) + (b >> 16 & 255) * k), gg = (int) ((a >> 8 & 255) * (1 - k) + (b >> 8 & 255) * k), bb = (int) ((a & 255) * (1 - k) + (b & 255) * k);
+        return 0xFF000000 | r << 16 | gg << 8 | bb;
+    }
+    /** Piezas que se mueven y enemigos. */
+    void baseThings(Gfx g, World w) {
+        BaseRun run = w.run;
+        for (BaseRun.Kin k : run.kin) { if (!k.on) continue; kinPiece(g, k.x(), k.y(), k.mat, k.color); }
+        for (BaseRun.Foe f : run.foes) if (f.alive) foe(g, f, w.tick);
+        for (BaseRun.Bullet b : run.bullets) if (b.kind == 1) { g.rrect(b.x - 2.5f, b.y - 9, 5, 11, 2, 0xFFD6DCE6, INK, .8f); g.rect(b.x - 2.5f, b.y - 2, 5, 2, 0xFFE8323C); }
+    }
+    static void kinPiece(Gfx g, float x, float y, int mat, int color) {
+        final int S = Base.CELL;
+        switch (mat) {
+            case Base.T_PANEL: g.rect(x, y, S, S, INK); g.rect(x + 1, y + 1, S - 2, S - 2, 0xFF8214FF); g.rect(x + 1, y + 1, S - 2, 2, 0xFFB46BFF); break;
+            case Base.T_STEEL: g.rect(x, y, S, S, INK); g.rect(x + 1, y + 1, S - 2, S - 2, 0xFF3A3F55); g.rect(x + 1, y + 1, S - 2, 2, 0xFF5A6180); for (int i = 0; i < 4; i++) g.rect(x + (i % 2 == 0 ? 5 : S - 7), y + (i < 2 ? 5 : S - 7), 2, 2, 0xFF8D99A8); break;
+            case Base.T_WOOD: g.rect(x, y, S, S, INK); g.rect(x + 1, y + 1, S - 2, S - 2, color); for (int j = 8; j < S; j += 8) g.rect(x + 1, y + j, S - 2, 1, tone(color, .78f, 0)); break;
+            default: g.rect(x, y, S, S, INK); g.rect(x + 1, y + 1, S - 2, S - 2, color); g.rect(x + 1, y + 1, S - 2, 2, tone(color, 1.25f, 30));
+                for (int i = 0; i < 14; i++) { int h = hash(i, (int) (x * 7 + y)); g.rect(x + 2 + (h & 27), y + 4 + (h >> 5 & 25), 1, 1, tone(color, .7f, 0)); }
+        }
+    }
+    /** Enemigos: dron de ataque, torreta de un ojo, badpal de dos ojos y la máquina del jefe. */
+    static void foe(Gfx g, BaseRun.Foe f, int tick) {
+        boolean flash = f.hurtT > 0 && f.hurtT % 4 < 2; int body = flash ? 0xFFFFFFFF : 0xFF7D8699, dark = flash ? 0xFFFFFFFF : 0xFF4A5164;
+        float x = f.x, y = f.y;
+        switch (f.type) {
+            case BaseRun.DRONE: {
+                float cy = y - 8, rot = (tick % 6) * 1.2f;
+                g.line(x - 15, cy - 9, x - 4, cy - 6, INK, 1.2f); g.line(x + 15, cy - 9, x + 4, cy - 6, INK, 1.2f);
+                g.line(x - 15 - 5 * (float) Math.cos(rot), cy - 10, x - 15 + 5 * (float) Math.cos(rot), cy - 10, 0xFF2C323F, 1.5f); g.line(x + 15 - 5 * (float) Math.cos(rot), cy - 10, x + 15 + 5 * (float) Math.cos(rot), cy - 10, 0xFF2C323F, 1.5f);
+                g.rrect(x - 11, cy - 7, 22, 13, 5, body, INK, 1.2f); g.rect(x - 5, cy + 5, 10, 3, dark);
+                g.circle(x + (float) Math.cos(f.aim) * 3, cy + (float) Math.sin(f.aim) * 2, 3, 0xFFFF3030, INK, .8f); break; }
+            case BaseRun.TURRET: {
+                g.rrect(x - 10, y - 6, 20, 6, 2, dark, INK, 1.2f);
+                g.circle(x, y - 8, 8, body, INK, 1.2f); g.rect(x - 8, y - 8, 16, 3, body);
+                float ex = x + (float) Math.cos(f.aim) * 3, ey = y - 9 + (float) Math.sin(f.aim) * 2;
+                g.circle(ex, ey, 3.6f, 0xFF1A1A1A, 0, 0); g.circle(ex, ey, 2.2f, 0xFFFF2A2A, 0, 0); break; }
+            case BaseRun.BADPAL: {
+                boolean sit = f.sitting(); float top = y - (sit ? 12 : 18), step = sit ? 0 : (float) Math.sin(tick * .3f) * 2;
+                if (!sit) { g.line(x - 4, top + 11, x - 5 + step, y, INK, 2); g.line(x + 4, top + 11, x + 5 - step, y, INK, 2); }
+                g.rrect(x - 9, top, 18, 12, 4, 0xFF5E8C3A, INK, 1.2f);
+                for (int s = -1; s <= 1; s += 2) { float ex = x + f.dir * 2 + s * 4; g.circle(ex, top + 5, 2.6f, 0xFFF2F2F2, INK, .7f); g.circle(ex + f.dir, top + 5, 1.2f, sit ? 0xFFFF3030 : 0xFF2A2A2A, 0, 0); } break; }
+            default: { // jefe: prensa con orugas y un visor
+                float top = y - f.h;
+                g.rrect(x - 30, y - 14, 60, 14, 6, 0xFF2C323F, INK, 1.5f); for (int i = 0; i < 5; i++) g.circle(x - 22 + i * 11, y - 7, 3.5f, 0xFF5A6180, INK, .8f);
+                g.rrect(x - 26, top + 10, 52, f.h - 24, 5, flash ? 0xFFFFFFFF : 0xFFB5482E, INK, 1.5f);
+                g.rect(x - 26, top + 10, 52, 5, 0xFF8E1F2A);
+                g.rrect(x - 18 + f.dir * 4, top + 20, 36, 10, 3, 0xFF1A1A1A, INK, 1);
+                g.rect(x - 12 + f.dir * 6, top + 23, 12, 4, 0xFFFF3030);
+                g.rrect(x - 34, top, 68, 12, 3, body, INK, 1.5f); // la prensa
+                g.rect(x + f.dir * 26 - 4, top + 34, 8, 8, dark);
+            }
+        }
+    }
+    void baseLights(Gfx g, World w) {
+        for (BaseRun.Bullet b : w.run.bullets) {
+            if (b.kind == 0) { g.glow(b.x, b.y, 7, 0xCCFF4A6A); g.circle(b.x, b.y, 2.2f, 0xFFFFE0E8, 0, 0); }
+            else if (b.kind == 1) { g.glow(b.x, b.y - 4, 5, 0x99FFA22E); }
+            else { g.glow(b.x, b.y, 10, 0xAAFFC83D); g.rect(b.x - 6, b.y - 6, 12, 8, 0x88FFF1B0); }
+        }
+    }
     public void drawWorld(Gfx g, World w, int who) {
+        if (T != w.t) { boolean grew = T.TW * T.TH != w.t.TW * w.t.TH; size(w.t); if (grew) { for (int i = 0; i < w.t.dirty.length; i++) w.t.dirty[i] = true; bgNew = true; } }
         zoom = g.h() / 280f * zoomMul; vw = g.w() / zoom; vh = g.h() / zoom;
         if (freeCam) { // editor: se puede llevar cualquier borde o esquina del mapa hasta el centro de la pantalla
-            float mx = vw * .45f, my = vh * .45f, lx = vw / 2f - mx, hx = Terrain.W - vw / 2f + mx, ly = vh / 2f - my, hy = Terrain.H - vh / 2f + my;
-            camX = lx > hx ? Terrain.W / 2f : Math.max(lx, Math.min(hx, camX)); camY = ly > hy ? Terrain.H / 2f : Math.max(ly, Math.min(hy, camY));
+            float mx = vw * .45f, my = vh * .45f, lx = vw / 2f - mx, hx = T.W - vw / 2f + mx, ly = vh / 2f - my, hy = T.H - vh / 2f + my;
+            camX = lx > hx ? T.W / 2f : Math.max(lx, Math.min(hx, camX)); camY = ly > hy ? T.H / 2f : Math.max(ly, Math.min(hy, camY));
         }
         else camera(w, who);
         float x0 = camX - vw / 2f, y0 = camY - vh / 2f; vx0 = x0; vy0 = y0;
@@ -261,25 +357,29 @@ public final class Renderer {
         g.save(); g.scale(zoom, zoom);
         float sx = shake > .3f ? (r.nextFloat() - .5f) * shake : 0, sy = shake > .3f ? (r.nextFloat() - .5f) * shake : 0;
         g.translate(-x0 + sx, -y0 + sy);
-        if (bgNew) paintBg();
-        float bx0 = x0 * .55f, by0 = y0 * .55f;
-        for (int q = (int) Math.floor(by0 / BG); q * BG < by0 + vh; q++) for (int k = (int) Math.floor(bx0 / BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
+        if (w.run != null && w.run.base.bg != 0) scenery(g, w.run.base.bg, x0, y0); // bases: bosque, playa o ciudad
+        else {
+            if (bgNew) paintBg();
+            float bx0 = x0 * .55f, by0 = y0 * .55f;
+            for (int q = (int) Math.floor(by0 / BG); q * BG < by0 + vh; q++) for (int k = (int) Math.floor(bx0 / BG); k * BG < bx0 + vw; k++) { g.tile(-1, bg, BG, bgNew, x0 + k * BG - bx0, y0 + q * BG - by0); bgNew = false; }
+        }
         int S = Terrain.TILE, budget = 3; Terrain t = w.t;
-        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(Terrain.TH - 1, (int) ((y0 + vh) / S)); ty++) // qué cuadros se rehacen este cuadro
-            for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(Terrain.TW - 1, (int) ((x0 + vw) / S)); tx++) {
-                int id = ty * Terrain.TW + tx; boolean d = t.dirty[id] && (!loaded[id] || budget-- > 0); // como mucho 3 relieves por cuadro
+        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(T.TH - 1, (int) ((y0 + vh) / S)); ty++) // qué cuadros se rehacen este cuadro
+            for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(T.TW - 1, (int) ((x0 + vw) / S)); tx++) {
+                int id = ty * T.TW + tx; boolean d = t.dirty[id] && (!loaded[id] || budget-- > 0); // como mucho 3 relieves por cuadro
                 fresh[id] = d; if (d) { t.dirty[id] = false; loaded[id] = true; }
             }
         layerPass(g, t, false, x0, y0); // fondo: detrás de todo
         for (Bonus b : w.bonus) crate(g, b.x, b.y, b.kind);
         for (Shot s : w.shots) look(g, s, false);
-        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(Terrain.TH - 1, (int) ((y0 + vh) / S)); ty++)
-            for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(Terrain.TW - 1, (int) ((x0 + vw) / S)); tx++) {
-                int id = ty * Terrain.TW + tx; boolean d = fresh[id];
+        for (int ty = Math.max(0, (int) (y0 / S)); ty <= Math.min(T.TH - 1, (int) ((y0 + vh) / S)); ty++)
+            for (int tx = Math.max(0, (int) (x0 / S)); tx <= Math.min(T.TW - 1, (int) ((x0 + vw) / S)); tx++) {
+                int id = ty * T.TW + tx; boolean d = fresh[id];
                 if (d) fillTile(t, tx, ty);
                 g.tile(id, px, S, d, tx * S, ty * S);
             }
         for (Prop p : w.props) if (!p.gone && p.x < x0 + vw && p.x + p.w > x0 && p.y < y0 + vh && p.y + p.h > y0) { prop(g, p); damage(g, p); }
+        if (w.run != null) baseThings(g, w);
         for (P p : ps) if (p.kind == CHUNK) {
             g.save(); g.translate(p.x, p.y); g.rotate(p.rot); float z = p.size, k = p.slot % 3 * .2f + .6f;
             g.poly(new float[]{-z, -z * k, z * .7f, -z, z, z * .4f, -z * .3f, z * k}, p.color, 0x66141414, .5f); g.restore();
@@ -308,6 +408,7 @@ public final class Renderer {
             else if (p.kind == DUST) g.circle(p.x, p.y, p.size * (2 - k), (int) ((p.color >>> 24) * k) << 24 | p.color & 0xFFFFFF, 0, 0);
         }
         g.additive(true); // de aquí en adelante, luces
+        if (w.run != null) baseLights(g, w);
         for (P p : ps) {
             float k = p.life / p.max;
             switch (p.kind) {
@@ -353,7 +454,7 @@ public final class Renderer {
     /** Agua: celeste translúcido desde la superficie hacia abajo, con una línea ondulada. */
     void water(Gfx g, World w, float x0, float y0) {
         if (w.water < 0) return; float top = w.water;
-        g.rect(x0, top, vw, Terrain.H - top, 0x553C8CFF);
+        g.rect(x0, top, vw, T.H - top, 0x553C8CFF);
         int n = (int) (vw / 6) + 2; float[] q = new float[(n + 2) * 2]; int k = 0;
         for (int i = 0; i <= n; i++) { float x = x0 + i * 6; q[k++] = x; q[k++] = top + (float) Math.sin(x * .07f + w.tick * .08f) * 1.4f; }
         q[k++] = x0 + n * 6; q[k++] = top + 6; float[] wave = java.util.Arrays.copyOf(q, k);
@@ -464,11 +565,11 @@ public final class Renderer {
     /** Grietas en los trozos de madera dañados. */
     void woodCracks(Gfx g, World w) {
         if (w.woodDmg == null) return;
-        int a = Math.max(0, (int) (vx0 / Terrain.FRAG) - 1), b = Math.min(Terrain.FW - 1, (int) ((vx0 + vw) / Terrain.FRAG) + 1);
-        int c = Math.max(0, (int) (vy0 / Terrain.FRAG) - 1), d = Math.min(Terrain.FH - 1, (int) ((vy0 + vh) / Terrain.FRAG) + 1);
+        int a = Math.max(0, (int) (vx0 / Terrain.FRAG) - 1), b = Math.min(T.FW - 1, (int) ((vx0 + vw) / Terrain.FRAG) + 1);
+        int c = Math.max(0, (int) (vy0 / Terrain.FRAG) - 1), d = Math.min(T.FH - 1, (int) ((vy0 + vh) / Terrain.FRAG) + 1);
         for (int j = c; j <= d; j++) for (int i = a; i <= b; i++) {
-            int f = j * Terrain.FW + i, dmg = w.woodDmg[f]; if (dmg <= 0) continue;
-            float k = dmg / (float) World.WOOD_HP; int x = Terrain.fragX(f), y = Terrain.fragY(f), h = hash(i, j);
+            int f = j * T.FW + i, dmg = w.woodDmg[f]; if (dmg <= 0) continue;
+            float k = dmg / (float) World.WOOD_HP; int x = w.t.fragX(f), y = w.t.fragY(f), h = hash(i, j);
             for (int n = 0; n < 2 + (int) (k * 4); n++) {
                 float ang = (h >> n * 3 & 7) * .785f + n, len = 4 + k * 9;
                 float x1 = x + (float) Math.cos(ang) * len, y1 = y + (float) Math.sin(ang) * len;

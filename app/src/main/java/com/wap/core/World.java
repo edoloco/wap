@@ -3,10 +3,12 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 24;
+    public static final int RULES = 25;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
-    public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
+    public final Terrain t; public final Rng rng;
+    /** Base en juego (modo BASES); null en las batallas. */
+    public BaseRun run; public int tick, bonusT = 400;
     public final Robot[] robots;
     /** Equipo ganador al terminar (-1 si nadie). winner es un robot de ese equipo. */
     public int winnerTeam = -1;
@@ -27,16 +29,31 @@ public final class World {
     public World(int seed, int lives, Wpn[] a, Wpn[] b) { this(seed, lives, a, b, null); }
     /** Partida en un nivel guardado (o aleatorio si level es null). */
     public World(int seed, int lives, Wpn[] a, Wpn[] b, Level level) { this(seed, lives, new Wpn[][]{a, b}, new int[]{0, 1}, level); }
+    /**
+     * BASES: solo (online = false: el jugador 0 y un rival que no juega) o en línea (el jugador 2 juega la base
+     * reflejada y se encuentran en la sala del jefe). Sin premios al azar: solo los que se pusieron en el editor.
+     */
+    public World(int seed, int lives, Wpn[][] loads, Base base, boolean online) {
+        rng = new Rng(seed); run = new BaseRun(base, online); t = base.build(online, run);
+        robots = new Robot[2];
+        for (int i = 0; i < 2; i++) { robots[i] = new Robot(i, lives); robots[i].team = i; System.arraycopy(loads[i], 0, robots[i].loadout, 0, Robot.SLOTS); robots[i].px = -9999; }
+        for (int[] q : t.props) props.add(new Prop(q));
+        robots[0].spawnAt(this);
+        if (online) robots[1].spawnAt(this); else { robots[1].lives = -1; robots[1].deadT = Integer.MAX_VALUE; robots[1].py = -9999; }
+        robots[0].facing = 1; robots[1].facing = -1;
+        woodDmg = new int[t.FW * t.FH]; bonusMax = 0;
+        for (float[] p : run.prizes) { Bonus b = new Bonus(); b.kind = (int) p[0]; b.x = p[1]; b.y = p[2]; b.life = Integer.MAX_VALUE; bonus.add(b); }
+    }
     /** Partida con varios robots (2 a 5). teams[i] es el equipo de cada uno. */
     public World(int seed, int lives, Wpn[][] loads, int[] teams, Level level) {
-        rng = new Rng(seed);
+        t = new Terrain(); rng = new Rng(seed);
         if (level != null) { level.apply(t); water = level.water; } else t.generate(rng);
         int n = loads.length; robots = new Robot[n];
         for (int i = 0; i < n; i++) { robots[i] = new Robot(i, lives); robots[i].team = teams[i]; System.arraycopy(loads[i], 0, robots[i].loadout, 0, Robot.SLOTS); robots[i].px = -9999; }
         for (int[] q : t.props) props.add(new Prop(q));
         for (Robot r : robots) r.spawnAt(this);
         for (Robot r : robots) { Robot o = nearest(r, false); if (o != null) r.facing = o.px < r.px ? -1 : 1; }
-        woodDmg = new int[FW * FH];
+        woodDmg = new int[t.FW * t.FH];
     }
     /** El robot vivo más cercano (enemigo si enemies). */
     public Robot nearest(Robot r, boolean enemies) {
@@ -46,6 +63,7 @@ public final class World {
     }
     /** Termina cuando queda un solo equipo con vidas. */
     void checkEnd() {
+        if (run != null) { run.checkEnd(this); return; }
         int team = -1; boolean many = false;
         for (Robot r : robots) if (r.lives >= 0) { if (team < 0) team = r.team; else if (r.team != team) many = true; }
         if (many) return;
@@ -70,13 +88,14 @@ public final class World {
     /** Busca un lugar libre lejos del rival. */
     /** Lugar libre lo más lejos posible del robot más cercano. */
     public int[] freeSpot(Robot self) {
+        if (run != null && self != null) return run.spawnFor(this, self.id);
         int[] best = {300, 300}; float bd = -1;
         for (int n = 0; n < 60; n++) {
-            int x = 40 + rng.i(Terrain.W - 80), y = 40 + rng.i(Terrain.H - 120);
+            int x = 40 + rng.i(t.W - 80), y = 40 + rng.i(t.H - 120);
             boolean ok = true;
             for (int a = -12; a <= 12 && ok; a += 6) for (int b = -60; b <= 0 && ok; b += 6) if (t.solid(x + a, y + b)) ok = false;
             if (!ok) continue;
-            while (y < Terrain.H - 20 && !t.solid(x, y) && !t.solid(x - 7, y) && !t.solid(x + 7, y)) y++;
+            while (y < t.H - 20 && !t.solid(x, y) && !t.solid(x - 7, y) && !t.solid(x + 7, y)) y++;
             float d = 900;
             for (Robot o : robots) if (o != null && o != self && o.px > -1000 && o.lives >= 0) d = Math.min(d, (float) StrictMath.hypot(x - o.px, y - o.py));
             d += rng.r(0, 200);
@@ -105,6 +124,7 @@ public final class World {
         if (dig > 0) t.carve((int) x, (int) y, dig);
         fx(Fx.EXPLODE, x, y, r, owner).b = style;
         blastWood(x, y, Math.max(r, dig), Math.max(dmg, 8));
+        if (run != null && owner >= 0) run.blast(this, x, y, r, dmg);
         for (int i = 0; i < props.size(); i++) {
             Prop p = props.get(i); if (p.gone) continue;
             float nx = Math.max(p.x, Math.min(x, p.x + p.w)), ny = Math.max(p.y, Math.min(y, p.y + p.h)), d = (float) StrictMath.hypot(nx - x, ny - y);
@@ -127,10 +147,10 @@ public final class World {
     public boolean hitProp(float x, float y, float d) { return hitProp(x, y, d, 0, 0); }
     /** Daña el objeto en ese punto y lo empuja en la dirección del golpe (vx, vy). */
     // ---------- Madera: cada trozo aguanta WOOD_HP y al romperse sale en astillas de su color
-    public static final int WOOD_HP = 22, FW = Terrain.FW, FH = Terrain.FH; public int[] woodDmg;
+    public static final int WOOD_HP = 22; public int[] woodDmg;
     public boolean hitWood(float x, float y, float d) {
         int ix = (int) x, iy = (int) y; if (t.at(ix, iy) != Terrain.WOOD) return false;
-        hurtWood(Terrain.frag(ix, iy), d); return true;
+        hurtWood(t.frag(ix, iy), d); return true;
     }
     void hurtWood(int f, float d) {
         woodDmg[f] += Math.max(1, Math.round(d));
@@ -138,10 +158,10 @@ public final class World {
     }
     /** Rompe un trozo: quita sus píxeles y lanza astillas del mismo color. */
     void breakWood(int f) {
-        int cx = f % FW, cy = f / FW, n = 0, color = 0; long sx = 0, sy = 0;
+        int cx = f % t.FW, cy = f / t.FW, n = 0, color = 0; long sx = 0, sy = 0;
         int x0 = (cx - 1) * Terrain.FRAG, y0 = (cy - 1) * Terrain.FRAG, x1 = (cx + 2) * Terrain.FRAG, y1 = (cy + 2) * Terrain.FRAG;
-        for (int y = Math.max(0, y0); y < Math.min(Terrain.H, y1); y++) for (int x = Math.max(0, x0); x < Math.min(Terrain.W, x1); x++) {
-            int i = y * Terrain.W + x; if (t.m[i] != Terrain.WOOD || Terrain.frag(x, y) != f) continue;
+        for (int y = Math.max(0, y0); y < Math.min(t.H, y1); y++) for (int x = Math.max(0, x0); x < Math.min(t.W, x1); x++) {
+            int i = y * t.W + x; if (t.m[i] != Terrain.WOOD || t.frag(x, y) != f) continue;
             t.m[i] = 0; n++; sx += x; sy += y; color = t.tex[i];
         }
         woodDmg[f] = 0;
@@ -154,8 +174,8 @@ public final class World {
         if (woodDmg == null) return;
         java.util.TreeSet<Integer> hit = new java.util.TreeSet<>();
         for (int yy = (int) y - r; yy <= y + r; yy += 3) for (int xx = (int) x - r; xx <= x + r; xx += 3)
-            if ((xx - x) * (xx - x) + (yy - y) * (yy - y) <= r * r && t.at(xx, yy) == Terrain.WOOD) hit.add(Terrain.frag(xx, yy));
-        for (int f : hit) { float d = (float) StrictMath.hypot(Terrain.fragX(f) - x, Terrain.fragY(f) - y); hurtWood(f, dmg * 1.6f * (.5f + .5f * Math.max(0, 1 - d / (r + 10)))); } // las explosiones astillan fuerte
+            if ((xx - x) * (xx - x) + (yy - y) * (yy - y) <= r * r && t.at(xx, yy) == Terrain.WOOD) hit.add(t.frag(xx, yy));
+        for (int f : hit) { float d = (float) StrictMath.hypot(t.fragX(f) - x, t.fragY(f) - y); hurtWood(f, dmg * 1.6f * (.5f + .5f * Math.max(0, 1 - d / (r + 10)))); } // las explosiones astillan fuerte
     }
     public boolean hitProp(float x, float y, float d, float vx, float vy) {
         if (hitWood(x, y, d)) return true;
@@ -228,6 +248,7 @@ public final class World {
             cx += dx * 3; cy += dy * 3;
             Robot hit = null; for (Robot r : robots) if (r.id != owner && r.alive() && r.hits(cx, cy)) { hit = r; break; }
             if (hit != null) { hit.stunT = Math.max(hit.stunT, Robot.BOLT_STUN); hit.damage(this, w.dmg, dx * w.knock, -.5f, owner, cx, cy); break; }
+            if (run != null && run.hurtFoe(this, cx, cy, w.dmg, 2)) break;
             if (t.solid((int) cx, (int) cy)) { fx(Fx.CHIPS, cx, cy, 3, 0); break; }
         }
         Fx f = fx(Fx.BOLT, x, y, 0, owner); f.c = cx; f.d = cy;
@@ -238,6 +259,7 @@ public final class World {
             cx += dx * 3; cy += dy * 3;
             boolean droneHit = false; for (int k = 0; k < shots.size(); k++) { Shot d = shots.get(k); if (d.w.drone && !d.dead && Math.abs(d.x - cx) < 6 && Math.abs(d.y - cy) < 6) { d.explode(this); droneHit = true; } }
             if (droneHit && !w.pierce) break;
+            if (!hit && run != null && run.hurtFoe(this, cx, cy, w.dmg, 1)) { hit = true; if (!w.pierce) break; }
             if (!hit) for (Robot r : robots) if (r.id != owner && r.alive() && r.hits(cx, cy)) {
                 r.damage(this, w.dmg, dx * w.knock, dy * w.knock - .2f, owner, cx, cy); hit = true; if (!w.pierce) { i = n; }
             }
@@ -253,6 +275,7 @@ public final class World {
 
     public void step(int[] in) {
         tick++;
+        if (run != null) { in = in.clone(); run.pre(this, in); }
         rAcc += robotRate; while (rAcc >= 1) { rAcc -= 1; for (int i = 0; i < robots.length; i++) robots[i].step(this, i < in.length ? in[i] : 0); }
         sAcc += shotRate; while (sAcc >= 1) { sAcc -= 1; for (int i = 0; i < shots.size(); i++) { Shot s = shots.get(i); if (!s.dead) s.step(this); } droneHits(); }
         for (int i = shots.size() - 1; i >= 0; i--) if (shots.get(i).dead) shots.remove(i);
@@ -261,6 +284,7 @@ public final class World {
             int n = Integer.bitCount(bonusKinds & 7), pick = rng.i(n), kind = 0; for (int k = 0; k < 3; k++) if ((bonusKinds & 1 << k) != 0 && pick-- == 0) { kind = k; break; }
             int[] p = freeSpot(null); Bonus b = new Bonus(); b.x = p[0]; b.y = p[1] - 30; b.kind = kind; bonus.add(b);
         }
+        if (run != null) run.post(this);
         moveProps();
         if (tick % 20 == 0) support();
         for (Prop p : props) if (p.hitT > 0) p.hitT--;
@@ -285,6 +309,7 @@ public final class World {
         for (Shot s : shots) h = h * 31 + Float.floatToIntBits(s.x) + 7 * Float.floatToIntBits(s.y);
         for (Prop p : props) h = h * 31 + Float.floatToIntBits(p.hp) + p.x * 17 + p.y * 3;
         for (Robot r : robots) h = h * 31 + r.stunT + 3 * r.thrownT + 5 * Float.floatToIntBits(r.vy);
+        if (run != null) h = h * 31 + run.hash();
         return h;
     }
 }

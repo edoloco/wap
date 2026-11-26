@@ -11,14 +11,17 @@ public final class Link implements Closeable {
         public byte[] level = new byte[0];
         /** Opciones del modo desarrollador del anfitrión (bits: 1 invencibles, 2 balas infinitas, 4 ver daño; 0 si no está activo). */
         public int dev, devSpeed = 100, devShot = 100, devPrizes = 4, devKinds = 7;
-        void write(DataOutputStream o) throws IOException { o.writeInt(rules); o.writeInt(seed); o.writeInt(lives); o.writeInt(color); o.writeByte(slots.length); for (int s : slots) o.writeShort(s); o.writeUTF(name); o.writeInt(level.length); o.write(level); o.writeInt(dev); o.writeShort(devSpeed); o.writeShort(devShot); o.writeByte(devPrizes); o.writeByte(devKinds); }
+        /** Base del anfitrión (modo BASES; vacío si es una batalla). */
+        public byte[] base = new byte[0];
+        void write(DataOutputStream o) throws IOException { o.writeInt(rules); o.writeInt(seed); o.writeInt(lives); o.writeInt(color); o.writeByte(slots.length); for (int s : slots) o.writeShort(s); o.writeUTF(name); o.writeInt(level.length); o.write(level); o.writeInt(dev); o.writeShort(devSpeed); o.writeShort(devShot); o.writeByte(devPrizes); o.writeByte(devKinds); o.writeInt(base.length); o.write(base); }
         static Hello read(DataInputStream i) throws IOException {
             Hello h = new Hello(); h.rules = i.readInt(); h.seed = i.readInt(); h.lives = i.readInt(); h.color = i.readInt();
             int n = i.readUnsignedByte(); if (n > 8) throw new IOException("saludo inválido"); h.slots = new int[n];
             for (int k = 0; k < n; k++) h.slots[k] = i.readShort(); h.name = i.readUTF();
             int len = i.readInt(); if (len < 0 || len > 16 << 20) throw new IOException("nivel demasiado grande");
             h.level = new byte[len]; i.readFully(h.level);
-            h.dev = i.readInt(); h.devSpeed = i.readShort(); h.devShot = i.readShort(); h.devPrizes = i.readUnsignedByte(); h.devKinds = i.readUnsignedByte(); return h;
+            h.dev = i.readInt(); h.devSpeed = i.readShort(); h.devShot = i.readShort(); h.devPrizes = i.readUnsignedByte(); h.devKinds = i.readUnsignedByte();
+            int bl = i.readInt(); if (bl < 0 || bl > 4 << 20) throw new IOException("base demasiado grande"); h.base = new byte[bl]; i.readFully(h.base); return h;
         }
     }
     private final Socket s; private final DataInputStream in; private final DataOutputStream out; private final Object wl = new Object();

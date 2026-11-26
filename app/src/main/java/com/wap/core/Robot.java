@@ -21,7 +21,7 @@ public final class Robot {
     static final float MAX_HP = 100, BONE_HP = 25;
 
     public final int id; public int px, py, h = STAND_H, facing = 1; float remX, remY;
-    public float vx, vy; public boolean grounded, blocked; int coyote;
+    public float vx, vy; public boolean grounded, blocked, carried; int coyote;
     /** Vida máxima de esta partida (se elige en PERSONALIZAR; 100 por defecto). */
     public float maxHp = MAX_HP;
     public float hp = MAX_HP; public int lives, kills, deaths, deadT, invuln, hurtT, armor = (1 << PIECES) - 1;
@@ -112,7 +112,8 @@ public final class Robot {
     public void damage(World g, float d, float kx, float ky, int by, float hx, float hy) {
         if (g.godId == id || g.godId == World.EVERYONE) return; // invencible (modo desarrollador)
         if (!alive() || invuln > 0) return;
-        if (by >= 0 && by != id && by < g.robots.length && g.robots[by].team == team) return; // sin fuego amigo
+        if (by >= 0 && by != id && by < g.robots.length && g.robots[by].team == team) return;
+        if (g.run != null && g.run.held(id)) return; // esperando al rival en la sala del jefe: nadie le hace daño // sin fuego amigo
         if (by == id) d *= .6f;
         if (sliding() && thrownT == 0) { // golpe al deslizarse: sale lanzado en la dirección del golpe y pierde poca vida
             float s = kx != 0 ? Math.signum(kx) : hx < px ? 1 : -1;
@@ -137,13 +138,16 @@ public final class Robot {
             armor &= ~(1 << best); g.fx(Fx.ARMOR, px + PX[best] * facing, py - PY[best], best, id);
             Fx f = g.lastFx; f.c = (hx < px ? 1.5f : -1.5f) + kx; f.d = -3;
         }
-        if (hp <= 0) {
-            if (droneShot != null) { Shot ds = droneShot; droneShot = null; if (!ds.dead) ds.explode(g); } // si muere el piloto, el dron explota
-            hp = 0; rope = 0; deadT = 150; stunT = 0; thrownT = 0; windT = 0; lassoT = 0; knockT = 0; killedBy = by; java.util.Arrays.fill(charge, 0); lives--; deaths++;
-            if (by != id) g.robots[by].kills++;
-            if (lives < 0) { lives = -1; deadT = 9999; finalT = FINAL; vx = 0; vy = 0; } // última vida: pose de salto, se pone blanco, brilla y explota (ver step)
-            else g.fx(Fx.DEATH, px, py - 27, id, 0).b = by; // b: quién lo eliminó (él mismo si se mató solo)
-        }
+        if (hp <= 0) die(g, by);
+    }
+    /** Muere (también al caer a un precipicio en las bases). by < 0: un enemigo de la base o una caída (cuenta como él mismo). */
+    public void die(World g, int by) {
+        if (!alive()) return; if (by < 0 || by >= g.robots.length) by = id;
+        if (droneShot != null) { Shot ds = droneShot; droneShot = null; if (!ds.dead) ds.explode(g); } // si muere el piloto, el dron explota
+        hp = 0; rope = 0; deadT = 150; stunT = 0; thrownT = 0; windT = 0; lassoT = 0; knockT = 0; killedBy = by; java.util.Arrays.fill(charge, 0); lives--; deaths++;
+        if (by != id) g.robots[by].kills++;
+        if (lives < 0) { lives = -1; deadT = 9999; finalT = FINAL; vx = 0; vy = 0; } // última vida: pose de salto, se pone blanco, brilla y explota (ver step)
+        else g.fx(Fx.DEATH, px, py - 27, id, 0).b = by; // b: quién lo eliminó (él mismo si se mató solo)
     }
     void heal(float a) {
         hp = Math.min(maxHp, hp + a);

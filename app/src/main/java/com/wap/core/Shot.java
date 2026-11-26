@@ -66,7 +66,7 @@ public final class Shot {
                 dead = true; return;
             }
         }
-        if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
+        if (x < 0 || y < 0 || x > g.t.W || y > g.t.H) dead = true;
     }
     /**
      * Dron: siempre avanza; la cruceta elige hacia dónde gira (las 8 direcciones), A dispara misiles y B lo explota.
@@ -97,7 +97,7 @@ public final class Shot {
             if (g.t.solid((int) x, (int) y)) { explode(g); return; }
             for (Robot r : g.robots) if (r.alive() && (r.id != owner || age > 45) && r.hits(x, y)) { explode(g); return; }
         }
-        if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
+        if (x < 0 || y < 0 || x > g.t.W || y > g.t.H) dead = true;
     }
     private boolean near(Robot r, int d) { return Math.abs(r.px - x) < d && y > r.py - r.h - d && y < r.py + d; }
     private boolean hitRobot(World g, Robot r) {
@@ -122,7 +122,7 @@ public final class Shot {
             float oy = y; y += vy / n;
             if (g.t.solid((int) x, (int) y)) { y = oy; if (vy > 0) { stuck = true; vx = vy = 0; return; } vy = 0; }
         }
-        if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
+        if (x < 0 || y < 0 || x > g.t.W || y > g.t.H) dead = true;
     }
     private void trap(World g) {
         int t = ++hops;
@@ -158,7 +158,7 @@ public final class Shot {
     }
     /** Primer suelo bajo (x, cerca de y): busca 26 px arriba y 40 abajo; -1 si no hay o es una pared. */
     static int ground(World g, float x, float y) {
-        int ix = (int) x; if (ix < 0 || ix >= Terrain.W) return -1;
+        int ix = (int) x; if (ix < 0 || ix >= g.t.W) return -1;
         for (int yy = (int) y - 26; yy < (int) y + 40; yy++) if (!g.t.solid(ix, yy) && g.t.solid(ix, yy + 1)) return yy + 1;
         return -1;
     }
@@ -178,7 +178,7 @@ public final class Shot {
             x = nx; y = ny;
             for (Robot r : g.robots) if (r.alive() && r.bubble == null && (r.id != owner || age > 40) && Math.abs(r.px - x) < 18 && y > r.py - r.h - 14 && y < r.py + 8) {
                 held = r.id; r.bubble = this; r.bubbleHits = 0; r.vx = r.vy = 0; r.rope = 0; g.fx(Fx.LASSO, x, y, 1, r.id); y = r.py - r.h / 2f; x = r.px; life = 600; break; }
-            if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
+            if (x < 0 || y < 0 || x > g.t.W || y > g.t.H) dead = true;
             return;
         }
         Robot r = g.robots[held];
@@ -200,7 +200,7 @@ public final class Shot {
         if (age % 3 == 0) g.fx(Fx.SMOKE, x - dir * 4, y - 2, 0, 0);
         for (Robot r : g.robots) if (r.alive() && r.id != owner && r.thrownT == 0 && Math.abs(r.px - x) < 14 && r.py > y - 46 && r.py - r.h < y) { // lo lanza para cualquier lado
             r.launch(g, g.rng.i(2) == 0 ? -1 : 1, owner, w.dmg); r.vx *= g.rng.r(.5f, 1.3f); r.vy = -g.rng.r(6, 11); }
-        if (x < 0 || y < 0 || x > Terrain.W || y > Terrain.H) dead = true;
+        if (x < 0 || y < 0 || x > g.t.W || y > g.t.H) dead = true;
     }
     /** La burbuja revienta y suelta a quien tenía. */
     public void pop(World g) {

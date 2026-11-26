@@ -68,7 +68,7 @@ final class Editor {
             case ERASE: if (eraseLayer == 0) w.removeProps(ix, iy, r); w.t.wipe(ix, iy, r, eraseLayer == 1 ? Terrain.BACKDROP : eraseLayer == 2 ? Terrain.OVERLAY : 0); break;
             case BUCKET: if (!w.t.bucket(ix, iy, mat(), col())) { drop(); app.toast = "LOS BLOQUES Y OBJETOS NO SE PINTAN CON EL BALDE"; app.toastT = 120; return; } break;
             case PANEL: case STEEL: w.t.block(ix, iy, tool == STEEL ? Terrain.STEEL : Terrain.PANEL); break;
-            case WATER: w.water = Math.max(Terrain.EDGE + 40, Math.min(Terrain.H - Terrain.EDGE - 8, iy)); break;
+            case WATER: w.water = Math.max(Terrain.EDGE + 40, Math.min(Terrain.H0 - Terrain.EDGE - 8, iy)); break;
             case VENT: w.t.vent(ix, iy); break;
             case CRATE: case METAL: case PC: case STONE: w.addProp(w.t.object(ix, iy, tool == CRATE ? Terrain.CRATE : tool == METAL ? Terrain.METAL : tool == PC ? Terrain.COMPUTER : Terrain.STONE)); break;
             default: return;
@@ -146,19 +146,19 @@ final class Editor {
     static Snap grab(int[] tiles, byte[] m, int[] tex, int[] back, int[] front, ArrayList<int[]> props, int water) {
         Snap e = new Snap(); e.tiles = tiles; int n = tiles.length; e.m = new byte[n][]; e.tex = new int[n][]; e.back = new int[n][]; e.front = new int[n][];
         for (int k = 0; k < n; k++) { int[] r = rect(tiles[k]); int sz = r[2] * r[3]; e.m[k] = new byte[sz]; e.tex[k] = new int[sz]; if (back != null) e.back[k] = new int[sz]; if (front != null) e.front[k] = new int[sz];
-            for (int j = 0; j < r[3]; j++) { int src = (r[1] + j) * Terrain.W + r[0], dst = j * r[2];
+            for (int j = 0; j < r[3]; j++) { int src = (r[1] + j) * Terrain.W0 + r[0], dst = j * r[2];
                 System.arraycopy(m, src, e.m[k], dst, r[2]); System.arraycopy(tex, src, e.tex[k], dst, r[2]);
                 if (back != null) System.arraycopy(back, src, e.back[k], dst, r[2]); if (front != null) System.arraycopy(front, src, e.front[k], dst, r[2]); }
             e.bytes += sz * (1L + 4 + (back != null ? 4 : 0) + (front != null ? 4 : 0)); }
         e.props = copyProps(props); e.water = water; return e;
     }
     /** x, y, ancho y alto de un cuadro. */
-    static int[] rect(int id) { int tx = id % Terrain.TW, ty = id / Terrain.TW, x = tx * Terrain.TILE, y = ty * Terrain.TILE; return new int[]{x, y, Math.min(Terrain.TILE, Terrain.W - x), Math.min(Terrain.TILE, Terrain.H - y)}; }
+    static int[] rect(int id) { int tx = id % Terrain.TW0, ty = id / Terrain.TW0, x = tx * Terrain.TILE, y = ty * Terrain.TILE; return new int[]{x, y, Math.min(Terrain.TILE, Terrain.W0 - x), Math.min(Terrain.TILE, Terrain.H0 - y)}; }
     /** Copia un cuadro del nivel a shadow (toShadow) o al revés. */
     void copyTile(int id, byte[] m, int[] tex, int[] back, int[] front, boolean toShadow) {
         if (back != null && sback == null) sback = new int[back.length]; if (front != null && sfront == null) sfront = new int[front.length];
         int[] r = rect(id);
-        for (int j = 0; j < r[3]; j++) { int o = (r[1] + j) * Terrain.W + r[0];
+        for (int j = 0; j < r[3]; j++) { int o = (r[1] + j) * Terrain.W0 + r[0];
             System.arraycopy(m, o, sm, o, r[2]); System.arraycopy(tex, o, stex, o, r[2]);
             if (back != null) System.arraycopy(back, o, sback, o, r[2]); else if (sback != null) java.util.Arrays.fill(sback, o, o + r[2], 0);
             if (front != null) System.arraycopy(front, o, sfront, o, r[2]); else if (sfront != null) java.util.Arrays.fill(sfront, o, o + r[2], 0); }
@@ -168,7 +168,7 @@ final class Editor {
         Terrain t = w.t;
         for (int k = 0; k < e.tiles.length; k++) { int[] r = rect(e.tiles[k]);
             int[] tb = e.back[k] != null ? t.layer(Terrain.BACKDROP) : t.back, tf = e.front[k] != null ? t.layer(Terrain.OVERLAY) : t.front;
-            for (int j = 0; j < r[3]; j++) { int o = (r[1] + j) * Terrain.W + r[0], s = j * r[2];
+            for (int j = 0; j < r[3]; j++) { int o = (r[1] + j) * Terrain.W0 + r[0], s = j * r[2];
                 System.arraycopy(e.m[k], s, t.m, o, r[2]); System.arraycopy(e.tex[k], s, t.tex, o, r[2]);
                 if (tb != null) { if (e.back[k] != null) System.arraycopy(e.back[k], s, tb, o, r[2]); else java.util.Arrays.fill(tb, o, o + r[2], 0); }
                 if (tf != null) { if (e.front[k] != null) System.arraycopy(e.front[k], s, tf, o, r[2]); else java.util.Arrays.fill(tf, o, o + r[2], 0); } }
@@ -258,7 +258,7 @@ final class Editor {
         if (panel != 0) { if ((press & Input.B) != 0) panel = 0; return; } // en un panel, la cruceta recorre sus botones
         if ((held & Input.LEFT) != 0) cx -= sp; if ((held & Input.RIGHT) != 0) cx += sp;
         if ((held & Input.UP) != 0) cy -= sp; if ((held & Input.DOWN) != 0) cy += sp;
-        cx = Math.max(Terrain.EDGE, Math.min(Terrain.W - Terrain.EDGE, cx)); cy = Math.max(Terrain.EDGE, Math.min(Terrain.H - Terrain.EDGE, cy));
+        cx = Math.max(Terrain.EDGE, Math.min(Terrain.W0 - Terrain.EDGE, cx)); cy = Math.max(Terrain.EDGE, Math.min(Terrain.H0 - Terrain.EDGE, cy));
         if (dpad) { // la vista sigue al cursor solo mientras se mueve con la cruceta (antes lo hacía siempre y deshacía el zoom con los dedos)
             float vw = app.ren.vwNow(), vh = app.ren.vh, mx = vw * .3f, my = vh * .3f;
             if (cx < app.ren.camX - mx) app.ren.camX = cx + mx; if (cx > app.ren.camX + mx) app.ren.camX = cx - mx;
