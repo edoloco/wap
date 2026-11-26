@@ -4,7 +4,7 @@ import com.wap.net.*;
 import java.util.ArrayList; import java.util.List;
 /** Pantallas y flujo de la aplicación. No conoce Android; recibe entradas y dibuja por Gfx. */
 public final class App {
-    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8, RIVALS = 9, LEVEL_SEL = 10, PAD_EDIT = 11, DEV = 12;
+    public static final int TITLE = 0, ARMS = 1, PLAY = 2, PAUSE = 3, OVER = 4, PAINT = 5, LOBBY = 6, EDIT = 7, LEVEL_LIST = 8, RIVALS = 9, LEVEL_SEL = 10, PAD_EDIT = 11, DEV = 12, CUSTOM = 13;
     /** Servicios del teléfono para jugar en red. */
     public interface Device { String name(); void listen(boolean on);
         /** Pide un texto con el teclado del teléfono; done recibe el texto o null si se cancela. */
@@ -31,7 +31,7 @@ public final class App {
     /** Modo desarrollador: se activa tocando 10 veces FAN en el menú de armas. Solo fuera de línea. */
     /** Toque en un lugar del menú de la caja de arma: esa combinación + A durante 2 cuadros (viaja como entrada normal, también en línea). */
     int forceIn, forceT;
-    boolean devMode, devGod, devStill, devAmmo, devDmg; int devSpeed = 100, devShot = 100, devPrizes = 4, devKinds = 7, fanTaps; long fanLast; float devAcc;
+    int netDev; boolean devMode, devGod, devStill, devAmmo, devDmg; int devSpeed = 100, devShot = 100, devPrizes = 4, devKinds = 7, fanTaps; long fanLast; float devAcc;
     static final int SPEED_MIN = 25, SPEED_MAX = 200, SPEED_STEP = 5;
     /** Números de daño flotando: x, y (mundo), valor, tiempo. */
     final ArrayList<float[]> dmgNums = new ArrayList<>();
@@ -212,7 +212,7 @@ public final class App {
         }
         float by = H - 22;
         box(g, W / 2 - 60, by, 120, 19, MINT, 0xFF9CF5C9, 0xFF1F8A5B); txtS(g, "LISTO", W / 2, by + 13, 8, CREAM, 0);
-        btn(W / 2 - 60, by, 120, 19, () -> { saveRivals(); go(TITLE); });
+        btn(W / 2 - 60, by, 120, 19, () -> { saveRivals(); go(CUSTOM); });
     }
     // ---------- SELECCIONA NIVEL: cuadritos con miniatura y nombre
     static final int THUMB = 80, THUMB_H = 44;
@@ -233,7 +233,7 @@ public final class App {
     }
     void levelSel(Gfx g) {
         List<String> l = levelNames(); l.add(0, "");
-        selPage = grid(g, "SELECCIONA NIVEL", l, selPage, levelName, n -> { levelName = n; save(); go(TITLE); }, l.size() - 1 == 0 ? "AÚN NO HAY NIVELES GUARDADOS" : (l.size() - 1) + " GUARDADOS + ALEATORIO");
+        selPage = grid(g, "SELECCIONA NIVEL", l, selPage, levelName, n -> { levelName = n; save(); go(CUSTOM); }, l.size() - 1 == 0 ? "AÚN NO HAY NIVELES GUARDADOS" : (l.size() - 1) + " GUARDADOS + ALEATORIO");
     }
     int gridCols() { return Math.max(3, Math.min(5, (int) ((W - 12) / 96))); }
     int pageOf(String name) { List<String> l = levelNames(); l.add(0, ""); int i = Math.max(0, l.indexOf(name)); return i / (gridCols() * 2); }
@@ -269,7 +269,7 @@ public final class App {
             else txt(g, (page + 1) + " / " + pages, W / 2 - 40, by + 12, 8, CREAM, 0);
             arrow(g, W - 40 - 96, by, 34, 18, 1, () -> gridGo(1));
         }
-        chip(g, W - 98, by, 92, 18, "VOLVER", false, () -> go(TITLE));
+        chip(g, W - 98, by, 92, 18, "VOLVER", false, () -> go(screen == LEVEL_SEL ? CUSTOM : TITLE));
         return page;
     }
     int gridPages = 1;
@@ -324,6 +324,7 @@ public final class App {
     Link.Hello hello(int seedV, int lives) {
         Link.Hello h = new Link.Hello(); h.rules = World.rules(); h.seed = seedV; h.lives = lives; h.color = myColor; h.slots = slots.clone();
         h.name = myName;
+        if (devMode && seedV != 0) { h.dev = (devGod ? 1 : 0) | (devAmmo ? 2 : 0) | (devDmg ? 4 : 0) | 8; h.devSpeed = devSpeed; h.devShot = devShot; h.devPrizes = devPrizes; h.devKinds = devKinds; } // solo cuentan las del anfitrión
         if (seedV != 0 && !levelName.isEmpty()) { Level lv = loadLevel(levelName); if (lv != null) h.level = lv.save(); } // el anfitrión manda su nivel
         return h;
     }
@@ -333,7 +334,7 @@ public final class App {
     }
     /** Solo para pruebas de escritorio. */
     public void openLobbyForTest() { openLobby(); }
-    void closeLobby() {
+    synchronized void closeLobby() {
         if (browser != null) { browser.close(); browser = null; } if (beacon != null) { beacon.close(); beacon = null; }
         if (server != null) { try { server.close(); } catch (Exception e) { } server = null; }
         hosting = false; busy = false; if (dev != null) dev.listen(false);
@@ -341,17 +342,26 @@ public final class App {
     void hostRoom() {
         if (busy) return; busy = true; hosting = true; if (browser != null) { browser.close(); browser = null; }
         final String name = !myName.isEmpty() ? "Sala de " + myName : dev != null ? dev.name() : "Sala WAP";
+        if (server != null) { try { server.close(); } catch (Exception e) { } server = null; } // una sala anterior que quedó abierta
         new Thread(() -> {
             try {
                 java.net.ServerSocket ss; try { ss = new java.net.ServerSocket(Link.PORT); } catch (Exception e) { ss = new java.net.ServerSocket(0); }
-                server = ss; beacon = new Lan.Beacon(name, ss.getLocalPort(), World.rules());
+                Lan.Beacon bc = new Lan.Beacon(name, ss.getLocalPort(), World.rules());
+                synchronized (this) {
+                    if (!hosting) { bc.close(); ss.close(); return; } // se canceló mientras se abría: no dejar un anuncio huérfano (salía la sala duplicada)
+                    if (beacon != null) beacon.close(); server = ss; beacon = bc;
+                }
                 netMsg = name + " está abierta. Esperando que el otro teléfono se una...";
                 Link l = Link.accept(ss);
+                synchronized (this) { if (beacon != null) { beacon.close(); beacon = null; } } // ya entró alguien: la sala deja de anunciarse
                 seed = seed * 1103515245 + 12345; Link.Hello mine = hello(seed, lives | hpMax << 16); l.send(mine); // la vida máxima del anfitrión va junto a las vidas
                 Link.Hello peer = l.readHello();
                 if (peer.rules != World.rules()) { l.close(); netMsg = "El otro teléfono tiene otra versión o armas distintas (armas.txt). Instalen el mismo APK en ambos."; busy = false; hosting = false; return; }
                 pendHost = mine; pendGuest = peer; pending = l;
-            } catch (Exception e) { if (hosting) netMsg = "No se pudo abrir la sala en esta red."; busy = false; hosting = false; }
+            } catch (Exception e) {
+                if (hosting) netMsg = "No se pudo abrir la sala en esta red.";
+                synchronized (this) { if (beacon != null) { beacon.close(); beacon = null; } } busy = false; hosting = false;
+            }
         }, "sala").start();
     }
     void joinRoom(Lan.Room r) {
@@ -375,7 +385,9 @@ public final class App {
         Level lv = null; received = null; receivedSaved = false;
         if (h.level.length > 0) try { lv = Level.load(h.level); } catch (Exception e) { endOnline("El nivel del otro teléfono no se pudo abrir."); return; }
         if (lv != null && me == 1) { received = lv; receivedSaved = levelNames().contains(lv.name) && java.util.Arrays.equals(loadLevel(lv.name).save(), h.level); } // se descarga solo para esta partida
-        int hostHp = h.lives >>> 16; w = new World(h.seed, h.lives & 0xFFFF, a, b, lv); w.setMaxHp(hostHp == 0 ? 100 : hostHp); bot = null; link = l; l.startReader(); ls = new Lockstep(l, me); online = true;
+        int hostHp = h.lives >>> 16; w = new World(h.seed, h.lives & 0xFFFF, a, b, lv); w.setMaxHp(hostHp == 0 ? 100 : hostHp); netDev = h.dev;
+        if ((h.dev & 8) != 0) { w.godId = (h.dev & 1) != 0 ? World.EVERYONE : -1; w.ammoId = (h.dev & 2) != 0 ? World.EVERYONE : -1; w.robotRate = h.devSpeed / 100f; w.shotRate = h.devShot / 100f; w.bonusMax = h.devPrizes; w.bonusKinds = h.devKinds; }
+        bot = null; link = l; l.startReader(); ls = new Lockstep(l, me); online = true;
         ren.reset(w); cd = 90; screen = PLAY; overT = 0; pad.clear();
         String hn = or(h.name, "PLAYER 1"), cn = or(c.name, "PLAYER 2"); if (hn.equals(cn)) cn = cn.length() < NAME_MAX - 1 ? cn + " 2" : "PLAYER 2";
         setNames(hn, cn, true); // en línea se ve el nombre de cada uno sobre su personaje
@@ -398,12 +410,14 @@ public final class App {
     public void back() {
         if (screen == LOBBY) { closeLobby(); go(TITLE); return; }
         if (screen == OVER && online) { endOnline(null); return; }
-        if (screen == PAINT) { save(); go(TITLE); return; }
+        if (screen == PAINT) { save(); go(CUSTOM); return; }
+        if (screen == CUSTOM) { go(TITLE); return; }
         if (screen == PAD_EDIT) { save(); go(PAINT); return; }
         if (screen == DEV) { save(); go(TITLE); return; }
         if (screen == EDIT) { leaveEditor(false); return; }
-        if (screen == LEVEL_LIST || screen == LEVEL_SEL) { go(TITLE); return; }
-        if (screen == RIVALS) { saveRivals(); go(TITLE); return; }
+        if (screen == LEVEL_LIST) { go(TITLE); return; }
+        if (screen == LEVEL_SEL) { go(CUSTOM); return; }
+        if (screen == RIVALS) { saveRivals(); go(CUSTOM); return; }
         if (testing != null && (screen == OVER || screen == PAUSE)) { backToEditor(); return; }
         if (screen == PLAY) screen = PAUSE; else if (screen == PAUSE) screen = PLAY; else if (screen == ARMS) { save(); saveRivals(); go(armsFor >= 0 ? RIVALS : TITLE); } else if (screen == OVER) go(TITLE);
     }
@@ -460,7 +474,7 @@ public final class App {
             case Fx.ARMOR: au.play(Audio.ARMOR); break;
             case Fx.BOLT: au.play(Audio.BLAST); break;
             case Fx.ICE: au.play(f.a == 2 ? Audio.BOOM : Audio.PICK); break;
-            case Fx.HIT: au.play(Audio.HURT); if (devMode && devDmg && !online && dmgNums.size() < 40) dmgNums.add(new float[]{f.x, f.y, f.a, 0}); break;
+            case Fx.HIT: au.play(Audio.HURT); if ((online ? (netDev & 4) != 0 : devMode && devDmg) && dmgNums.size() < 40) dmgNums.add(new float[]{f.x, f.y, f.a, 0}); break;
             case Fx.STOMP: case Fx.SLAM: au.play(Audio.BOOM); break;
             case Fx.GRAB: au.play(Audio.HOOK); break;
             case Fx.JUMP: if (f.a == 0) au.play(Audio.JUMP); break;
@@ -591,7 +605,7 @@ public final class App {
         sky(g); floor(g, 0, H * .93f, W * .48f);
         RobotArt.View v = new RobotArt.View();
         hero(g, v, W * .24f, H * .93f);
-        txtS(g, "PERSONALIZAR", sliderX(), 28 * u, 20 * u, GOLD, -1);
+        txtS(g, "MI PERSONAJE", sliderX(), 28 * u, 20 * u, GOLD, -1);
         String[] n = {"ROJO", "VERDE", "AZUL"}; int[] tone = {0xFFE8323C, 0xFF3DDC97, 0xFF5FA8FF};
         for (int i = 0; i < 3; i++) {
             float y = sliderY(i), x = sliderX(), w = sliderW(), k = channel(i) / 255f;
@@ -670,6 +684,7 @@ public final class App {
         W = (g.w() + s - 1) / s; H = (g.h() + s - 1) / s; u = H / 360f; pad.layout(W, H); btns.clear(); acts.clear(); heroV = null;
         switch (screen) {
             case TITLE: title(g); break;
+            case CUSTOM: custom(g); break;
             case ARMS: arms(g); break;
             case PAINT: paint(g); break;
             case PAD_EDIT: padEdit(g); break;
@@ -791,9 +806,8 @@ public final class App {
         hero(g, hero, W * .25f, H * .92f);
         float x = W * .47f, wd = W - x - 6;
         txtS(g, "WAP", x, H * .15f, 48 * u, GOLD, -1);
-        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA\nRED LOCAL", "SELECCIONA NIVEL", "EDITOR DE NIVELES", "RIVALES", "ELEGIR 4 ARMAS", "PERSONALIZAR", "VIDAS  " + lives));
-        List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, () -> { selPage = pageOf(levelName); go(LEVEL_SEL); }, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> go(RIVALS), () -> { armsFor = -1; go(ARMS); }, () -> go(PAINT),
-            this::askLives));
+        List<String> l = new ArrayList<>(java.util.Arrays.asList("JUGAR", "EN LÍNEA\nRED LOCAL", "EDITOR DE NIVELES", "ELEGIR 4 ARMAS", "PERSONALIZAR"));
+        List<Runnable> a = new ArrayList<>(java.util.Arrays.asList(this::start, this::openLobby, () -> { levelPage = 0; go(LEVEL_LIST); }, () -> { armsFor = -1; go(ARMS); }, () -> go(CUSTOM)));
         if (devMode) { l.add("DESARROLLADOR"); a.add(() -> go(DEV)); }
         if (up != null) { l.add(up.label()); a.add(() -> up.act()); txt(g, up.version(), W - 4, H - 3, 8, MUTE, 1); }
         l.add("SALIR DEL JUEGO"); a.add(() -> { save(); if (dev != null) dev.exit(); });
@@ -803,6 +817,22 @@ public final class App {
         for (int i = 1; i < l.size(); i++) {
             int r = (i - 1) / 2, c = (i - 1) % 2; boolean last = i == l.size() - 1 && c == 0;
             fat(g, x + c * (cw + gap), top + (r + 1) * (rh + gap), last ? wd : cw, rh, l.get(i), i, l.get(i).startsWith("SALIR") ? 0xFF4A5590 : BLUE, a.get(i));
+        }
+        if (toastT > 0) { g.rect(0, H - 16, W, 16, RED); txtS(g, toast, W / 2, H - 4, 8, CREAM, 0); }
+    }
+    /** PERSONALIZAR: mi personaje, rivales, nivel y vidas. */
+    void custom(Gfx g) {
+        sky(g); floor(g, 0, H * .92f, W * .46f);
+        hero(g, hero, W * .25f, H * .92f);
+        float x = W * .47f, wd = W - x - 6;
+        txtS(g, "PERSONALIZAR", x, H * .15f, fit("PERSONALIZAR", 28 * u, wd), GOLD, -1);
+        String lv = levelName.isEmpty() ? "ALEATORIO" : levelName;
+        String[] l = {"MI PERSONAJE", "RIVALES", "NIVEL\n" + lv, "VIDAS  " + lives, "VOLVER"};
+        Runnable[] a = {() -> go(PAINT), () -> go(RIVALS), () -> { selPage = pageOf(levelName); go(LEVEL_SEL); }, this::askLives, () -> go(TITLE)};
+        int rows = (l.length + 1) / 2; float top = H * .22f, gap = 4, rh = Math.min(36, (H - 8 - top - gap * (rows - 1)) / rows), cw = (wd - gap) / 2;
+        for (int i = 0; i < l.length; i++) {
+            int rr = i / 2, c = i % 2; boolean last = i == l.length - 1 && c == 0;
+            fat(g, x + c * (cw + gap), top + rr * (rh + gap), last ? wd : cw, rh, l[i], i, i == l.length - 1 ? 0xFF4A5590 : BLUE, a[i]);
         }
         if (toastT > 0) { g.rect(0, H - 16, W, 16, RED); txtS(g, toast, W / 2, H - 4, 8, CREAM, 0); }
     }

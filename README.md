@@ -43,7 +43,7 @@ CANNON PUNCH lanza un guante de box del color del traje; si golpea al rival lo d
 
 PROTON RAY (reemplaza a Larpa) es un rayo continuo: mientras mantienes el disparo sale un chorro naranja que se retuerce, con arcos eléctricos celestes, y la carga se agota lentamente (4 s). Si alcanza al rival lo atrapa en un lazo: queda quieto, cae despacio y pierde energía hasta que salta para soltarse. ROBOT TRAP (reemplaza a Blowtorch) se carga como el Plasma Cannon y al terminar dice "TRAMPA LISTA". Entonces A con la cruceta elige dónde cae: abajo, a los pies; adelante (o sola), a media distancia; arriba, lejos. No se pega: rebota en las paredes y siempre termina en el suelo. Allí se abre con un haz de luz en triángulo (punta en la trampa, base ancha y brillante arriba) y atrae todo lo cercano, incluido quien la lanzó: quien llega al centro muere al instante.
 
-PERSONALIZAR (antes "Color del robot") cambia el color y el nombre. En línea, el nombre aparece sobre cada personaje. Cuando alguien muere, arriba se avisa "X SE BANEÓ DE LA VIDA" (se mató solo) o "X FUE ELIMINADO POR Y".
+PERSONALIZAR agrupa MI PERSONAJE (color, nombre, vida máxima y mando), RIVALES, NIVEL y VIDAS. MI PERSONAJE cambia el color y el nombre. En línea, el nombre aparece sobre cada personaje. Cuando alguien muere, arriba se avisa "X SE BANEÓ DE LA VIDA" (se mató solo) o "X FUE ELIMINADO POR Y".
 
 El importador de dibujos (`tools/arte.sh`, `arte/dibujos/`) queda listo, pero el juego usa por ahora el personaje original.
 

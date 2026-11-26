@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 23;
+    public static final int RULES = 24;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t = new Terrain(); public final Rng rng; public int tick, bonusT = 400;
@@ -18,7 +18,7 @@ public final class World {
     public int water = -1;
     /** Vida máxima de todos los personajes (para probar el equilibrio). Se llama antes del primer paso. */
     /** Modo desarrollador (solo fuera de línea): personaje invencible y personaje con balas infinitas (-1 nadie). */
-    public int godId = -1, ammoId = -1;
+    public int godId = -1, ammoId = -1; public static final int EVERYONE = -2; // EVERYONE: en línea, las opciones del anfitrión valen para los dos
     /** Modo desarrollador: velocidad de los personajes y de las armas (1 = normal). Se avanza de a pasos enteros. */
     public float robotRate = 1, shotRate = 1; float rAcc, sAcc;
     /** Premios: cuántos puede haber a la vez y cuáles salen (bits: 1 cápsulas, 2 vida extra, 4 caja de arma). */

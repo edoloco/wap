@@ -110,7 +110,7 @@ public final class Robot {
         g.fx(Fx.SPAWN, px, py - 27, id, 0);
     }
     public void damage(World g, float d, float kx, float ky, int by, float hx, float hy) {
-        if (g.godId == id) return; // invencible (modo desarrollador)
+        if (g.godId == id || g.godId == World.EVERYONE) return; // invencible (modo desarrollador)
         if (!alive() || invuln > 0) return;
         if (by >= 0 && by != id && by < g.robots.length && g.robots[by].team == team) return; // sin fuego amigo
         if (by == id) d *= .6f;
@@ -171,7 +171,7 @@ public final class Robot {
         }
         if (!w.lasso || fireT == 0) g.fx(Fx.FLASH, mx, my, deg * facing, id).b = Wpn.index(w.name); // el rayo continuo avisa solo al empezar
         vx -= facing * w.recoil; fireT = 22; fireSlot = slot;
-        if (!w.infinite && g.ammoId != id) ammo[slot]--; delay[slot] = w.delay; // ammoId: balas infinitas del modo desarrollador
+        if (!w.infinite && g.ammoId != id && g.ammoId != World.EVERYONE) ammo[slot]--; delay[slot] = w.delay; // ammoId: balas infinitas del modo desarrollador
         if (ammo[slot] <= 0) reload[slot] = w.reload;
         return true;
     }

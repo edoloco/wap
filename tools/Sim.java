@@ -460,6 +460,21 @@ public class Sim {
         for(int i=0;i<16&&b.bubble!=null;i++)w.step(new int[]{0,i%2==0?Input.A:0});check(b.bubble==null&&s.dead,"disparando 7 veces rompe la burbuja y sale");
         w=flat();a=w.robots[0];b=w.robots[1];b.px=a.px+600;run(w,0,2);s=w.spawn(bs,0,a.px+20,a.py-200,0,0);float sy=s.y;for(int i=0;i<100;i++)w.step(new int[2]);check(s.y<sy-30,"la burbuja sola flota hacia arriba ("+(sy-s.y)+" px en 100 cuadros)");
     }
+    static void personalizarSalas(String out)throws Exception{
+        // una sala vieja que sigue anunciándose no duplica la sala del mismo teléfono
+        try(com.wap.net.Lan.Browser br=new com.wap.net.Lan.Browser();com.wap.net.Lan.Beacon b1=new com.wap.net.Lan.Beacon("Sala de EDO",47812,World.RULES)){Thread.sleep(400);
+            try(com.wap.net.Lan.Beacon b2=new com.wap.net.Lan.Beacon("Sala de EDO",50123,World.RULES)){java.util.List<com.wap.net.Lan.Room> rs=br.rooms();for(int i=0;i<30;i++){Thread.sleep(100);rs=br.rooms();if(!rs.isEmpty()&&rs.get(0).port==50123)break;}
+                Thread.sleep(1500);rs=br.rooms();check(rs.size()==1&&rs.get(0).port==50123,"un mismo teléfono muestra una sola sala (la más nueva): "+rs.size());}}
+        // opciones del desarrollador del anfitrión viajan en el saludo
+        java.net.ServerSocket ss=new java.net.ServerSocket(0);com.wap.net.Link[] hl=new com.wap.net.Link[1];Thread t=new Thread(()->{try{hl[0]=com.wap.net.Link.accept(ss);}catch(Exception e){}});t.start();
+        com.wap.net.Link cl=com.wap.net.Link.connect("127.0.0.1",ss.getLocalPort());t.join();
+        com.wap.net.Link.Hello h=new com.wap.net.Link.Hello();h.rules=World.RULES;h.slots=new int[]{1,2,3,4};h.dev=1|2|8;h.devSpeed=150;h.devShot=60;h.devPrizes=9;h.devKinds=5;hl[0].send(h);com.wap.net.Link.Hello hr=cl.readHello();
+        check(hr.dev==11&&hr.devSpeed==150&&hr.devShot==60&&hr.devPrizes==9&&hr.devKinds==5,"las opciones de desarrollador del anfitrión llegan al invitado");cl.close();hl[0].close();ss.close();
+        World w=flat();w.godId=World.EVERYONE;w.ammoId=World.EVERYONE;float hp=w.robots[1].hp;w.robots[1].damage(w,30,0,0,0,w.robots[1].px,w.robots[1].py);check(w.robots[1].hp==hp,"en línea, invencible vale para los dos");
+        // menú: PERSONALIZAR agrupa personaje, rivales, nivel y vidas
+        for(int[] r:new int[][]{{1280,720},{2048,1536},{2400,1080}}){App q=new App(store,mute);q.seed(3);q.go(App.CUSTOM);BufferedImage im=new BufferedImage(r[0],r[1],BufferedImage.TYPE_INT_RGB);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"31_personalizar_"+r[0]+".png"));check(q.overflow==0,"PERSONALIZAR "+r[0]+" sin textos fuera");
+            q.go(App.TITLE);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"31_titulo_"+r[0]+".png"));check(q.overflow==0,"menú principal "+r[0]+" sin textos fuera");}
+    }
     static void hieloRayoTornado(String out)throws Exception{
         // FREEZEE FLOW
         World w=flat();Robot a=w.robots[0],b=w.robots[1];b.px=a.px+160;a.facing=1;run(w,0,2);int sl=-1;for(int k=0;k<4;k++)a.loadout[k]=Wpn.ALL[Wpn.index("FREEZEE FLOW")];a.ammo[3]=90;
@@ -486,5 +501,5 @@ public class Sim {
         // pantalla de armas en tres tamaños
         for(int[] r:new int[][]{{1280,720},{2048,1536},{2400,1080}}){App q=new App(store,mute);q.seed(3);q.go(App.ARMS);BufferedImage im=new BufferedImage(r[0],r[1],BufferedImage.TYPE_INT_RGB);q.overflow=0;q.draw(new J(im));ImageIO.write(im,"png",new File(out,"29_armas_"+r[0]+".png"));check(q.overflow==0,"pantalla de armas "+r[0]+"x"+r[1]+" sin textos fuera");}
     }
-    public static void main(String[] a)throws Exception{hieloRayoTornado(a.length>0?a[0]:"out");burbuja(a.length>0?a[0]:"out");premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
+    public static void main(String[] a)throws Exception{personalizarSalas(a.length>0?a[0]:"out");hieloRayoTornado(a.length>0?a[0]:"out");burbuja(a.length>0?a[0]:"out");premiosTorre(a.length>0?a[0]:"out");ultimaVida(a.length>0?a[0]:"out");desarrollador(a.length>0?a[0]:"out");golpe();mandoSalto();vidaGancho();editorNuevo(a.length>0?a[0]:"out");aspecto(a.length>0?a[0]:"out");dron(a.length>0?a[0]:"out");armas();piezas(a.length>0?a[0]:"out");fx(a.length>0?a[0]:"out");mech();bodies();online();update();weapons();determinism();soak();shots(a.length>0?a[0]:"out");sheet(a.length>0?a[0]:"out");cuadros(a.length>0?a[0]:"out");System.out.println("fallas: "+fails);}
 }

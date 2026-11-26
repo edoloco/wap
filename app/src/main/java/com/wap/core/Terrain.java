@@ -281,7 +281,7 @@ public final class Terrain {
     // ---------- Herramientas del editor de niveles
     public static final int EDGE = 16, GRID = G;
     static boolean inside(int x, int y) { return x >= EDGE && y >= EDGE && x < W - EDGE && y < H - EDGE; }
-    /** Color de tierra con un poco de textura (vetas en bloques de 4 px), para que no se vea plana. */
+    /** Color de tierra con textura de arena (puntos al azar), para que no se vea plana. */
     static int earthTex(int c, int x, int y) {
         int k = vein(x, y);
         int r = Math.max(0, Math.min(255, (c >> 16 & 255) + k)), g = Math.max(0, Math.min(255, (c >> 8 & 255) + k)), b = Math.max(0, Math.min(255, (c & 255) + k));
@@ -443,7 +443,8 @@ public final class Terrain {
         int ka = vein(a % W, a / W), kb = vein(b % W, b / W);
         return near(ta, 0, tb, kb) || near(ta, ka, tb, 0) || near(ta, ka, tb, kb);
     }
-    static int vein(int x, int y) { int h = hash(x >> 2, y >> 2) & 7; return h < 2 ? -18 : h > 5 ? 12 : 0; }
+    /** Textura de arena: puntos sueltos al azar (siempre los mismos en cada lugar), algunos oscuros y pocos claros. */
+    static int vein(int x, int y) { int h = hash(x, y) * 0x9E3779B1 >>> 27; return h < 4 ? -22 : h == 31 ? 14 : 0; }
     static boolean near(int a, int ka, int b, int kb) {
         for (int s = 0; s <= 16; s += 8) if (Math.abs(((a >> s & 255) - ka) - ((b >> s & 255) - kb)) > 6) return false;
         return true;
