@@ -113,7 +113,7 @@ public final class Robot {
         if (g.godId == id || g.godId == World.EVERYONE) return; // invencible (modo desarrollador)
         if (!alive() || invuln > 0) return;
         if (by >= 0 && by != id && by < g.robots.length && g.robots[by].team == team) return;
-        if (g.run != null && g.run.held(id)) return; // esperando al rival en la sala del jefe: nadie le hace daño // sin fuego amigo
+        if (g.run != null && g.run.truce(by, id)) return; // bases en línea: antes de la pelea final no se dañan entre ellos // sin fuego amigo
         if (by == id) d *= .6f;
         if (sliding() && thrownT == 0) { // golpe al deslizarse: sale lanzado en la dirección del golpe y pierde poca vida
             float s = kx != 0 ? Math.signum(kx) : hx < px ? 1 : -1;

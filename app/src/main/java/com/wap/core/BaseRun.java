@@ -20,8 +20,13 @@ public final class BaseRun implements Terrain.PageSource {
     final ArrayList<float[]> prizes = new ArrayList<>();
     final float[][] starts = new float[2][];
     final int[] check = {-1, -1}, fallT = new int[2]; final int[][] spawnCache = new int[64][];
-    /** held: esperando al rival en la sala del jefe. fight: pelea final en línea. bossOn: puertas cerradas con el jefe. */
-    public final boolean[] held = new boolean[2]; public boolean fight, bossOn, won; public Foe boss;
+    /**
+     * held: ya llegó a la sala del jefe y espera al rival (puede moverse y disparar en su mitad; una pared invisible no lo deja pasar).
+     * fight: pelea final en línea (se restablecen vidas y energía). bossOn: puertas cerradas con el jefe.
+     */
+    public final boolean[] held = new boolean[2]; public boolean fight, bossOn, won; public Foe boss; public int startLives = 3;
+    /** Pared invisible en medio de la sala del jefe hasta que llegan los dos: {x, y, ancho, alto}. */
+    public int[] split;
     /** Puertas cerradas (rectángulos de acero): {x, y, ancho, alto}. */
     public final ArrayList<int[]> doors = new ArrayList<>();
 
@@ -29,6 +34,24 @@ public final class BaseRun implements Terrain.PageSource {
     /** Piezas fijas por cuadro del mapa: {material de la base, color}. Escarcha de FREEZEE FLOW por cuadro. */
     public final java.util.HashMap<Long, int[]> cells = new java.util.HashMap<>(); public final java.util.HashSet<Long> frost = new java.util.HashSet<>();
     World world;
+    /** Madera de la base: se rompe por cuadro (cada uno aguanta WOOD_HP) y suelta astillas de su color. */
+    public static final int WOOD_HP = 30; final java.util.HashMap<Long, Integer> woodHp = new java.util.HashMap<>();
+    public boolean woodHit(World g, int x, int y, float d) { if (g.t.at(x, y) != Terrain.WOOD) return false; hurtWood(g, x / Base.CELL, y / Base.CELL, d); return true; }
+    public void woodBlast(World g, float x, float y, int r, float dmg) {
+        final int C = Base.CELL;
+        for (int cy = (int) Math.floor((y - r) / C); cy <= (int) Math.floor((y + r) / C); cy++) for (int cx = (int) Math.floor((x - r) / C); cx <= (int) Math.floor((x + r) / C); cx++) {
+            int[] v = cells.get(Base.key(cx, cy)); if (v == null || v[0] != Base.T_WOOD) continue;
+            float d = (float) StrictMath.hypot(cx * C + C / 2f - x, cy * C + C / 2f - y); if (d > r + C * .7f) continue;
+            hurtWood(g, cx, cy, dmg * 1.6f * (.5f + .5f * Math.max(0, 1 - d / (r + 16))));
+        }
+    }
+    void hurtWood(World g, int cx, int cy, float d) {
+        long k = Base.key(cx, cy); Integer hp = woodHp.get(k); int[] v = cells.get(k); if (hp == null || v == null || v[0] != Base.T_WOOD) return;
+        hp -= Math.max(1, Math.round(d)); if (hp > 0) { woodHp.put(k, hp); return; }
+        woodHp.remove(k); cells.remove(k); final int C = Base.CELL;
+        for (int y = cy * C; y < cy * C + C; y++) for (int x = cx * C; x < cx * C + C; x++) if (g.t.at(x, y) == Terrain.WOOD) g.t.set(x, y, 0);
+        Fx e = g.fx(Fx.WOOD, cx * C + C / 2f, cy * C + C / 2f, C * C / 2f, -1); e.b = v[1];
+    }
     /** Habitaciones activas: donde está cada jugador y las que la rodean. Las demás duermen (sus enemigos y piezas se quedan quietos) y su mapa se suelta. */
     public boolean[] active = new boolean[0];
     /** Arma una página del mapa desde los datos: pared, habitaciones (y precipicios), piezas fijas, objetos, piezas que se mueven y puertas. */
@@ -41,12 +64,13 @@ public final class BaseRun implements Terrain.PageSource {
             for (int y = ry0; y < ry1; y++) java.util.Arrays.fill(page, (y - y0) * S + rx0 - x0, (y - y0) * S + rx1 - x0, (byte) 0);
         }
         for (int cy = y0 / C; cy < (y0 + S) / C; cy++) for (int cx = x0 / C; cx < (x0 + S) / C; cx++) {
-            int[] v = cells.get(Base.key(cx, cy)); if (v == null) continue; byte k = Base.matOf(v[0]);
+            int[] v = cells.get(Base.key(cx, cy)); if (v == null || v[0] == Base.T_BACK) continue; byte k = Base.matOf(v[0]); // el fondo no choca
             for (int y = cy * C; y < cy * C + C; y++) java.util.Arrays.fill(page, (y - y0) * S + cx * C - x0, (y - y0) * S + cx * C + C - x0, k);
         }
         if (world != null) for (Prop q : world.props) if (!q.gone) box(page, x0, y0, q.x, q.y, q.w, q.h, (byte) q.kind, true);
         for (Kin k : kin) if (k.on) box(page, x0, y0, k.x(), k.y(), C, C, Terrain.KINETIC, true);
         for (int[] d : doors) box(page, x0, y0, d[0], d[1], d[2], d[3], Terrain.STEEL, false);
+        if (split != null) box(page, x0, y0, split[0], split[1], split[2], split[3], Terrain.KINETIC, true);
     }
     static void box(byte[] page, int x0, int y0, int x, int y, int w, int h, byte k, boolean onlyAir) {
         final int S = Terrain.PS;
@@ -66,7 +90,9 @@ public final class BaseRun implements Terrain.PageSource {
         }
     }
     public int wallColor() { switch (base.bg) { case 1: return 0xFF2E3B26; case 2: return 0xFF6B5A3E; case 3: return 0xFF2A2E3A; default: return 0xFF3A4150; } }
-    public boolean held(int id) { return id >= 0 && id < 2 && held[id]; }
+    public boolean held(int id) { return false; } // ya nadie queda quieto al llegar (versión 65)
+    /** En línea, antes de la pelea final los jugadores no se hacen daño entre ellos. */
+    public boolean truce(int by, int id) { return online && !fight && by >= 0 && by < 2 && by != id; }
 
     // ---------- Piezas que se mueven
     /** Pieza que se mueve: en el mapa es material KINETIC (choca, no se ve); el Renderer la dibuja donde está. */
@@ -122,10 +148,10 @@ public final class BaseRun implements Terrain.PageSource {
     public static final class Foe {
         public final int type; public float x, y, vx, vy, hp, maxHp, aim; public int t, state, dir = 1, hurtT; public boolean alive = true; public final boolean mirrored;
         /** Lo mismo que les pasa a los jugadores: aturdido, congelado, lanzado (girando), atado al rayo, en una burbuja, empujado. */
-        public int stunT, frozenT, thrownT, lassoT, lassoBy = -1; public float rot, kx; public Shot bubble;
+        public int stunT, frozenT, thrownT, lassoT, lassoBy = -1, effHits, effTick = -999; public float rot, kx; public Shot bubble;
         public boolean busy() { return stunT > 0 || frozenT > 0 || thrownT > 0 || lassoT > 0 || bubble != null; }
         public final float hw, h; final float homeX, homeY;
-        Foe(int type, float x, float y, boolean mirrored) {
+        public Foe(int type, float x, float y, boolean mirrored) {
             this.type = type; this.x = x; this.y = y; homeX = x; homeY = y; this.mirrored = mirrored; dir = mirrored ? -1 : 1;
             switch (type) {
                 case DRONE: hw = 12; h = 16; hp = 10; this.y = y - 8; break;
@@ -245,27 +271,37 @@ public final class BaseRun implements Terrain.PageSource {
     }
     // ---------- Efectos de las armas sobre los enemigos (los mismos que sobre los jugadores)
     static float heavy(Foe f) { return f.type == BOSS ? .2f : 1; }
+    /** Al jefe los efectos de las armas le hacen efecto al segundo golpe (un golpe = un contacto; los toques seguidos cuentan como uno). */
+    static boolean effect(World g, Foe f) {
+        if (f.type != BOSS) return true;
+        if (g.tick - f.effTick < 20) { f.effTick = g.tick; return false; }
+        f.effTick = g.tick; if (++f.effHits < 2) return false; f.effHits = 0; return true;
+    }
     void push(Foe f, float dir, float k) { if (f.alive && f.bubble == null) f.kx += Math.signum(dir) * Math.min(4, .8f + k * 2) * heavy(f); }
     /** CANNON PUNCH y TORNADO GUN: sale lanzado girando; al chocar se daña. El jefe es pesado: apenas se mueve. */
     void launch(World g, Foe f, int dir, float dmg, float up) {
-        if (!f.alive || f.thrownT > 0) return; hurt(g, f, dmg); if (!f.alive) return;
-        f.thrownT = 80; f.bubble = null; f.lassoT = 0; f.vx = dir * 6.5f * heavy(f); f.vy = -up * heavy(f); f.y -= 2; g.fx(Fx.GRAB, f.x, f.y - f.h / 2, 0, -1);
+        if (!f.alive || f.thrownT > 0) return; boolean full = effect(g, f); hurt(g, f, dmg); if (!f.alive || !full) return;
+        f.thrownT = 80; f.bubble = null; f.lassoT = 0; f.vx = dir * 6.5f; f.vy = -up; f.y -= 2; g.fx(Fx.GRAB, f.x, f.y - f.h / 2, 0, -1);
     }
     /** FREEZEE FLOW: cubo de hielo (el jefe, un rato corto). */
-    void freeze(World g, Foe f) { if (!f.alive || f.frozenT > 0 || f.bubble != null) return; f.frozenT = f.type == BOSS ? 70 : 300; f.kx = 0; g.fx(Fx.ICE, f.x, f.y - f.h / 2, 1, -1); }
+    void freeze(World g, Foe f) { if (!f.alive || f.frozenT > 0 || f.bubble != null || !effect(g, f)) return; f.frozenT = 300; f.kx = 0; g.fx(Fx.ICE, f.x, f.y - f.h / 2, 1, -1); }
     /** ELECTRIC THUNDER: daño y aturdido. */
     public boolean boltFoe(World g, float x, float y, float dmg) {
-        for (Foe f : foes) if (f.hit(x, y, 2)) { hurt(g, f, dmg); f.stunT = Math.max(f.stunT, f.type == BOSS ? 25 : Robot.BOLT_STUN + 20); return true; }
+        for (Foe f : foes) if (f.hit(x, y, 2)) { hurt(g, f, dmg); if (effect(g, f)) f.stunT = Math.max(f.stunT, Robot.BOLT_STUN + 20); return true; }
         return false;
     }
     /** PROTON RAY: lo ata al rayo y lo arrastra hacia el que dispara. */
     public boolean lassoFoe(World g, float x, float y, int by) {
-        for (Foe f : foes) if (f.hit(x, y, 2) && f.bubble == null) { if (f.lassoT == 0) g.fx(Fx.LASSO, f.x, f.y - f.h / 2, 1, -1); f.lassoT = Math.max(f.lassoT, 60); f.lassoBy = by; return true; }
+        for (Foe f : foes) if (f.hit(x, y, 2) && f.bubble == null) {
+            if (f.lassoT == 0) { if (!effect(g, f)) { if (g.tick % 10 == 0) hurt(g, f, 1.5f); return true; } g.fx(Fx.LASSO, f.x, f.y - f.h / 2, 1, -1); }
+            f.lassoT = Math.max(f.lassoT, 60); f.lassoBy = by; return true;
+        }
         return false;
     }
     /** BOOBLE SEAL: la burbuja lo atrapa, sube despacio y le baja la vida hasta reventar. */
     public void bubbleCatch(World g, Shot s) {
-        for (Foe f : foes) if (f.alive && f.bubble == null && f.type != BOSS && Math.abs(f.x - s.x) < 18 + f.hw && s.y > Math.min(f.top(), f.y - 38) - 14 && s.y < f.y + 8) { // los chicos se atrapan a la altura de la mano, como al disparar
+        for (Foe f : foes) if (f.alive && f.bubble == null && Math.abs(f.x - s.x) < 18 + f.hw && s.y > Math.min(f.top(), f.y - 38) - 14 && s.y < f.y + 8) { // los chicos se atrapan a la altura de la mano, como al disparar
+            if (!effect(g, f)) { if (f.type == BOSS) { s.pop(g); hurt(g, f, 3); } return; } // al jefe, la primera burbuja solo le revienta encima
             f.bubble = s; s.foeHeld = true; s.vx = 0; s.vy = -.3f; s.life = 360; f.thrownT = 0; f.lassoT = 0; g.fx(Fx.LASSO, s.x, s.y, 1, -1); return;
         }
     }
@@ -274,8 +310,8 @@ public final class BaseRun implements Terrain.PageSource {
         for (Foe f : foes) {
             if (!f.alive || f.bubble != null) continue; float dx = x - f.x, dy = y - (f.y - f.h / 2), d = (float) StrictMath.hypot(dx, dy);
             if (d > Shot.TRAP_R) continue;
-            float p = (.4f + 3 * (1 - d / Shot.TRAP_R)) * heavy(f); f.x += Math.signum(dx) * Math.min(p, Math.abs(dx) * .5f + .1f); if (f.type == DRONE) f.y += Math.signum(dy) * Math.min(p, Math.abs(dy) * .5f);
-            if (Math.abs(dx) < 9 && Math.abs(dy) < 40) { g.fx(Fx.TRAP, x, y, 1, -1); hurt(g, f, f.type == BOSS ? 40 : 999); }
+            float p = (.4f + 3 * (1 - d / Shot.TRAP_R)); f.x += Math.signum(dx) * Math.min(p, Math.abs(dx) * .5f + .1f); if (f.type == DRONE) f.y += Math.signum(dy) * Math.min(p, Math.abs(dy) * .5f);
+            if (Math.abs(dx) < 9 && Math.abs(dy) < 40) { g.fx(Fx.TRAP, x, y, 1, -1); if (effect(g, f)) hurt(g, f, 999); else { hurt(g, f, 40); f.kx = (f.x < x ? -1 : 1) * 8; f.x += f.kx * 3; } } // al jefe, la segunda trampa lo destruye
         }
     }
     /** Estados: mientras dura uno, el enemigo no ataca. Devuelve true si este tick no actúa. */
@@ -297,7 +333,7 @@ public final class BaseRun implements Terrain.PageSource {
         if (f.stunT > 0) { f.stunT--; if (f.walks()) fall(g, f); return true; }
         if (f.lassoT > 0) { // atado al rayo: lo arrastra hacia el que dispara y le baja la vida
             f.lassoT--; Robot r = f.lassoBy >= 0 && f.lassoBy < g.robots.length ? g.robots[f.lassoBy] : null;
-            if (r != null && r.alive() && Math.abs(r.px - f.x) > 24) { float nx = f.x + Math.signum(r.px - f.x) * .7f * heavy(f); if (!g.t.solid((int) (nx + Math.signum(r.px - f.x) * f.hw), (int) (f.y - f.h / 2))) f.x = nx; }
+            if (r != null && r.alive() && Math.abs(r.px - f.x) > 24) { float nx = f.x + Math.signum(r.px - f.x) * .7f; if (!g.t.solid((int) (nx + Math.signum(r.px - f.x) * f.hw), (int) (f.y - f.h / 2))) f.x = nx; }
             if (f.walks()) fall(g, f); if (f.t % 10 == 0) hurt(g, f, 1.5f); return true;
         }
         return false;
@@ -358,12 +394,19 @@ public final class BaseRun implements Terrain.PageSource {
     public int[] spawnFor(World g, int who) {
         int room = who < 2 ? check[who] : -1;
         if (room < 0 || room == startRoom(who)) { float[] s = start(who); return new int[]{(int) s[0], (int) s[1]}; }
+        if (fight && room == bossIdx()) return entry(g, room, who);
         if (spawnCache[room % 64] == null) spawnCache[room % 64] = entry(g, room);
         return spawnCache[room % 64].clone();
     }
     /** Primer lugar firme de la habitación (desde el lado por donde se entra), con espacio para el personaje. */
-    int[] entry(World g, int idx) {
-        int[] r = rooms.get(idx); boolean fromRight = r[5] == 1;
+    /** El jugador 1 llega a la sala del jefe por la izquierda (la base está a la izquierda del jefe). */
+    boolean p1Left() { int bi = bossIdx(); if (bi < 0) return true; for (int[] r : rooms) if (r[5] == 0 && r[0] < rooms.get(bi)[0]) return true; return false; }
+    int[] entry(World g, int idx) { return entry(g, idx, -1); }
+    int[] entry(World g, int idx, int who) {
+        int[] r = rooms.get(idx); int bi = bossIdx(); boolean fromRight;
+        if (bi >= 0 && bi != idx) fromRight = r[0] > rooms.get(bi)[0]; // se entra por el lado contrario al jefe
+        else if (bi == idx && fight) fromRight = who == 1 ? p1Left() : !p1Left(); // pelea final: cada uno reaparece en su mitad
+        else fromRight = r[5] == 1;
         for (int k = 1; k < Base.RW - 1; k++) {
             int cx = fromRight ? Base.RW - 1 - k : k, x = r[0] + cx * Base.CELL + Base.CELL / 2;
             for (int cy = Base.RH - 1; cy >= 2; cy--) {
@@ -416,11 +459,17 @@ public final class BaseRun implements Terrain.PageSource {
             }
             return;
         }
-        if (fight) { for (Robot r : g.robots) if (r.deadT > 0 || r.hp <= 0 || r.lives < 0) { finish(g, 1 - r.id); return; } return; }
-        for (Robot r : g.robots) if (r.alive() && !held[r.id] && insideBoss(r, room)) { held[r.id] = true; r.vx = 0; g.fx(Fx.DOOR, r.px, r.py - 27, 1, r.id); }
-        if (held[0] && held[1]) { // llegaron los dos: se cierran las puertas y pelean
+        if (fight) return; // la pelea sigue con vidas: termina cuando uno se queda sin (checkEnd)
+        if (split == null) { // pared invisible en medio de la sala: cada uno en su mitad hasta que llegan los dos
+            split = new int[]{room[0] + room[2] / 2 - 3, room[1], 6, room[3]};
+            for (int j = split[1]; j < split[1] + split[3]; j++) for (int i = split[0]; i < split[0] + split[2]; i++) if (g.t.at(i, j) == 0) g.t.set(i, j, Terrain.KINETIC);
+        }
+        for (Robot r : g.robots) if (r.alive() && !held[r.id] && insideBoss(r, room)) { held[r.id] = true; g.fx(Fx.DOOR, r.px, r.py - 27, 1, r.id); }
+        if (held[0] && held[1]) { // llegaron los dos: se cierran las puertas, se quita la pared, vidas y energía como al empezar, y a pelear
             fight = true; held[0] = held[1] = false; closeDoors(g, room);
-            for (Robot r : g.robots) { r.hp = r.maxHp; r.invuln = 90; }
+            for (int j = split[1]; j < split[1] + split[3]; j++) for (int i = split[0]; i < split[0] + split[2]; i++) if (g.t.at(i, j) == Terrain.KINETIC) g.t.set(i, j, 0);
+            split = null;
+            for (Robot r : g.robots) { r.lives = startLives; r.hp = r.maxHp; r.invuln = 90; }
             g.fx(Fx.FIGHT, room[0] + room[2] / 2f, room[1] + room[3] / 2f, 0, -1);
         }
     }
@@ -435,7 +484,7 @@ public final class BaseRun implements Terrain.PageSource {
 
     // ---------- Cada tick
     /** Antes de mover a los personajes: el que espera en la sala del jefe no se mueve. */
-    void pre(World g, int[] in) { for (int i = 0; i < Math.min(2, in.length); i++) if (held[i]) in[i] = 0; }
+    void pre(World g, int[] in) { }
     void post(World g) {
         wake(g);
         moveKin(g);
@@ -451,7 +500,6 @@ public final class BaseRun implements Terrain.PageSource {
                 continue;
             }
             fallT[i] = 0; check[i] = at;
-            if (held[i]) { r.vx = 0; r.invuln = Math.max(r.invuln, 2); }
         }
         boss(g);
         if (bossOn && boss != null && !boss.alive && !won) win(g);

@@ -14,8 +14,8 @@ public final class Base {
     public static final int MAGIC = 0x57415042, VERSION = 1; // "WAPB"
     public static final int CELL = 32, RW = 16, RH = 9, ROOM_PX = RW * CELL, ROOM_PY = RH * CELL, MAX_ROOMS = 40;
     /** Materiales de las piezas (los del editor de niveles, sin fondo ni sobre). */
-    public static final int T_EARTH = 1, T_WOOD = 2, T_PANEL = 3, T_STEEL = 4, T_CRATE = 5, T_METAL = 6, T_STONE = 7, T_PC = 8, TILE_KINDS = 9;
-    public static final String[] TILE_NAMES = {"", "TIERRA", "MADERA", "BLOQUE", "ACERO", "CAJA", "METAL", "PIEDRA", "COMPUTADOR"};
+    public static final int T_EARTH = 1, T_WOOD = 2, T_PANEL = 3, T_STEEL = 4, T_CRATE = 5, T_METAL = 6, T_STONE = 7, T_PC = 8, T_BACK = 9, TILE_KINDS = 10; // T_BACK: fondo (decoración detrás, no choca)
+    public static final String[] TILE_NAMES = {"", "TIERRA", "MADERA", "BLOQUE", "ACERO", "CAJA", "METAL", "PIEDRA", "COMPUTADOR", "FONDO"};
     /** Movimiento de una pieza: fija, sube y baja 2 cuadros, de lado a lado 2 cuadros, gira en círculo, aparece y desaparece. */
     public static final int M_NONE = 0, M_UPDOWN = 1, M_SIDE = 2, M_SPIN = 3, M_BLINK = 4, MOVES = 5;
     public static final String[] MOVE_NAMES = {"FIJA", "SUBE Y BAJA", "LADO A LADO", "GIRA", "APARECE"};
@@ -81,8 +81,16 @@ public final class Base {
         }
     }
     public int[] bossRoom() { for (int[] r : rooms) if (r[2] == 1) return r; return null; }
-    /** En línea hace falta la sala del jefe al final (ninguna habitación más a la derecha): ahí se juntan los dos. */
-    public boolean canOnline() { int[] b = bossRoom(); if (b == null) return false; for (int[] r : rooms) if (r[0] > b[0]) return false; return true; }
+    /**
+     * En línea la base se refleja alrededor de la columna de la sala del jefe: si la base está a su izquierda, el espejo va a la derecha, y al revés.
+     * Las habitaciones de esa misma columna (arriba o abajo del jefe) no se duplican: son comunes y ahí los jugadores se juntan.
+     * Por eso hace falta que toda la base quede a un solo lado del jefe.
+     */
+    public boolean canOnline() {
+        int[] b = bossRoom(); if (b == null) return false; boolean left = false, right = false;
+        for (int[] r : rooms) { if (r[0] < b[0]) left = true; if (r[0] > b[0]) right = true; }
+        return !(left && right);
+    }
     public long[] startCell() { for (Map.Entry<Long, Integer> e : things.entrySet()) if (e.getValue() == START) return new long[]{e.getKey()}; return null; }
     /** Pone algo en un cuadro (dentro de una habitación). El inicio es uno solo. */
     public void putThing(int cx, int cy, int what) {
@@ -152,9 +160,11 @@ public final class Base {
     ArrayList<int[]> playRooms(boolean mirror) {
         ArrayList<int[]> out = new ArrayList<>(); for (int[] r : rooms) out.add(new int[]{r[0], r[1], r[2], 0});
         int[] b = bossRoom();
-        if (mirror && b != null) for (int[] r : rooms) if (r != b) out.add(new int[]{2 * b[0] - r[0], r[1], 0, 1}); // {rx, ry, jefe, reflejada}
+        if (mirror && b != null) for (int[] r : rooms) if (r[0] != b[0]) out.add(new int[]{2 * b[0] - r[0], r[1], 0, 1}); // {rx, ry, jefe, reflejada}; las de la columna del jefe son comunes
         return out;
     }
+    /** La base está a la izquierda del jefe (el espejo del jugador 2 va a la derecha). */
+    boolean baseLeft() { int[] b = bossRoom(); if (b == null) return true; for (int[] r : rooms) if (r[0] < b[0]) return true; for (int[] r : rooms) if (r[0] > b[0]) return false; return true; }
     /** Cuadro reflejado (alrededor del centro de la sala del jefe). */
     int mirrorX(int cx) { int[] b = bossRoom(); return 2 * b[0] * RW + RW - 1 - cx; }
     Terrain build(boolean mirror, BaseRun run) {
@@ -172,17 +182,17 @@ public final class Base {
         for (Map.Entry<Long, int[]> e : tiles.entrySet()) {
             int cx = kx(e.getKey()), cy = ky(e.getKey()); int[] v = e.getValue();
             int[] home = roomOfCell(cx, cy); if (home == null) continue;
-            boolean half = mirror && home[2] == 1 && Math.floorMod(cx, RW) >= RW / 2; // en línea la sala del jefe es simétrica: su mitad izquierda se refleja (así se abre al lado del jugador 2)
+            boolean half = mirror && home[2] == 1 && (baseLeft() ? Math.floorMod(cx, RW) >= RW / 2 : Math.floorMod(cx, RW) < RW / 2); // en línea la sala del jefe es simétrica: su mitad izquierda se refleja (así se abre al lado del jugador 2)
             if (half) continue;
             piece(t, run, ox + cx * CELL, oy + cy * CELL, v, false);
-            if (mirror && bossRoom() != null) piece(t, run, ox + (mirrorX(cx) - (v[0] == T_PC ? 1 : 0)) * CELL, oy + cy * CELL, v, true); // el computador mide 2 cuadros
+            if (mirror && bossRoom() != null && (home[0] != bossRoom()[0] || home[2] == 1)) piece(t, run, ox + (mirrorX(cx) - (v[0] == T_PC ? 1 : 0)) * CELL, oy + cy * CELL, v, true); // el computador mide 2 cuadros; las salas comunes no se duplican
         }
         for (Map.Entry<Long, Integer> e : things.entrySet()) {
             int cx = kx(e.getKey()), cy = ky(e.getKey()); int what = e.getValue();
             int[] home = roomOfCell(cx, cy); if (home == null) continue;
-            if (mirror && home[2] == 1 && (Math.floorMod(cx, RW) >= RW / 2 || what == START)) continue;
+            if (mirror && home[2] == 1 && ((baseLeft() ? Math.floorMod(cx, RW) >= RW / 2 : Math.floorMod(cx, RW) < RW / 2) || what == START)) continue;
             run.thing(what, ox + cx * CELL + CELL / 2f, oy + cy * CELL + CELL, false);
-            if (mirror && bossRoom() != null) run.thing(what, ox + mirrorX(cx) * CELL + CELL / 2f, oy + cy * CELL + CELL, true);
+            if (mirror && bossRoom() != null && (home[0] != bossRoom()[0] || home[2] == 1)) run.thing(what, ox + mirrorX(cx) * CELL + CELL / 2f, oy + cy * CELL + CELL, true);
         }
         t.frostSink = (x, y) -> { run.frost.add(key(x / CELL, y / CELL)); return 0; };
         return t;
@@ -196,7 +206,7 @@ public final class Base {
             case T_METAL: t.props.add(new int[]{x, y, CELL, CELL, Terrain.METAL}); break;
             case T_STONE: t.props.add(new int[]{x, y, CELL, CELL, Terrain.STONE}); break;
             case T_PC: t.props.add(new int[]{x, y, 2 * CELL, 2 * CELL, Terrain.COMPUTER}); break;
-            default: run.cells.put(key(x / CELL, y / CELL), new int[]{mat, color});
+            default: run.cells.put(key(x / CELL, y / CELL), new int[]{mat, color}); if (mat == T_WOOD) run.woodHp.put(key(x / CELL, y / CELL), BaseRun.WOOD_HP);
         }
     }
     /** Material del mapa para cada pieza fija. */

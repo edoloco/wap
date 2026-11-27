@@ -519,9 +519,20 @@ public class Sim {
         check(a.hash()==z.hash(),"en línea: la base es igual en los dos teléfonos");
         a=new World(9,3,cargas("SHOTGUN"),Base.load(f),true);int[] bb=a.run.rooms.get(a.run.bossIdx());Robot p0=a.robots[0],p1=a.robots[1];a.step(new int[2]);
         p0.px=bb[0]+100;p0.py=bb[1]+256;p0.vy=0;for(int i=0;i<3;i++)a.step(new int[2]);check(a.run.held[0]&&!a.run.fight,"en línea: el primero que llega espera al otro");
-        float h0=p0.hp;p0.damage(a,30,0,0,1,p0.px,p0.py);check(p0.hp==h0,"en línea: el que espera no recibe daño");
-        p1.px=bb[0]+bb[2]-100;p1.py=bb[1]+256;p1.vy=0;for(int i=0;i<3;i++)a.step(new int[2]);check(a.run.fight&&!a.run.doors.isEmpty(),"en línea: llegan los dos, se cierran las puertas y pelean");
-        p1.invuln=0;p1.damage(a,999,0,0,0,p1.px,p1.py);for(int i=0;i<3;i++)a.step(new int[2]);check(a.finished&&a.winner==0,"en línea: el que muere en la pelea pierde");
+        int x1=p0.px;for(int i=0;i<20;i++)a.step(new int[]{Input.RIGHT,0});check(p0.px>x1+10,"en línea: el que espera se puede mover");
+        for(int i=0;i<200;i++)a.step(new int[]{Input.RIGHT,0});check(p0.px<bb[0]+bb[2]/2,"en línea: una pared invisible no lo deja pasar a la mitad del otro");
+        float h0=p0.hp;p0.damage(a,30,0,0,1,p0.px,p0.py);check(p0.hp==h0,"en línea: antes de la pelea no se hacen daño entre ellos");
+        p0.lives=1;p0.hp=20;p1.px=bb[0]+bb[2]-100;p1.py=bb[1]+256;p1.vy=0;for(int i=0;i<3;i++)a.step(new int[2]);
+        check(a.run.fight&&!a.run.doors.isEmpty()&&a.run.split==null,"en línea: llegan los dos, se quita la pared, se cierran las puertas y pelean");
+        check(p0.lives==3&&p0.hp==p0.maxHp,"en línea: al empezar la pelea se restablecen vidas y energía");
+        for(int kk=0;kk<4&&!a.finished;kk++){p1.invuln=0;p1.damage(a,999,0,0,0,p1.px,p1.py);for(int i=0;i<400&&!a.finished&&!p1.alive();i++)a.step(new int[2]);if(kk==0)check(!a.finished&&p1.alive()&&a.run.roomAt(p1.px,p1.py-20)==a.run.bossIdx()&&p1.px>bb[0]+bb[2]/2,"en línea: en la pelea se reaparece en su mitad de la sala");}
+        check(a.finished&&a.winner==0,"en línea: pierde el que se queda sin vidas");
+        // jefe a la izquierda y salas comunes arriba del jefe
+        {Base d=Base.empty("IZQ");d.addRoom(-1,0);d.addRoom(-1,-1);d.toggleBoss(-1,0);check(d.canOnline(),"en línea: la sala del jefe puede ir a la izquierda");
+         World v=new World(5,3,cargas("SHOTGUN"),d,true);int nb=0;for(int[] rq:v.run.rooms)if(rq[0]==v.run.rooms.get(v.run.bossIdx())[0])nb++;
+         check(v.run.rooms.size()==4&&nb==2,"en línea: las salas sobre el jefe son comunes (no se duplican)");
+         check(v.robots[1].px<v.run.rooms.get(v.run.bossIdx())[0]&&v.robots[0].px>v.run.rooms.get(v.run.bossIdx())[0],"en línea: con el jefe a la izquierda, el espejo va a la izquierda");
+         Base e2=Base.empty("MAL");e2.addRoom(1,0);e2.addRoom(2,0);e2.toggleBoss(1,0);check(!e2.canOnline(),"en línea: no se puede si hay base a los dos lados del jefe");}
         // fondos
         for(int bg=1;bg<4;bg++){Base d=baseDePrueba();d.bg=bg;World v=new World(3,3,cargas("SHOTGUN"),d,false);Renderer rd=new Renderer();rd.reset(v);BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,v,0);rd.drawWorld(g,v,0);ImageIO.write(im,"png",new File(out,"34_fondo_"+Base.BG_NAMES[bg].toLowerCase()+".png"));}
     }
@@ -538,6 +549,13 @@ public class Sim {
             check(ok,"enemigos: "+c[0]+" los deja "+c[1]+" como a un jugador");
             if(c[0].equals("FREEZEE FLOW")){Renderer rd=new Renderer();rd.reset(w);rd.freeCam=true;rd.camX=f.x;rd.camY=f.y-60;BufferedImage im=new BufferedImage(1280,720,BufferedImage.TYPE_INT_RGB);J g=new J(im);rd.drawWorld(g,w,0);rd.drawWorld(g,w,0);ImageIO.write(im,"png",new File(out,"41_enemigo_congelado.png"));}
         }
+        {Base d=Base.empty("J");for(int x=0;x<16;x++)d.putTile(x,8,Base.T_STEEL,0,0);World v=new World(3,3,cargas("SHOTGUN"),d,false);v.run.boss=new BaseRun.Foe(BaseRun.BOSS,300,v.run.rooms.get(0)[1]+256,false);v.run.foes.add(v.run.boss);BaseRun.Foe bo=v.run.boss;
+         v.run.boltFoe(v,bo.x,bo.y-20,5);boolean first=bo.stunT==0;for(int i=0;i<30;i++)v.step(new int[2]);v.run.boltFoe(v,bo.x,bo.y-20,5);check(first&&bo.stunT>0,"jefe: los efectos de las armas le hacen efecto al segundo golpe");}
+        {Base d=Base.empty("M");for(int x=0;x<16;x++)d.putTile(x,8,Base.T_STEEL,0,0);d.putTile(8,7,Base.T_WOOD,0xFFC8955A,0);d.putTile(8,6,Base.T_WOOD,0xFFC8955A,0);d.putTile(5,6,Base.T_BACK,0xFF8B5A2B,0);
+         World v=new World(3,3,cargas("BAZOOKA"),d,false);int x0=v.run.rooms.get(0)[0],y0=v.run.rooms.get(0)[1];check(!v.t.solid(x0+5*32+10,y0+6*32+10)&&v.t.solid(x0+8*32+10,y0+7*32+10),"bases: el FONDO no choca y la madera sí");
+         for(int i=0;i<6;i++)v.explode(x0+8*32+16,y0+7*32,20,15,0,1,0);check(!v.t.solid(x0+8*32+10,y0+7*32+10)&&!v.t.solid(x0+8*32+10,y0+6*32+10),"bases: la madera se rompe");
+         check(v.t.solid(x0+3*32,y0+8*32+5),"bases: el resto del terreno no se rompe");}
+        check(Wpn.ALL[Wpn.index("NAPALM")].element==Wpn.E_FIRE&&Wpn.ALL[Wpn.index("BOOBLE SEAL")].element==Wpn.E_WATER&&Wpn.ALL[Wpn.index("CANNON PUNCH")].element==Wpn.E_EARTH&&Wpn.ALL[Wpn.index("FAN")].element==Wpn.E_WIND&&Wpn.ALL[Wpn.index("SHOTGUN")].element==Wpn.E_NORMAL,"armas: cada una tiene su elemento");
         Base b=Base.empty("T");for(int x=0;x<16;x++)b.putTile(x,8,Base.T_STEEL,0,0);b.putThing(9,7,Base.E_BADPAL);World w=new World(3,3,cargas("SHOTGUN"),b,false);BaseRun.Foe f=w.run.foes.get(0);
         w.spawn(Wpn.ALL[Wpn.index("ROBOT TRAP")],0,f.x+30,f.y-10,0,0);Renderer fxr=new Renderer();fxr.reset(w);for(int i=0;i<300&&f.alive;i++){w.step(new int[2]);fxr.consume(w,false);w.robots[0].invuln=99;}check(!f.alive,"enemigos: la ROBOT TRAP los atrae y los destruye");
     }

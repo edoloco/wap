@@ -13,6 +13,9 @@ public final class Wpn {
     /** Aspecto (armas.txt): color nuevo (0 = el de siempre), tamaño, si se ve su luz y un dibujo propio que reemplaza al cuerpo. */
     /** trail: deja estela aunque vaya rápido. */
     public boolean trail;
+    /** Elemento del arma (por ahora solo interno y en el color de su tarjeta): normal, fuego, agua, tierra o viento. Ver la rosa elemental del proyecto. */
+    public static final int E_NORMAL = 0, E_FIRE = 1, E_WATER = 2, E_EARTH = 3, E_WIND = 4; public static final String[] ELEMENTS = {"NORMAL", "FUEGO", "AGUA", "TIERRA", "VIENTO"};
+    public int element = E_NORMAL;
     /** FLAME TOWER: al tocar el suelo levanta llamas a lo largo del piso (tower = la llama que se crea). */
     public Wpn tower; public boolean pillar;
     /** BOOBLE SEAL: burbuja lenta que sube y atrapa a quien toca. */
@@ -110,6 +113,13 @@ public final class Wpn {
             new Wpn("FLAME TOWER", "Bola de fuego que cae y levanta llamas por todo el suelo").mag(2, 40, 170).shot(1, 2, 6).phys(.2f, 0, 1).hit(8, 0, 1).look(FIREBALL).lob(14),
         };
         for (Wpn w : ALL) {
+            switch (w.name) {
+                case "FLAME TOWER": case "NAPALM": case "FLAMER": case "HELLRAIDER": case "MINI NUKE": case "BIG NUKE": w.element = E_FIRE; break;
+                case "BOOBLE SEAL": case "FREEZEE FLOW": w.element = E_WATER; break;
+                case "CANNON PUNCH": case "SPIKEBALLS": case "GRASSHOPPER": w.element = E_EARTH; break;
+                case "FAN": case "TORNADO GUN": w.element = E_WIND; break;
+                default: w.element = E_NORMAL;
+            }
             if (w.name.equals("BAZOOKA") || w.name.equals("DOOMSDAY")) { w.accel = .24f; w.smoke = true; }
             if (w.name.equals("MINE") || w.name.equals("TRAP")) { w.sticky = true; w.trigger = 28; }
             if (w.name.equals("FREEZEE FLOW")) w.ice = true;

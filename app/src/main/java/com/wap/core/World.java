@@ -3,7 +3,7 @@ import java.util.ArrayList;
 /** Estado completo de una partida. Avanza con step(entradas) a 60 ticks por segundo, sin leer el reloj ni el dispositivo. */
 public final class World {
     /** Versión de las reglas: dos teléfonos solo juegan en línea si coincide. */
-    public static final int RULES = 29;
+    public static final int RULES = 30;
     /** Versión de reglas para jugar en línea: incluye las armas de armas.txt, así ambos teléfonos deben tener las mismas. */
     public static int rules() { return Wpn.signature == 0 ? RULES : RULES ^ Wpn.signature & 0x7FFFFF00; }
     public final Terrain t; public final Rng rng;
@@ -34,7 +34,7 @@ public final class World {
      * reflejada y se encuentran en la sala del jefe). Sin premios al azar: solo los que se pusieron en el editor.
      */
     public World(int seed, int lives, Wpn[][] loads, Base base, boolean online) {
-        rng = new Rng(seed); run = new BaseRun(base, online); t = base.build(online, run); run.world = this;
+        rng = new Rng(seed); run = new BaseRun(base, online); t = base.build(online, run); run.world = this; run.startLives = lives;
         robots = new Robot[2];
         for (int i = 0; i < 2; i++) { robots[i] = new Robot(i, lives); robots[i].team = i; System.arraycopy(loads[i], 0, robots[i].loadout, 0, Robot.SLOTS); robots[i].px = -9999; }
         for (int[] q : t.props) props.add(new Prop(q));
@@ -149,7 +149,7 @@ public final class World {
     // ---------- Madera: cada trozo aguanta WOOD_HP y al romperse sale en astillas de su color
     public static final int WOOD_HP = 22; public int[] woodDmg;
     public boolean hitWood(float x, float y, float d) {
-        int ix = (int) x, iy = (int) y; if (t.at(ix, iy) != Terrain.WOOD) return false;
+        int ix = (int) x, iy = (int) y; if (run != null) return run.woodHit(this, ix, iy, d); if (t.at(ix, iy) != Terrain.WOOD) return false;
         hurtWood(t.frag(ix, iy), d); return true;
     }
     void hurtWood(int f, float d) {
@@ -172,6 +172,7 @@ public final class World {
     }
     /** Daño de explosión a los trozos de madera dentro del radio. */
     void blastWood(float x, float y, int r, float dmg) {
+        if (run != null) { run.woodBlast(this, x, y, r, dmg); return; } // bases: la madera se rompe por cuadro
         if (woodDmg == null) return;
         java.util.TreeSet<Integer> hit = new java.util.TreeSet<>();
         for (int yy = (int) y - r; yy <= y + r; yy += 3) for (int xx = (int) x - r; xx <= x + r; xx += 3)

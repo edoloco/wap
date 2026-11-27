@@ -319,6 +319,7 @@ public final class Renderer {
         }
         for (int cy = cy0; cy <= cy1; cy++) for (int cx = cx0; cx <= cx1; cx++) {
             int[] v = run.cells.get(Base.key(cx, cy)); if (v == null) continue;
+            if (v[0] == Base.T_BACK) { backPiece(g, cx * C, cy * C, v[1]); continue; }
             kinPiece(g, cx * C, cy * C, v[0], v[1]);
             if (run.frost.contains(Base.key(cx, cy))) { g.rect(cx * C, cy * C, C, 6, 0xDDEEF6FF); g.rect(cx * C, cy * C + 6, C, 3, 0x88EEF6FF); }
         }
@@ -336,6 +337,12 @@ public final class Renderer {
             if (f.lassoT > 0) g.circle(f.x, cy, f.hw + 5, 0, 0xAAFF8A3D, 1.5f); // atado al rayo
         }
         for (BaseRun.Bullet b : run.bullets) if (b.kind == 1) { g.rrect(b.x - 2.5f, b.y - 9, 5, 11, 2, 0xFFD6DCE6, INK, .8f); g.rect(b.x - 2.5f, b.y - 2, 5, 2, 0xFFE8323C); }
+    }
+    /** FONDO: pared de atrás, oscura y sin borde (no choca). */
+    static void backPiece(Gfx g, float x, float y, int color) {
+        final int S = Base.CELL; int c = tone(color | 0xFF000000, .55f, 0);
+        g.rect(x, y, S, S, c); g.rect(x, y, S, 1, tone(c, 1.15f, 6)); g.rect(x, y, 1, S, tone(c, 1.1f, 4));
+        for (int i = 0; i < 6; i++) { int h = hash(i, (int) (x * 3 + y)); g.rect(x + 3 + (h & 25), y + 3 + (h >> 5 & 25), 1, 1, tone(c, .75f, 0)); }
     }
     static void kinPiece(Gfx g, float x, float y, int mat, int color) {
         final int S = Base.CELL;

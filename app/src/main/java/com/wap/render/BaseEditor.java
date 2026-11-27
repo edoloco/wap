@@ -13,7 +13,7 @@ final class BaseEditor {
     static final String[] TOOL_NAMES = {"PIEZA", "BORRAR", "ENEMIGO", "PREMIO", "INICIO", "SALA"};
     static final String[] HINT = {"TOCA O ARRASTRA PARA PONER PIEZAS EN LA GRILLA", "TOCA O ARRASTRA PARA BORRAR", "TOCA UN CUADRO PARA PONER EL ENEMIGO",
         "TOCA UN CUADRO PARA PONER EL PREMIO", "TOCA DONDE PARTE EL JUGADOR", "TOCA UN + PARA AGREGAR UNA HABITACIÓN · TOCA UNA PARA ELEGIRLA"};
-    static final int[] MATS = {Base.T_EARTH, Base.T_WOOD, Base.T_PANEL, Base.T_STEEL, Base.T_CRATE, Base.T_METAL, Base.T_STONE, Base.T_PC};
+    static final int[] MATS = {Base.T_EARTH, Base.T_WOOD, Base.T_PANEL, Base.T_STEEL, Base.T_CRATE, Base.T_METAL, Base.T_STONE, Base.T_PC, Base.T_BACK};
     static final int[] ENEMIES = {Base.E_DRONE, Base.E_TURRET, Base.E_BADPAL}; static final String[] ENEMY_NAMES = {"DRON DE ATAQUE", "TORRETA", "BADPAL"};
     static final String[] ENEMY_HINT = {"AL ACERCARTE VUELA SUBIENDO Y BAJANDO Y SUELTA MISILES", "UN OJO ROJO: TE DISPARA BOLITAS DE ENERGÍA AL VERTE", "CAMINA, SE SIENTA CERCA TUYO, DISPARA Y SE CAMBIA DE LUGAR"};
     static final int[] PRIZES = {Base.P_CAPSULE, Base.P_LIFE, Base.P_WEAPON}; static final String[] PRIZE_NAMES = {"CÁPSULA", "VIDA", "ARMA"};
@@ -157,6 +157,7 @@ final class BaseEditor {
         switch (mat) { case Base.T_PANEL: return 0xFF8214FF; case Base.T_STEEL: return 0xFF3A3F55; case Base.T_CRATE: return 0xFFCB8C3C; case Base.T_METAL: return 0xFF8D99A8; case Base.T_STONE: return 0xFF9C9488; case Base.T_PC: return 0xFF2C323F; default: return color | 0xFF000000; }
     }
     void tile(Gfx g, float x, float y, float cs, int[] v) {
+        if (v[0] == Base.T_BACK) { g.rect(x, y, cs, cs, Renderer.tone(v[1] | 0xFF000000, .55f, 0)); if (cs >= 8) { g.line(x, y, x + cs, y + cs, 0x33FFFFFF, 1); } return; } // fondo: oscuro y rayado
         int mat = v[0]; float s = mat == Base.T_PC ? cs * 2 : cs; int c = matColor(mat, v[1]);
         g.rect(x, y, s, s, c);
         if (cs >= 6) {
@@ -221,7 +222,7 @@ final class BaseEditor {
                 for (int i = 0; i < MATS.length; i++) { final int k = i; String n = Base.TILE_NAMES[MATS[i]]; boolean sel = i == mat; float x = 3 + i * cw;
                     app.box(g, x, by + 2, cw - 2, 12, sel ? App.GOLD : matColor(MATS[i], COLORS[color]), sel ? App.CREAM : 0x55FFFFFF, App.DEEP);
                     app.label(g, n, x, by + 2, cw - 2, 12, sel ? App.DEEP : App.CREAM, sel ? 0 : App.DEEP); app.btn(x, by + 1, cw, 14, () -> mat = k); }
-                float y2 = by + 16; boolean colors = MATS[mat] == Base.T_EARTH || MATS[mat] == Base.T_WOOD, moves = Base.movable(MATS[mat]);
+                float y2 = by + 16; boolean colors = MATS[mat] == Base.T_EARTH || MATS[mat] == Base.T_WOOD || MATS[mat] == Base.T_BACK, moves = Base.movable(MATS[mat]);
                 float mw = moves ? 84 : 0;
                 if (colors) for (int i = 0; i < COLORS.length; i++) { final int k = i; float x = 3 + i * 13; if (x + 12 > W - mw - 6) break;
                     if (i == color) g.rect(x - 1, y2 - 1, 13, 13, App.GOLD); g.rect(x, y2, 11, 11, COLORS[i]); app.btn(x, y2, 13, 12, () -> color = k); }

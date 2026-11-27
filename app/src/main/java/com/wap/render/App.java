@@ -734,6 +734,9 @@ public final class App {
     static final int COLS = 3, ROWS = 10;
     int armsPage;
     /** Columnas y filas por página de la lista de armas (letra chica). */
+    /** Colores de las tarjetas por elemento {relleno, luz, sombra}: normal gris, fuego rojo, agua azul, tierra verde, viento celeste. */
+    static final int[][] ELEMENT_COLORS = {{0xFF5A5F70, 0xFF8A90A3, 0xFF33364A}, {0xFFB5302A, 0xFFF0716A, 0xFF6E1512}, {0xFF2456B8, 0xFF6E9CF2, 0xFF12306E},
+        {0xFF3E8A3A, 0xFF7CCB6A, 0xFF1F4E1C}, {0xFF2499C2, 0xFF7FD8F2, 0xFF0F5A75}};
     int armsCols() { float a = W - (12 * u + 200 * u + 8 * u) - 12 * u; return Math.max(3, Math.min(5, (int) (a / 54))); }
     int armsRows() { return Math.max(4, (int) ((H - 6 * u - 30) / 14)); }
     void navArms(int p) {
@@ -1013,9 +1016,10 @@ public final class App {
         for (int q = armsPage * per; q < Math.min(n, (armsPage + 1) * per); q++) {
             final int i = L[q], ix = i, p = q - armsPage * per; float x = gx + p % cols * gw, yy = gy + p / cols * gh;
             boolean c = i == cur, eq = false; for (int s : eslots()) eq |= s == i;
+            int[] el = ELEMENT_COLORS[Wpn.ALL[i].element]; // el color de la tarjeta dice el elemento del arma
             if (c) box(g, x, yy, gw - 2, gh - 2, GOLD, CREAM, 0xFFB8862A);
-            else if (eq) box(g, x, yy, gw - 2, gh - 2, PURPLE, 0xFFB46BFF, 0xFF4A00A8);
-            else box(g, x, yy, gw - 2, gh - 2, NAVY, BLUE, DEEP);
+            else box(g, x, yy, gw - 2, gh - 2, el[0], el[1], el[2]);
+            if (eq && !c) { g.rect(x, yy, gw - 2, 2, CREAM); g.rect(x, yy + gh - 4, gw - 2, 2, CREAM); g.rect(x, yy, 2, gh - 2, CREAM); g.rect(x + gw - 4, yy, 2, gh - 2, CREAM); } // equipada: marco claro
             String nm = Wpn.ALL[i].label; int tc = c ? DEEP : CREAM; float cx = x + (gw - 2) / 2;
             if (PixelFont.tinyW(nm) <= gw - 6 || nm.indexOf(' ') < 0) PixelFont.tiny(g, nm, cx, yy + (gh - 2) / 2 - 2, tc, 0);
             else { int sp = nm.lastIndexOf(' ', nm.length() / 2 + 2); if (sp < 0) sp = nm.indexOf(' '); PixelFont.tiny(g, nm.substring(0, sp), cx, yy + (gh - 2) / 2 - 5, tc, 0); PixelFont.tiny(g, nm.substring(sp + 1), cx, yy + (gh - 2) / 2 + 1, tc, 0); }
@@ -1045,6 +1049,7 @@ public final class App {
             int c = cols[(i + fightT / 3) % cols.length]; String ch = t.substring(i, i + 1);
             txtS(g, ch, x0 + i * cw + cw / 2 + jx, y + jy, size, c, 0);
         }
+        if (w != null && w.run != null && w.run.online) { String s2 = "VIDAS Y ENERGÍA RESTABLECIDAS"; txtS(g, s2, W / 2, y + size * .9f, fit(s2, 14 * u, W - 20), fightT % 10 < 5 ? MINT : CREAM, 0); }
     }
     /** Vida del jefe de la base. */
     void bossBar(Gfx g, float x, float y, float wd, BaseRun.Foe b) {
@@ -1062,7 +1067,7 @@ public final class App {
         else if (w.robots.length == 2) bar(g, W - 4 - bw, 4, bw, w.robots[1 - this.me], 1 - this.me);
         else { float y = 4; for (Robot o : w.robots) if (o != me) { mini(g, W - 4 - bw, y, bw, o); y += 15; } } // varios rivales: barras chicas
         if (w.run != null && online && !w.finished) {
-            if (w.run.held[this.me]) txtS(g, "ESPERANDO A TU RIVAL EN LA SALA DEL JEFE...", W / 2, H * .3f, fit("ESPERANDO A TU RIVAL EN LA SALA DEL JEFE...", 12 * u, W - 10), GOLD, 0);
+            if (w.run.held[this.me] && !w.run.fight) txtS(g, "ESPERANDO A TU RIVAL EN LA SALA DEL JEFE...", W / 2, H * .3f, fit("ESPERANDO A TU RIVAL EN LA SALA DEL JEFE...", 12 * u, W - 10), GOLD, 0);
             else if (w.run.held[1 - this.me]) txtS(g, "TU RIVAL YA TE ESPERA EN LA SALA DEL JEFE", W / 2, H * .3f, fit("TU RIVAL YA TE ESPERA EN LA SALA DEL JEFE", 10 * u, W - 10), CREAM, 0);
         }
         if (me.piloting()) { // manejando el dron: cómo se usa y cuánta batería le queda
